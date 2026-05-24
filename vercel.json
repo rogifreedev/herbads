@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/creative-analysis/process",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }
