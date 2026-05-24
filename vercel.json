@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/meta/daily-sync",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/creative-analysis/process",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
