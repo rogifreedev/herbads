@@ -12,6 +12,11 @@ function safeNext(value: string | null) {
   return value;
 }
 
+function getRedirectOrigin() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  return appUrl || window.location.origin;
+}
+
 export function GoogleLoginButton() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -20,7 +25,7 @@ export function GoogleLoginButton() {
   async function login() {
     setLoading(true);
     const supabase = createSupabaseBrowserClient();
-    const origin = window.location.origin;
+    const origin = getRedirectOrigin();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
