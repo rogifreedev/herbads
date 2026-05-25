@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export function AdIdeasGenerateForm({ clientId }: { clientId: string }) {
+export function AdIdeasGenerateForm({ clientId, defaultFocus = "Neue Hooks und Creative Angles fuer Tests", defaultCount = "10", buttonLabel = "Generieren" }: { clientId: string; defaultFocus?: string; defaultCount?: string; buttonLabel?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
   const [format, setFormat] = useState("all");
   const [funnelStage, setFunnelStage] = useState("ALL");
-  const [count, setCount] = useState("10");
-  const [focus, setFocus] = useState("Neue Hooks und Creative Angles fuer Tests");
+  const [count, setCount] = useState(defaultCount);
+  const [focus, setFocus] = useState(defaultFocus);
 
   async function submit() {
     setLoading(true);
@@ -68,7 +68,7 @@ export function AdIdeasGenerateForm({ clientId }: { clientId: string }) {
       </label>
       <Button type="button" disabled={loading || pending} onClick={submit}>
         <Sparkles className="mr-2 h-4 w-4" />
-        Generieren
+        {buttonLabel}
       </Button>
     </div>
   );

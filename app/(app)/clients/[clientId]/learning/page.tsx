@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdIdeasGenerateForm } from "@/components/ad-ideas-generate-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,18 @@ export default async function CreativeLearningPage({ params }: { params: Promise
         <SummaryCard label="Avg Score" value={formatNumber(overview.totals.avgCreativeScore)} />
         <SummaryCard label="Confidence" value={`${formatNumber(overview.totals.learningConfidence)}%`} />
       </section>
+
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/15 via-herb-surface to-herb-surface">
+        <CardHeader>
+          <CardTitle>Neue AI-Ideen aus Learnings generieren</CardTitle>
+          <CardDescription>
+            Nutzt OpenRouter mit aktuellen Winner-/Loser-Patterns, Fatigue-Signalen, Opportunities, Hook Insights und Meta-Kontext. Die Ideen werden gespeichert und danach unten im Prediction Board bewertet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdIdeasGenerateForm clientId={clientId} defaultCount="8" defaultFocus={learningFocus(overview)} buttonLabel="Learning-Ideen generieren" />
+        </CardContent>
+      </Card>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <PatternSection
@@ -113,6 +126,15 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
       </CardContent>
     </Card>
   );
+}
+
+function learningFocus(overview: Awaited<ReturnType<typeof getCreativeLearningOverview>>) {
+  const winners = overview.winnerPatterns.map((pattern) => pattern.title).slice(0, 4).join(", ") || "keine klaren Winner";
+  const losers = overview.loserPatterns.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine klaren Loser";
+  const opportunities = overview.opportunities.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine klaren Opportunities";
+  const fatigue = overview.fatigueWarnings.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine Fatigue-Warnungen";
+
+  return `Generiere neue datenbasierte Ad Ideas aus Creative Learning. Gewinner-Angles: ${winners}. Schwache Patterns vermeiden oder neu framings testen: ${losers}. Opportunities reaktivieren: ${opportunities}. Fatigue beachten: ${fatigue}. Jede Idee soll einen klaren Hook, Angle, Format, First Seconds/Static Visual und rationale mit Bezug auf diese Learnings haben.`;
 }
 
 function PatternSection({ title, description, emptyTitle, emptyDescription, patterns, clientId }: {
