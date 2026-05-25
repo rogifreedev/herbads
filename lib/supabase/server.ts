@@ -19,7 +19,7 @@ export async function createSupabaseServerClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, { ...options, path: "/" }));
           } catch {
             // Server Components cannot always set cookies. Middleware will handle session refresh later.
           }

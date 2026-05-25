@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
   function redirect(url: string) {
     const response = NextResponse.redirect(url);
-    cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+    cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, { ...options, path: "/" }));
     return response;
   }
 

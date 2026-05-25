@@ -52,7 +52,7 @@ export async function updateSession(request: NextRequest) {
               headers: request.headers
             }
           });
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, { ...options, path: "/" }));
         }
       }
     }
