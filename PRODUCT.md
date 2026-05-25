@@ -105,6 +105,7 @@ Die detaillierte UX- und Layout-Spezifikation steht in `DESIGN_SYSTEM.md`.
 - `Dashboard`: globale Agentur-Uebersicht.
 - `Analysen`: kundenspezifische Performance- und Creative-Analysen fuer den in der Topbar gewaehlten Kunden.
 - `Analysen > Performance`: Dashboard fuer den aktuell gewaehlten Kunden.
+- `Analysen > Learning`: Self-Learning-System fuer Winner-/Loser-Patterns, Fatigue, Opportunities und Prediction Scores.
 - `Analysen > Creatives`: Creative Library und Rankings.
 - `Analysen > Pattern Analyse`: uebergreifende Muster, Learnings und Creative-Hypothesen.
 - `Reports`: Exporte und spaetere Kundenreports.
@@ -190,11 +191,39 @@ Aktueller MVP-Stand:
 - KPI-Vergleich
 - AI-Zusammenfassung je Creative
 - Erste Pattern-Erkennung: Gemeinsamkeiten der Top- und Low-Performer
+- Creative Learning: datenbasierte Winner-/Loser-Patterns, neue Hook-/Angle-Testzellen und Prediction Board fuer gespeicherte Ad Ideas.
 
 Aktueller MVP-Stand:
 
 - Globale und kundenspezifische KPI Cards nutzen echte Meta Insights, sobald synchronisiert.
 - Creative Library und Creative Detailseiten nutzen echte synchronisierte Creatives und Ads.
+
+### Creative Learning System
+
+Das Creative Learning System ist der Einstieg in ein selbstlernendes Creative-OS. Es ersetzt kein grosses ML-Modell, sondern nutzt zuerst erklaerbare Signale aus echten Meta-Daten, Creative Scores, AI-Analysen, Hooks, Angles und gespeicherten Ad Ideas.
+
+MVP-Umfang:
+
+- Neue Route `/clients/[clientId]/learning` unter `META Ads > Learning`.
+- Winner Patterns: starke Angles mit Performance-Evidence wie Score, Spend, Impressions, CTR/ROAS und Beispiel-Creatives.
+- Loser Patterns: schwache Angles mit Empfehlung, ob Hook, Offer, Proof oder Funnel-Fit ueberarbeitet werden soll.
+- Emerging Opportunities: historisch positive Angles, die aktuell wenig oder gar nicht genutzt werden.
+- Fatigue Warnings: Vergleich historischer Angle-Performance gegen die letzten 30 Tage.
+- Hook & Angle Tests: neue Testzellen aus Winner Patterns und bestehenden Hook Insights.
+- Prediction Board: gespeicherte Ad Ideas bekommen einen prognostischen Score mit Confidence, CTR-Band, Begruendung und Risiken.
+
+Score-Prinzip:
+
+- Der Prediction Score ist erklaerbar und kombiniert Angle-Historie, Hook-Aehnlichkeit, AI-Ideen-Score und vorhandene Performance-Signifikanz.
+- Confidence steigt mit mehr Creatives, Spend, Impressions und AI-Analysen.
+- Ziel ist kein absoluter Forecast, sondern eine priorisierte Testentscheidung vor Launch.
+
+Spaetere Self-Learning-Schleife:
+
+- Ad Ideas werden mit live gegangenen Creatives verknuepft.
+- Prediction und echte Performance werden nach 3, 7, 14 und 30 Tagen verglichen.
+- Pattern-Gewichte werden anhand von Prediction-vs-Actual-Learnings angepasst.
+- Wiederholt schwache Hooks, Claims, Angles oder Formate werden automatisch depriorisiert.
 
 ## Nicht im MVP
 

@@ -18,6 +18,7 @@ Abgeschlossen:
 - Creative Library, Creative Detail, Landingpages, Video Transcripts, AI Creative Analysen und Kundenprofil-AI.
 - Creative Performance Score mit Score-Erklaerung, Score-Sortierung und Score-Filter.
 - Pattern Analyse MVP auf `/analysis` mit Top-/Low-Performer-Vergleich.
+- Creative Learning MVP auf `/clients/[clientId]/learning` mit Winner-/Loser-Patterns, Opportunities, Fatigue-Warnings, Hook-Testzellen und Prediction Board fuer Ad Ideas.
 - Reports MVP auf `/reports` und globale Integrationsuebersicht auf `/settings`.
 - Kritische Unit Tests fuer KPI-Aggregation und Creative Score.
 
@@ -26,6 +27,7 @@ Post-MVP offen:
 - Automatische AI-Analyse-Queue nach Daily Sync.
 - Ad Ideas Engine unter META Ads: Hook Intelligence, Meta-Ads-Kontext, gespeicherte Reel-/Static-Ideen und Self-Learning ueber verknuepfte Creative-Performance.
 - Competitor Intelligence unter META Ads: Competitor Ad Library Links, manuell erfasste Competitor Creatives, Reach-/Budget-Schaetzung, AI Analyse und Einspeisung in Ad Ideas.
+- Persistenter Prediction-vs-Actual-Feedback-Loop fuer das Creative Learning System.
 - Persistierte Score-Historie, falls Score-Trends historisch ausgewertet werden sollen.
 - RLS/Security-Haertung fuer spaetere externe Kunden-Logins.
 - Deployment-Finalisierung mit Vercel Env Review, Supabase Backups und finaler Storage-Bucket-Pruefung.
@@ -85,6 +87,52 @@ Im MVP wird Self-Learning als persistenter Feedback Loop umgesetzt:
 - UI zum Verknuepfen einer Idee mit einem Live-Creative.
 - Performance Learning Dashboard pro Hook Type, Angle, Format und Funnel Stage.
 - Depriorisierung von wiederholt schwachen Claims, Hooks und Visual Directions.
+
+## Post-MVP: Creative Learning System
+
+### Ziel
+
+Unter `META Ads` gibt es den Bereich `Learning` mit Route `/clients/[clientId]/learning`. Dieser Bereich fasst eigene Meta-Performance, Creative Scores, AI-Analysen, Hook Intelligence, Angle Cluster und gespeicherte Ad Ideas zu einem erklaerbaren Self-Learning-System zusammen.
+
+Das System soll nicht nur sagen, welche Ads gut waren, sondern warum sie gut waren, welche Muster wiederholbar sind, welche Muster schwach sind und welche neuen Hooks/Angles als naechstes getestet werden sollten.
+
+### MVP Umfang
+
+- Neue Datei `lib/creative-learning.ts` fuer serverseitige Aggregation.
+- Neue Seite `app/(app)/clients/[clientId]/learning/page.tsx`.
+- Navigationseintrag `Learning` unter `META Ads`.
+- Winner Patterns aus Angle Performance, Creative Score, Spend, Impressions, CTR/ROAS und Beispiel-Creatives.
+- Loser Patterns aus schwachen Angle Scores mit ausreichend Spend/Performance-Signal.
+- Emerging Opportunities aus historisch starken, aktuell wenig genutzten Angles.
+- Fatigue Warnings durch Vergleich historischer Angle-Scores mit den letzten 30 Tagen.
+- Hook & Angle Testzellen aus Winner Patterns und bestehenden Hook Insights.
+- Prediction Board fuer gespeicherte Ad Ideas mit predicted Score, Confidence, CTR-Band, Begruendung und Risiken.
+
+### Aktuelle Score-Logik
+
+Der MVP nutzt bewusst ein erklaerbares heuristisches Modell statt eigenem ML-Training:
+
+- Angle Score aus `getCreativeAnglesOverview`.
+- Hook Score aus `getAdIdeasOverview` / Hook Insights.
+- AI-Ideen-Score aus gespeicherten `ad_ideas`.
+- Confidence aus Anzahl Creatives, Spend, Impressions und AI-Analyseabdeckung.
+- Textaehnlichkeit zwischen neuen Ideen und historischen Hooks/Angles als Similarity-Signal.
+
+Prediction fuer eine Ad Idea:
+
+```text
+predictedScore = angleScore * 0.45 + hookScore * 0.35 + ideaScore * 0.20
+confidence = Datenmenge + Spend + Creative-Anzahl + Hook-/Angle-Match
+```
+
+### Naechste Ausbaustufe
+
+- Persistente Tabellen fuer `learning_insights`, `prediction_runs` und `ad_idea_prediction_results`.
+- Verknuepfung von `ad_ideas` mit live gegangenen Creatives.
+- Prediction-vs-Actual Auswertung nach 3, 7, 14 und 30 Tagen.
+- Automatischer Learning-Job nach Meta Daily Sync.
+- Gewichtsanpassung fuer Hook Type, Angle, Format, Funnel Stage, Offer, Proof und Landingpage Match.
+- UI fuer historische Prediction Accuracy und Modell-Confidence je Kunde.
 
 ## Post-MVP: Competitor Intelligence
 

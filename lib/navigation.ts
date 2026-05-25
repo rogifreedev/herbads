@@ -20,6 +20,7 @@ export const navItems: NavItem[] = [
     icon: ChartNoAxesCombined,
     children: [
       { title: "Performance", href: "/clients/[clientId]" },
+      { title: "Learning", href: "/clients/[clientId]/learning" },
       { title: "Creatives", href: "/clients/[clientId]/creatives" },
       { title: "Angles", href: "/clients/[clientId]/angles" },
       { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
