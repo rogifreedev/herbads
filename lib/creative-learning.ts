@@ -184,30 +184,82 @@ function buildOpportunities(allAngles: AngleInsight[], recentAngles: AngleInsigh
     }));
 }
 
+function hookVariantsForAngle(angle: string) {
+  const normalized = angle.toLowerCase();
+  if (normalized.includes("founder") || normalized.includes("story")) {
+    return [
+      "Was wir heute noch genauso machen wie vor 100 Jahren",
+      "Warum echter Geschmack nicht schneller produziert werden kann"
+    ];
+  }
+  if (normalized.includes("social proof") || normalized.includes("ugc")) {
+    return [
+      "Warum Kunden diesen Speck immer wieder bestellen",
+      "Der Geschmack, den unsere Kunden sofort wiedererkennen"
+    ];
+  }
+  if (normalized.includes("feature") || normalized.includes("usp")) {
+    return [
+      "Woran du echten Suedtiroler Speck sofort erkennst",
+      "Dieses Detail macht den Unterschied im Geschmack"
+    ];
+  }
+  if (normalized.includes("pain") || normalized.includes("problem")) {
+    return [
+      "Warum Supermarkt-Speck oft flach schmeckt",
+      "Wenn Speck nach Rauch schmeckt, aber nicht nach Handwerk"
+    ];
+  }
+  if (normalized.includes("education") || normalized.includes("myth")) {
+    return [
+      "Drei Dinge, die guten Speck von durchschnittlichem Speck trennen",
+      "Was Reifung beim Speck wirklich veraendert"
+    ];
+  }
+  if (normalized.includes("aspiration") || normalized.includes("lifestyle")) {
+    return [
+      "Der Moment, in dem aus einer Jause ein Genussmoment wird",
+      "Ein Stueck Suedtirol fuer den Tisch zuhause"
+    ];
+  }
+  if (normalized.includes("scarcity") || normalized.includes("urgency")) {
+    return [
+      "Nur solange dieser Reifegrad verfuegbar ist",
+      "Wenn diese Charge weg ist, kommt sie so nicht wieder"
+    ];
+  }
+
+  return [
+    `Warum ${angle.toLowerCase()} jetzt einen neuen Test verdient`,
+    `Der unterschätzte Grund hinter ${angle.toLowerCase()}`
+  ];
+}
+
 function buildHookOpportunities(winners: LearningPattern[], hooks: HookInsight[]) {
   return winners.slice(0, 6).flatMap((pattern, index) => {
-    const winnerHook = hooks[index % Math.max(hooks.length, 1)];
+    const supportHook = hooks[index % Math.max(hooks.length, 1)];
     const baseScore = pattern.score;
-    const hookText = winnerHook?.hook ?? `Warum ${pattern.title} jetzt relevant ist`;
+    const [primaryHook, secondaryHook] = hookVariantsForAngle(pattern.title);
+    const preferredFormat = supportHook?.formats[0] ?? "reel";
     return [
       {
         id: `hook-opportunity-${pattern.id}-1`,
-        hook: hookText,
+        hook: primaryHook,
         angle: pattern.title,
-        format: winnerHook?.formats[0] ?? "reel",
+        format: preferredFormat,
         predictedScore: clamp(baseScore + 4),
         confidence: pattern.confidence,
-        why: `Nutzt einen bestehenden Winner-Angle und kombiniert ihn mit einem Hook-Pattern, das bereits Performance-Signale hat.`,
+        why: `Neuer Hook fuer einen bestehenden Winner-Angle. Nutzt das Performance-Signal, kopiert aber keinen bestehenden Hook- oder Analyse-Text.`,
         sourcePattern: pattern.title
       },
       {
         id: `hook-opportunity-${pattern.id}-2`,
-        hook: `Der haeufigste Fehler bei ${pattern.title.toLowerCase()}`,
+        hook: secondaryHook,
         angle: pattern.title,
         format: "static",
         predictedScore: clamp(baseScore - 2),
         confidence: clamp(pattern.confidence - 8),
-        why: `Negative/Loss-Aversion-Variante fuer denselben Angle, um neue Aufmerksamkeit ohne komplett neues Messaging zu testen.`,
+        why: `Alternative Testzelle fuer denselben Angle mit anderer Einstiegsspannung und klarerem Produkt-/Proof-Bezug.`,
         sourcePattern: pattern.title
       }
     ];

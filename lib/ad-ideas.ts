@@ -415,16 +415,27 @@ export async function generateAdIdeas(clientId: string, options: GenerateAdIdeas
   const hookInsights = buildHookInsights(context);
   const metaSummary = metaContextSummary(context);
   const competitorPatterns = await getCompetitorIdeaPatterns(clientId);
+  const { data: recentIdeas } = await supabase
+    .from("ad_ideas")
+    .select("hook,angle,concept,headline,created_at")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(20);
   const count = Math.max(1, Math.min(20, Math.floor(options.count ?? 10)));
+  const learningMode = (options.focus ?? "").includes("LEARNING_GENERATION_MODE");
   const promptContext = {
     options: { count, format: options.format ?? "all", funnelStage: options.funnelStage ?? "ALL", focus: options.focus ?? "" },
     metaSummary,
     topHooks: hookInsights.slice(0, 10),
     weakHooks: hookInsights.slice(-5),
     competitorPatterns,
-    recentIdeasContext: "Vermeide reine Wiederholungen bestehender Hooks. Nutze Gewinner-Patterns, aber formuliere neue Angles."
+    recentIdeas: (recentIdeas ?? []).map((idea) => ({ hook: idea.hook, angle: idea.angle, concept: idea.concept, headline: idea.headline })),
+    generationMode: learningMode ? "learning_synthesis" : "standard_ad_ideas",
+    recentIdeasContext: "Vermeide reine Wiederholungen bestehender Hooks, Headlines und Konzepte. Nutze Gewinner-Patterns nur als abstrakte Signale, nicht als Textbausteine."
   };
   const prompt = `Erstelle ${count} neue Meta Ad Ideen fuer Reels und Static Images. Nutze echte Meta-Ads-Daten, Hook Performance, Campaign Objectives und Optimization Goals.
+
+${learningMode ? "WICHTIG: Du bist im Creative-Learning-Modus. Deine Aufgabe ist Synthese, nicht Remix. Bestehende Hooks, Headlines, Konzepte, Competitor Patterns oder Top-Hooks duerfen nicht umformuliert oder als Schablone kopiert werden. Extrahiere nur das dahinterliegende Prinzip und entwickle daraus neue strategische Konzepte." : ""}
 
 Kontext JSON:
 ${JSON.stringify(promptContext, null, 2)}
@@ -437,6 +448,10 @@ Regeln:
 - Reels brauchen einen starken First-3-Seconds Einstieg.
 - Static Ideen brauchen klare Bildidee und Headline.
 - Beruecksichtige Meta Kontext wie Objective, Optimization Goal, aktive Ads und Gewinner-Hooks.
+- Kopiere keine bestehenden Hook-Texte, Headlines oder Konzepte aus topHooks, weakHooks, recentIdeas oder competitorPatterns.
+- Jede Idee muss ein neues strategisches Konzept enthalten, nicht nur einen anderen Satzbau.
+- sourcePatterns sollen das genutzte Learning benennen, nicht den kopierten Text.
+- rationale muss erklaeren, welches Performance-Learning transformiert wurde und warum die neue Idee anders ist.
 - Beruecksichtige competitorPatterns als Inspirationsquelle, aber kopiere keine Competitor Ads 1:1.
 - Wenn eine Idee von Competitor Patterns inspiriert ist, erklaere die Adaption in rationale und sourcePatterns.
 - Keine verbotenen Versprechen erfinden.`;

@@ -40,7 +40,7 @@ export default async function CreativeLearningPage({ params }: { params: Promise
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AdIdeasGenerateForm clientId={clientId} defaultCount="8" defaultFocus={learningFocus(overview)} buttonLabel="Learning-Ideen generieren" />
+          <AdIdeasGenerateForm clientId={clientId} defaultCount="8" defaultFocus={learningFocus(overview)} buttonLabel="Learning-Ideen generieren" hideFocus />
         </CardContent>
       </Card>
 
@@ -134,7 +134,7 @@ function learningFocus(overview: Awaited<ReturnType<typeof getCreativeLearningOv
   const opportunities = overview.opportunities.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine klaren Opportunities";
   const fatigue = overview.fatigueWarnings.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine Fatigue-Warnungen";
 
-  return `Generiere neue datenbasierte Ad Ideas aus Creative Learning. Gewinner-Angles: ${winners}. Schwache Patterns vermeiden oder neu framings testen: ${losers}. Opportunities reaktivieren: ${opportunities}. Fatigue beachten: ${fatigue}. Jede Idee soll einen klaren Hook, Angle, Format, First Seconds/Static Visual und rationale mit Bezug auf diese Learnings haben.`;
+  return `LEARNING_GENERATION_MODE. Generiere neue datenbasierte Ad Ideas aus Creative Learning, ohne bestehende Hook-Texte oder Ad-Bausteine zu kopieren. Gewinner-Angles als strategische Richtung nutzen: ${winners}. Schwache Patterns nicht wiederholen, sondern bewusst anders framen: ${losers}. Opportunities als neue Testfelder reaktivieren: ${opportunities}. Fatigue beachten und frische Openings/Visuals entwickeln: ${fatigue}. Jede Idee braucht ein neues Konzept, einen neu formulierten Hook, eine klare Produktionsidee und eine Begruendung, welches Learning transformiert wurde.`;
 }
 
 function PatternSection({ title, description, emptyTitle, emptyDescription, patterns, clientId }: {

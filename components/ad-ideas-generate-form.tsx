@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export function AdIdeasGenerateForm({ clientId, defaultFocus = "Neue Hooks und Creative Angles fuer Tests", defaultCount = "10", buttonLabel = "Generieren" }: { clientId: string; defaultFocus?: string; defaultCount?: string; buttonLabel?: string }) {
+export function AdIdeasGenerateForm({ clientId, defaultFocus = "Neue Hooks und Creative Angles fuer Tests", defaultCount = "10", buttonLabel = "Generieren", hideFocus = false }: { clientId: string; defaultFocus?: string; defaultCount?: string; buttonLabel?: string; hideFocus?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
@@ -37,7 +37,7 @@ export function AdIdeasGenerateForm({ clientId, defaultFocus = "Neue Hooks und C
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-[120px_140px_120px_minmax(220px,1fr)_auto] md:items-end">
+    <div className={hideFocus ? "grid gap-3 md:grid-cols-[120px_140px_120px_auto] md:items-end" : "grid gap-3 md:grid-cols-[120px_140px_120px_minmax(220px,1fr)_auto] md:items-end"}>
       <label className="grid gap-1 text-xs text-white/55">Format
         <Select value={format} onValueChange={setFormat}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
@@ -63,9 +63,11 @@ export function AdIdeasGenerateForm({ clientId, defaultFocus = "Neue Hooks und C
       <label className="grid gap-1 text-xs text-white/55">Anzahl
         <Input value={count} onChange={(event) => setCount(event.target.value)} inputMode="numeric" className="h-9" />
       </label>
-      <label className="grid gap-1 text-xs text-white/55">Fokus
-        <Input value={focus} onChange={(event) => setFocus(event.target.value)} className="h-9" />
-      </label>
+      {hideFocus ? null : (
+        <label className="grid gap-1 text-xs text-white/55">Fokus
+          <Input value={focus} onChange={(event) => setFocus(event.target.value)} className="h-9" />
+        </label>
+      )}
       <Button type="button" disabled={loading || pending} onClick={submit}>
         <Sparkles className="mr-2 h-4 w-4" />
         {buttonLabel}
