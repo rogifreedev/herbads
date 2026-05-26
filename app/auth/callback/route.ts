@@ -1,12 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
-
-function isAllowedEmail(email: string | undefined) {
-  return Boolean(email?.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`));
-}
-
 function safeNext(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
   if (value.startsWith("/auth") || value.startsWith("/login")) return "/dashboard";
@@ -45,6 +39,13 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
+  function finishRedirect() {
+    const url = new URL(requestUrl.toString());
+    url.pathname = "/auth/finish";
+    url.search = `?next=${encodeURIComponent(next)}`;
+    return redirect(url.toString());
+  }
+
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
@@ -60,12 +61,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!isAllowedEmail(user?.email)) {
-    await supabase.auth.signOut();
-    const url = requestUrl.origin + "/login?error=domain";
-    return redirect(url);
-  }
-
-  return redirect(requestUrl.origin + next);
+  return finishRedirect();
 }

@@ -31,6 +31,14 @@ function getSupabasePublicKey() {
 }
 
 export async function updateSession(request: NextRequest) {
+  if (isPublicPath(request.nextUrl.pathname) || isCronPath(request.nextUrl.pathname)) {
+    return NextResponse.next({
+      request: {
+        headers: request.headers
+      }
+    });
+  }
+
   let supabaseResponse = NextResponse.next({
     request: {
       headers: request.headers
@@ -59,10 +67,6 @@ export async function updateSession(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-
-  if (isPublicPath(request.nextUrl.pathname) || isCronPath(request.nextUrl.pathname)) {
-    return supabaseResponse;
-  }
 
   if (!user) {
     return unauthorizedResponse(request);
