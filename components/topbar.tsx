@@ -31,11 +31,11 @@ export function Topbar() {
             <Settings className="h-5 w-5" />
           </Link>
         </Button>
-        <Button asChild variant="ghost" size="icon" className="text-white/70 hover:text-white">
-          <Link href="/auth/logout" aria-label="Abmelden">
+        <form action="/auth/logout" method="post">
+          <Button type="submit" variant="ghost" size="icon" className="text-white/70 hover:text-white" aria-label="Abmelden">
             <LogOut className="h-5 w-5" />
-          </Link>
-        </Button>
+          </Button>
+        </form>
       </div>
     </header>
   );
