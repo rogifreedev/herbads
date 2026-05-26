@@ -2,19 +2,12 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 function safeNext(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
   if (value.startsWith("/auth") || value.startsWith("/login")) return "/dashboard";
   return value;
-}
-
-function getRedirectOrigin() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  return appUrl || window.location.origin;
 }
 
 function clearSupabaseAuthCookies() {
@@ -38,23 +31,7 @@ export function GoogleLoginButton() {
   async function login() {
     setLoading(true);
     clearSupabaseAuthCookies();
-    const supabase = createSupabaseBrowserClient();
-    const origin = getRedirectOrigin();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
-        queryParams: {
-          hd: "herb-media.com",
-          prompt: "select_account"
-        }
-      }
-    });
-
-    if (error) {
-      setLoading(false);
-      toast.error(error.message);
-    }
+    window.location.assign(`/auth/google?next=${encodeURIComponent(next)}`);
   }
 
   return (
