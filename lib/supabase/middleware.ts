@@ -1,5 +1,5 @@
-import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { APP_SESSION_COOKIE_NAME, APP_SESSION_MAX_AGE, createAppSessionCookie, verifyAppSessionCookie } from "@/lib/auth-session";
 
 const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
 
@@ -73,10 +73,7 @@ function parseSessionCookie(value: string | null) {
     if (!accessToken) return null;
     if (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt * 1000 < Date.now()) return null;
 
-    return {
-      accessToken,
-      userEmail: typeof session.user?.email === "string" ? session.user.email : undefined
-    };
+    return { accessToken };
   } catch {
     return null;
   }
@@ -85,8 +82,6 @@ function parseSessionCookie(value: string | null) {
 async function getUserFromAuthCookie(request: NextRequest): Promise<AuthUser | null> {
   const session = parseSessionCookie(getAuthCookieValue(request));
   if (!session) return null;
-
-  if (isAllowedEmail(session.userEmail)) return { email: session.userEmail };
 
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL!}/auth/v1/user`, {
@@ -114,44 +109,38 @@ export async function updateSession(request: NextRequest) {
     });
   }
 
-  let supabaseResponse = NextResponse.next({
+  const appSession = await verifyAppSessionCookie(request.cookies.get(APP_SESSION_COOKIE_NAME)?.value);
+  if (isAllowedEmail(appSession?.email)) {
+    return NextResponse.next({
+      request: {
+        headers: request.headers
+      }
+    });
+  }
+
+  const supabaseResponse = NextResponse.next({
     request: {
       headers: request.headers
     }
   });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    getSupabasePublicKey(),
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({
-            request: {
-              headers: request.headers
-            }
-          });
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, { ...options, path: "/" }));
-        }
-      }
-    }
-  );
-
-  const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-  const user = supabaseUser ?? await getUserFromAuthCookie(request);
+  const user = await getUserFromAuthCookie(request);
 
   if (!user) {
     return unauthorizedResponse(request);
   }
 
   if (!isAllowedEmail(user.email)) {
-    await supabase.auth.signOut();
     return unauthorizedResponse(request, 403);
   }
+
+  supabaseResponse.cookies.set(APP_SESSION_COOKIE_NAME, await createAppSessionCookie(user.email!), {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: request.nextUrl.protocol === "https:",
+    maxAge: APP_SESSION_MAX_AGE
+  });
 
   return supabaseResponse;
 }

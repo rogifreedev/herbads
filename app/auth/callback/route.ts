@@ -1,6 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { Session } from "@supabase/supabase-js";
+import { APP_SESSION_COOKIE_NAME, APP_SESSION_MAX_AGE, createAppSessionCookie } from "@/lib/auth-session";
+
+const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
+
+function isAllowedEmail(email: string | undefined) {
+  return Boolean(email?.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`));
+}
 
 function safeNext(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
@@ -100,6 +107,20 @@ export async function GET(request: NextRequest) {
     response.cookies.set(authCookieName, "", { ...options, maxAge: 0 });
   }
 
+  async function persistAppSession(response: NextResponse, session: Session) {
+    const email = session.user.email;
+    if (!email || !isAllowedEmail(email)) return false;
+
+    response.cookies.set(APP_SESSION_COOKIE_NAME, await createAppSessionCookie(email), {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: requestUrl.protocol === "https:",
+      maxAge: APP_SESSION_MAX_AGE
+    });
+    return true;
+  }
+
   function finishRedirect() {
     const url = new URL(requestUrl.toString());
     url.pathname = "/auth/finish";
@@ -117,8 +138,12 @@ export async function GET(request: NextRequest) {
 
     if (!data.session) return redirect(requestUrl.origin + "/login?error=oauth");
 
-    const response = finishRedirect();
+    const response = redirect(requestUrl.origin + next);
     persistSession(response, data.session);
+    if (!await persistAppSession(response, data.session)) {
+      await supabase.auth.signOut();
+      return redirect(requestUrl.origin + "/login?error=domain");
+    }
     return response;
   }
 
