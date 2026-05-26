@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { calculateCreativePerformanceScore, type CreativePerformanceScore } from "@/lib/creative-score";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { aggregateInsightRows, emptyMetrics, type PerformanceMetrics } from "@/lib/metrics";
@@ -205,7 +206,9 @@ function mapCreative(creative: CreativeRow, ads: AdRow[], insights: InsightRow[]
   };
 }
 
-export async function listClientCreatives(clientId: string, dateRange?: CreativeInsightDateRange): Promise<{ creatives: CreativeListItem[]; error: string | null }> {
+async function listClientCreativesUncached(clientId: string, since?: string | null, until?: string | null): Promise<{ creatives: CreativeListItem[]; error: string | null }> {
+  const dateRange = { since, until };
+
   try {
     const supabase = createSupabaseServiceRoleClient();
     const [
@@ -286,6 +289,16 @@ export async function listClientCreatives(clientId: string, dateRange?: Creative
   } catch (error) {
     return { creatives: [], error: error instanceof Error ? error.message : "Creatives konnten nicht geladen werden." };
   }
+}
+
+const listClientCreativesCached = unstable_cache(
+  listClientCreativesUncached,
+  ["list-client-creatives-v2"],
+  { revalidate: 120 }
+);
+
+export async function listClientCreatives(clientId: string, dateRange?: CreativeInsightDateRange): Promise<{ creatives: CreativeListItem[]; error: string | null }> {
+  return listClientCreativesCached(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
 }
 
 export async function getClientCreativeDetail(clientId: string, creativeId: string, dateRange?: CreativeInsightDateRange): Promise<{ creative: CreativeDetail | null; error: string | null }> {

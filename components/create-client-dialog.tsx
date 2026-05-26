@@ -107,6 +107,7 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
 
     toast.success("Kunde angelegt.");
     setOpen(false);
+    window.dispatchEvent(new Event("herbads-clients-changed"));
     router.refresh();
     router.push(`/clients/${result.client.id}`);
   }

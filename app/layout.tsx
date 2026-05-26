@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   description: "Creative Intelligence fuer Meta Ads"
 };
 
+export const preferredRegion = "fra1";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="de" className="dark">

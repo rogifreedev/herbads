@@ -1,4 +1,3 @@
-import { ClientRouteGuard } from "@/components/client-route-guard";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { Topbar } from "@/components/topbar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -6,7 +5,6 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
-      <ClientRouteGuard />
       <SidebarNav />
       <SidebarInset>
         <Topbar />

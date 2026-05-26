@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { listClientCreatives, type CreativeInsightDateRange, type CreativeListItem } from "@/lib/creatives";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -421,7 +422,9 @@ function buildAngleInsights(creatives: CreativeListItem[], items: CreativeAngleI
     .sort((a, b) => b.score - a.score || b.spend - a.spend || b.creativeCount - a.creativeCount);
 }
 
-export async function getCreativeAnglesOverview(clientId: string, dateRange?: CreativeInsightDateRange): Promise<CreativeAnglesOverview> {
+async function getCreativeAnglesOverviewUncached(clientId: string, since?: string | null, until?: string | null): Promise<CreativeAnglesOverview> {
+  const dateRange = { since, until };
+
   try {
     const supabase = createSupabaseServiceRoleClient();
     const [{ creatives, error: creativesError }, { data: analyses, error: analysesError }] = await Promise.all([
@@ -462,6 +465,16 @@ export async function getCreativeAnglesOverview(clientId: string, dateRange?: Cr
       error: error instanceof Error ? error.message : "Creative Angles konnten nicht geladen werden."
     };
   }
+}
+
+const getCreativeAnglesOverviewCached = unstable_cache(
+  getCreativeAnglesOverviewUncached,
+  ["creative-angles-overview-v2"],
+  { revalidate: 120 }
+);
+
+export async function getCreativeAnglesOverview(clientId: string, dateRange?: CreativeInsightDateRange): Promise<CreativeAnglesOverview> {
+  return getCreativeAnglesOverviewCached(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
 }
 
 export function getAngleDescription(angle: string) {

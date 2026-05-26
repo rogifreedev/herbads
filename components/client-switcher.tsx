@@ -50,26 +50,30 @@ export function ClientSwitcher() {
 
       if (!ignore && Array.isArray(result.clients)) {
         setClients(result.clients);
-
-        const firstClient = result.clients[0] as ClientOption | undefined;
-        const activeClient = result.clients.find((client: ClientOption) => client.id === getActiveClientId(pathname));
-
-        if (activeClient) {
-          window.localStorage.setItem("herbads-active-client-id", activeClient.id);
-        } else if (firstClient) {
-          window.localStorage.setItem("herbads-active-client-id", firstClient.id);
-        }
       }
     }
 
     loadClients().catch(() => {
       if (!ignore) setClients(fallbackClients);
     });
+    window.addEventListener("herbads-clients-changed", loadClients);
 
     return () => {
       ignore = true;
+      window.removeEventListener("herbads-clients-changed", loadClients);
     };
-  }, [pathname]);
+  }, []);
+
+  useEffect(() => {
+    const firstClient = clients[0];
+    const activeClient = clients.find((client) => client.id === getActiveClientId(pathname));
+
+    if (activeClient) {
+      window.localStorage.setItem("herbads-active-client-id", activeClient.id);
+    } else if (firstClient) {
+      window.localStorage.setItem("herbads-active-client-id", firstClient.id);
+    }
+  }, [clients, pathname]);
 
   return (
     <DropdownMenu>

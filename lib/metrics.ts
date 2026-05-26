@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type PerformanceMetrics = {
@@ -111,7 +112,7 @@ export function aggregateInsightRows(rows: InsightRow[]): PerformanceMetrics {
   };
 }
 
-export async function getClientPerformanceMetrics(clientId: string) {
+async function getClientPerformanceMetricsUncached(clientId: string) {
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from("creative_insights_daily")
@@ -125,7 +126,13 @@ export async function getClientPerformanceMetrics(clientId: string) {
   return { metrics: aggregateInsightRows(data ?? []), hasData: Boolean(data?.length), error: null };
 }
 
-export async function getGlobalPerformanceMetrics() {
+export const getClientPerformanceMetrics = unstable_cache(
+  getClientPerformanceMetricsUncached,
+  ["client-performance-metrics-v1"],
+  { revalidate: 120 }
+);
+
+async function getGlobalPerformanceMetricsUncached() {
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from("creative_insights_daily")
@@ -137,6 +144,12 @@ export async function getGlobalPerformanceMetrics() {
 
   return { metrics: aggregateInsightRows(data ?? []), hasData: Boolean(data?.length), error: null };
 }
+
+export const getGlobalPerformanceMetrics = unstable_cache(
+  getGlobalPerformanceMetricsUncached,
+  ["global-performance-metrics-v1"],
+  { revalidate: 120 }
+);
 
 export function formatCurrency(value: number, maximumFractionDigits = 0) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits }).format(value);

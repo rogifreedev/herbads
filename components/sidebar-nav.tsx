@@ -16,7 +16,7 @@ import {
   useSidebar
 } from "@/components/ui/sidebar";
 import { navItems } from "@/lib/navigation";
-import { getActiveClientId } from "@/lib/routes";
+import { getActiveClientId, getDefaultClientId } from "@/lib/routes";
 import { SidebarNavItem } from "@/components/sidebar-nav-item";
 
 type SidebarNavProps = {
@@ -31,22 +31,8 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const closeMobile = onNavigate ?? (() => setOpenMobile(false));
 
   useEffect(() => {
-    let ignore = false;
-
-    async function loadDefaultClient() {
-      const response = await fetch("/api/clients", { cache: "no-store" });
-      const result = await response.json();
-      const firstClientId = Array.isArray(result.clients) ? result.clients[0]?.id : undefined;
-
-      if (!ignore && firstClientId) setDefaultClientId(firstClientId);
-    }
-
-    loadDefaultClient().catch(() => undefined);
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    setDefaultClientId(getActiveClientId(pathname) ?? getDefaultClientId());
+  }, [pathname]);
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
