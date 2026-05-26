@@ -17,6 +17,19 @@ function getRedirectOrigin() {
   return appUrl || window.location.origin;
 }
 
+function clearSupabaseAuthCookies() {
+  const names = document.cookie
+    .split(";")
+    .map((cookie) => cookie.split("=")[0]?.trim())
+    .filter((name): name is string => Boolean(name?.startsWith("sb-")));
+
+  for (const name of names) {
+    for (const path of ["/", "/auth", "/auth/callback", "/login"]) {
+      document.cookie = `${name}=; Max-Age=0; path=${path}; SameSite=Lax`;
+    }
+  }
+}
+
 export function GoogleLoginButton() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -24,6 +37,7 @@ export function GoogleLoginButton() {
 
   async function login() {
     setLoading(true);
+    clearSupabaseAuthCookies();
     const supabase = createSupabaseBrowserClient();
     const origin = getRedirectOrigin();
     const { error } = await supabase.auth.signInWithOAuth({

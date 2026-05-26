@@ -54,7 +54,7 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
                 return (
                   <SidebarMenuSubItem key={child.title}>
                     <SidebarMenuSubButton asChild isActive={childActive}>
-                      <Link href={childHref} onClick={onNavigate}>{child.title}</Link>
+                      <Link href={childHref} prefetch={false} onClick={onNavigate}>{child.title}</Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                 );
@@ -69,7 +69,7 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
-        <Link href={resolvedHref} onClick={onNavigate}>
+        <Link href={resolvedHref} prefetch={false} onClick={onNavigate}>
           {Icon ? <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-white/45")} /> : null}
           <span className="group-data-[state=collapsed]/sidebar-wrapper:md:hidden">{item.title}</span>
         </Link>
