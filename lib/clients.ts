@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { mockClients } from "@/lib/mock-data";
@@ -112,7 +114,7 @@ function getMockClients(): ClientSummary[] {
   }));
 }
 
-export async function listClients(): Promise<{ clients: ClientSummary[]; error: string | null }> {
+async function listClientsUncached(): Promise<{ clients: ClientSummary[]; error: string | null }> {
   try {
     const supabase = await getSupabaseForServerData();
 
@@ -153,6 +155,17 @@ export async function listClients(): Promise<{ clients: ClientSummary[]; error: 
       error: error instanceof Error ? error.message : "Supabase konnte nicht geladen werden."
     };
   }
+}
+
+const listClientsCached = unstable_cache(
+  listClientsUncached,
+  ["list-clients-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.clients] }
+);
+
+export async function listClients(): Promise<{ clients: ClientSummary[]; error: string | null }> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return listClientsUncached();
+  return listClientsCached();
 }
 
 export async function getClientById(clientId: string): Promise<{ client: ClientSummary; error: string | null }> {
@@ -196,6 +209,7 @@ export async function upsertClientProfile(clientId: string, input: ClientProfile
     throw new Error(error.message);
   }
 
+  revalidateCacheTags(CACHE_TAGS.competitors);
   return mapProfileRow(data, clientId);
 }
 
@@ -243,6 +257,7 @@ export async function createClient(input: CreateClientInput) {
     }
   }
 
+  revalidateCacheTags(CACHE_TAGS.clients);
   return {
     id: client.id,
     name: client.name,

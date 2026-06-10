@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS, CREATIVE_ANALYSIS_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { aggregateInsightRows } from "@/lib/metrics";
@@ -498,7 +500,7 @@ async function callOpenRouterForAnalysis(input: { creative: CreativeRow; clientN
   return { model, generated: normalizeGeneratedAnalysis(extractJsonObject(responseText)) };
 }
 
-export async function getLatestCreativeAnalysis(clientId: string, creativeId: string): Promise<{ analysis: CreativeAiAnalysis | null; error: string | null }> {
+async function getLatestCreativeAnalysisUncached(clientId: string, creativeId: string): Promise<{ analysis: CreativeAiAnalysis | null; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
     const { data, error } = await supabase
@@ -515,6 +517,16 @@ export async function getLatestCreativeAnalysis(clientId: string, creativeId: st
   } catch (error) {
     return { analysis: null, error: error instanceof Error ? error.message : "AI Analyse konnte nicht geladen werden." };
   }
+}
+
+const getLatestCreativeAnalysisCached = unstable_cache(
+  getLatestCreativeAnalysisUncached,
+  ["latest-creative-analysis-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.creativeAnalysis] }
+);
+
+export async function getLatestCreativeAnalysis(clientId: string, creativeId: string): Promise<{ analysis: CreativeAiAnalysis | null; error: string | null }> {
+  return getLatestCreativeAnalysisCached(clientId, creativeId);
 }
 
 export async function analyzeCreative(clientId: string, creativeId: string) {
@@ -575,5 +587,6 @@ export async function analyzeCreative(clientId: string, creativeId: string) {
 
   if (insertError || !inserted) throw new Error(insertError?.message ?? "AI Analyse konnte nicht gespeichert werden.");
 
+  revalidateCacheTags(...CREATIVE_ANALYSIS_CACHE_TAGS);
   return mapAnalysis(inserted as CreativeAiAnalysisRow);
 }

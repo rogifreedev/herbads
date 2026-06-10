@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { listClientCreatives, type CreativeInsightDateRange, type CreativeListItem } from "@/lib/creatives";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -470,7 +471,7 @@ async function getCreativeAnglesOverviewUncached(clientId: string, since?: strin
 const getCreativeAnglesOverviewCached = unstable_cache(
   getCreativeAnglesOverviewUncached,
   ["creative-angles-overview-v2"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: [CACHE_TAGS.creativeAngles] }
 );
 
 export async function getCreativeAnglesOverview(clientId: string, dateRange?: CreativeInsightDateRange): Promise<CreativeAnglesOverview> {

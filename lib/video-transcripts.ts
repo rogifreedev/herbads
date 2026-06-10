@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS, VIDEO_TRANSCRIPT_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -438,7 +440,7 @@ export function getHookTranscript(transcript: CreativeVideoTranscript | null, se
   return words || null;
 }
 
-export async function getLatestCreativeVideoTranscript(clientId: string, creativeId: string): Promise<{ transcript: CreativeVideoTranscript | null; error: string | null }> {
+async function getLatestCreativeVideoTranscriptUncached(clientId: string, creativeId: string): Promise<{ transcript: CreativeVideoTranscript | null; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
     const { data, error } = await supabase
@@ -453,6 +455,16 @@ export async function getLatestCreativeVideoTranscript(clientId: string, creativ
   } catch (error) {
     return { transcript: null, error: error instanceof Error ? error.message : "Transcript konnte nicht geladen werden." };
   }
+}
+
+const getLatestCreativeVideoTranscriptCached = unstable_cache(
+  getLatestCreativeVideoTranscriptUncached,
+  ["latest-creative-video-transcript-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.videoTranscripts] }
+);
+
+export async function getLatestCreativeVideoTranscript(clientId: string, creativeId: string): Promise<{ transcript: CreativeVideoTranscript | null; error: string | null }> {
+  return getLatestCreativeVideoTranscriptCached(clientId, creativeId);
 }
 
 export async function transcribeCreativeVideo(clientId: string, creativeId: string) {
@@ -534,6 +546,7 @@ export async function transcribeCreativeVideo(clientId: string, creativeId: stri
       .single();
 
     if (error || !data) throw new Error(error?.message ?? "Transcript konnte nicht gespeichert werden.");
+    revalidateCacheTags(...VIDEO_TRANSCRIPT_CACHE_TAGS);
     return mapTranscript(data as TranscriptRow);
   } catch (error) {
     await supabase.from("creative_video_transcripts").upsert(
@@ -548,6 +561,7 @@ export async function transcribeCreativeVideo(clientId: string, creativeId: stri
       { onConflict: "creative_id" }
     );
 
+    revalidateCacheTags(...VIDEO_TRANSCRIPT_CACHE_TAGS);
     throw error;
   }
 }

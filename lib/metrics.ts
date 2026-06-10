@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type PerformanceMetrics = {
@@ -129,7 +130,7 @@ async function getClientPerformanceMetricsUncached(clientId: string) {
 export const getClientPerformanceMetrics = unstable_cache(
   getClientPerformanceMetricsUncached,
   ["client-performance-metrics-v1"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: [CACHE_TAGS.metrics] }
 );
 
 async function getGlobalPerformanceMetricsUncached() {
@@ -148,7 +149,7 @@ async function getGlobalPerformanceMetricsUncached() {
 export const getGlobalPerformanceMetrics = unstable_cache(
   getGlobalPerformanceMetricsUncached,
   ["global-performance-metrics-v1"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: [CACHE_TAGS.metrics] }
 );
 
 export function formatCurrency(value: number, maximumFractionDigits = 0) {

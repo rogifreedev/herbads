@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -295,6 +296,7 @@ export async function analyzeLandingpage(clientId: string, url: string) {
       .single();
 
     if (error || !data) throw new Error(error?.message ?? "Landingpage Analyse konnte nicht gespeichert werden.");
+    revalidateCacheTags(CACHE_TAGS.landingpages);
     return data;
   } catch (error) {
     await supabase.from("landingpage_analyses").upsert(
@@ -307,6 +309,7 @@ export async function analyzeLandingpage(clientId: string, url: string) {
       { onConflict: "client_id,normalized_url" }
     );
 
+    revalidateCacheTags(CACHE_TAGS.landingpages);
     throw error;
   }
 }

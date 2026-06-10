@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { aggregateInsightRows, emptyMetrics, type PerformanceMetrics } from "@/lib/metrics";
@@ -242,7 +244,7 @@ function landingpageSignal(metrics: PerformanceMetrics, matchScore: number | nul
   return "WATCH";
 }
 
-export async function listClientLandingpages(clientId: string): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
+async function listClientLandingpagesUncached(clientId: string): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
     const [
@@ -347,4 +349,14 @@ export async function listClientLandingpages(clientId: string): Promise<{ landin
   } catch (error) {
     return { landingpages: [], error: error instanceof Error ? error.message : "Landingpages konnten nicht geladen werden." };
   }
+}
+
+const listClientLandingpagesCached = unstable_cache(
+  listClientLandingpagesUncached,
+  ["client-landingpages-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.landingpages] }
+);
+
+export async function listClientLandingpages(clientId: string): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
+  return listClientLandingpagesCached(clientId);
 }

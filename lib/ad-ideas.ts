@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { listClientCreatives, type CreativeListItem } from "@/lib/creatives";
 import { getCompetitorIdeaPatterns } from "@/lib/competitors";
@@ -321,7 +323,7 @@ function metaContextSummary(context: Awaited<ReturnType<typeof loadContext>>) {
   };
 }
 
-export async function getAdIdeasOverview(clientId: string): Promise<AdIdeasOverview> {
+async function getAdIdeasOverviewUncached(clientId: string): Promise<AdIdeasOverview> {
   try {
     const supabase = createSupabaseServiceRoleClient();
     const [context, { data: ideas, error: ideasError }] = await Promise.all([
@@ -358,6 +360,16 @@ export async function getAdIdeasOverview(clientId: string): Promise<AdIdeasOverv
       error: error instanceof Error ? error.message : "Ad Ideas konnten nicht geladen werden."
     };
   }
+}
+
+const getAdIdeasOverviewCached = unstable_cache(
+  getAdIdeasOverviewUncached,
+  ["ad-ideas-overview-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.adIdeas] }
+);
+
+export async function getAdIdeasOverview(clientId: string): Promise<AdIdeasOverview> {
+  return getAdIdeasOverviewCached(clientId);
 }
 
 async function callOpenRouter(prompt: string) {
@@ -492,6 +504,7 @@ Regeln:
     if (ideasError) throw new Error(ideasError.message);
   }
 
+  revalidateCacheTags(CACHE_TAGS.adIdeas);
   return getAdIdeasOverview(clientId);
 }
 
@@ -501,5 +514,6 @@ export async function updateAdIdeaStatus(clientId: string, ideaId: string, statu
   const supabase = createSupabaseServiceRoleClient();
   const { error } = await supabase.from("ad_ideas").update({ status }).eq("client_id", clientId).eq("id", ideaId);
   if (error) throw new Error(error.message);
+  revalidateCacheTags(CACHE_TAGS.adIdeas);
   return getAdIdeasOverview(clientId);
 }

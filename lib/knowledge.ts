@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS, KNOWLEDGE_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -286,7 +288,7 @@ async function createEmbeddings(texts: string[]): Promise<EmbeddingResult> {
   return { embeddings: texts.map(() => null), model: null, provider: null, status: "skipped_missing_api_key" };
 }
 
-export async function listKnowledgeDocuments(clientId: string): Promise<{ documents: KnowledgeDocument[]; error: string | null }> {
+async function listKnowledgeDocumentsUncached(clientId: string): Promise<{ documents: KnowledgeDocument[]; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
     const { data, error } = await supabase
@@ -309,6 +311,16 @@ export async function listKnowledgeDocuments(clientId: string): Promise<{ docume
       error: error instanceof Error ? error.message : "Wissensdokumente konnten nicht geladen werden."
     };
   }
+}
+
+const listKnowledgeDocumentsCached = unstable_cache(
+  listKnowledgeDocumentsUncached,
+  ["knowledge-documents-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.knowledge] }
+);
+
+export async function listKnowledgeDocuments(clientId: string): Promise<{ documents: KnowledgeDocument[]; error: string | null }> {
+  return listKnowledgeDocumentsCached(clientId);
 }
 
 export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInput) {
@@ -414,6 +426,7 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
 
     if (updateError || !readyDocument) throw updateError ?? new Error("Wissensdokument konnte nicht finalisiert werden.");
 
+    revalidateCacheTags(...KNOWLEDGE_CACHE_TAGS);
     return mapKnowledgeDocument(readyDocument);
   } catch (error) {
     if (documentId) {
@@ -421,6 +434,7 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
         .from("client_knowledge_documents")
         .update({ status: "error", error_message: error instanceof Error ? error.message : "Upload fehlgeschlagen." })
         .eq("id", documentId);
+      revalidateCacheTags(...KNOWLEDGE_CACHE_TAGS);
     }
 
     throw error;

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { calculateCreativePerformanceScore, type CreativePerformanceScore } from "@/lib/creative-score";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { aggregateInsightRows, emptyMetrics, type PerformanceMetrics } from "@/lib/metrics";
@@ -294,14 +295,16 @@ async function listClientCreativesUncached(clientId: string, since?: string | nu
 const listClientCreativesCached = unstable_cache(
   listClientCreativesUncached,
   ["list-client-creatives-v2"],
-  { revalidate: 120 }
+  { revalidate: 120, tags: [CACHE_TAGS.creatives] }
 );
 
 export async function listClientCreatives(clientId: string, dateRange?: CreativeInsightDateRange): Promise<{ creatives: CreativeListItem[]; error: string | null }> {
   return listClientCreativesCached(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
 }
 
-export async function getClientCreativeDetail(clientId: string, creativeId: string, dateRange?: CreativeInsightDateRange): Promise<{ creative: CreativeDetail | null; error: string | null }> {
+async function getClientCreativeDetailUncached(clientId: string, creativeId: string, since?: string | null, until?: string | null): Promise<{ creative: CreativeDetail | null; error: string | null }> {
+  const dateRange = { since, until };
+
   try {
     const supabase = createSupabaseServiceRoleClient();
     const { data: creative, error: creativeError } = await supabase
@@ -355,4 +358,14 @@ export async function getClientCreativeDetail(clientId: string, creativeId: stri
   } catch (error) {
     return { creative: null, error: error instanceof Error ? error.message : "Creative konnte nicht geladen werden." };
   }
+}
+
+const getClientCreativeDetailCached = unstable_cache(
+  getClientCreativeDetailUncached,
+  ["client-creative-detail-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.creatives] }
+);
+
+export async function getClientCreativeDetail(clientId: string, creativeId: string, dateRange?: CreativeInsightDateRange): Promise<{ creative: CreativeDetail | null; error: string | null }> {
+  return getClientCreativeDetailCached(clientId, creativeId, dateRange?.since ?? null, dateRange?.until ?? null);
 }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { META_DATA_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getOptionalEnv } from "@/lib/env";
 
@@ -642,6 +643,7 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
       await supabase.from("sync_jobs").update({ status: "completed", payload: summary, finished_at: new Date().toISOString() }).eq("id", job.id);
     }
 
+    revalidateCacheTags(...META_DATA_CACHE_TAGS);
     return summary;
   } catch (error) {
     if (job?.id) {
@@ -757,6 +759,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
       await supabase.from("sync_jobs").update({ status: "completed", payload: summary, finished_at: new Date().toISOString() }).eq("id", job.id);
     }
 
+    revalidateCacheTags(...META_DATA_CACHE_TAGS);
     return summary;
   } catch (error) {
     if (job?.id) {

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS, COMPETITOR_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -548,7 +550,7 @@ async function latestAnalyses(clientId: string) {
   return map;
 }
 
-export async function getCompetitorOverview(clientId: string): Promise<CompetitorOverview> {
+async function getCompetitorOverviewUncached(clientId: string): Promise<CompetitorOverview> {
   try {
     const supabase = createSupabaseServiceRoleClient();
     const [{ data: competitors, error: competitorsError }, { data: sources, error: sourcesError }, { data: creatives, error: creativesError }, cpmBase, links, analyses] = await Promise.all([
@@ -598,6 +600,20 @@ export async function getCompetitorOverview(clientId: string): Promise<Competito
   }
 }
 
+const getCompetitorOverviewCached = unstable_cache(
+  getCompetitorOverviewUncached,
+  ["competitor-overview-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.competitors] }
+);
+
+export async function getCompetitorOverview(clientId: string): Promise<CompetitorOverview> {
+  return getCompetitorOverviewCached(clientId);
+}
+
+function revalidateCompetitorCaches() {
+  revalidateCacheTags(...COMPETITOR_CACHE_TAGS);
+}
+
 export async function createCompetitor(clientId: string, input: CreateCompetitorInput) {
   const name = nullableString(input.name);
   if (!name) throw new Error("Competitor Name fehlt.");
@@ -623,6 +639,7 @@ export async function createCompetitor(clientId: string, input: CreateCompetitor
     if (sourceError) throw new Error(sourceError.message);
   }
 
+  revalidateCompetitorCaches();
   return getCompetitorOverview(clientId);
 }
 
@@ -637,6 +654,7 @@ export async function createCompetitorSource(clientId: string, input: { competit
     status: "pending"
   });
   if (error) throw new Error(error.message);
+  revalidateCompetitorCaches();
   return getCompetitorOverview(clientId);
 }
 
@@ -801,6 +819,7 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
       .from("competitor_ad_library_sources")
       .update({ status: "completed", error_message: null, last_checked_at: new Date().toISOString(), raw: { imported, pageId, adId: parsed.adId } })
       .eq("id", sourceId);
+    revalidateCompetitorCaches();
     return getCompetitorOverview(clientId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Competitor Crawl fehlgeschlagen.";
@@ -808,6 +827,7 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
       .from("competitor_ad_library_sources")
       .update({ status: "failed", error_message: message, last_checked_at: new Date().toISOString() })
       .eq("id", sourceId);
+    revalidateCompetitorCaches();
     throw new Error(message);
   }
 }
@@ -851,6 +871,7 @@ export async function createCompetitorCreative(clientId: string, input: CreateCo
     cta: nullableString(input.cta)
   });
   if (error) throw new Error(error.message);
+  revalidateCompetitorCaches();
   return getCompetitorOverview(clientId);
 }
 
@@ -992,6 +1013,7 @@ Regeln:
     .select("id")
     .single();
   if (insertError || !inserted) throw new Error(insertError?.message ?? "Competitor Analyse konnte nicht gespeichert werden.");
+  revalidateCompetitorCaches();
   return getCompetitorOverview(clientId);
 }
 
