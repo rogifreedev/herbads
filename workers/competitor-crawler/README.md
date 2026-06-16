@@ -53,7 +53,14 @@ docker run --rm --env-file workers/competitor-crawler/.env --shm-size=1g herbads
 
 ## Run with Compose
 
-From `workers/competitor-crawler`:
+Preferred: run from the repository root:
+
+```bash
+docker compose -f docker-compose.competitor-crawler.yml up -d --build
+docker compose -f docker-compose.competitor-crawler.yml logs -f competitor-crawler
+```
+
+Alternative: from `workers/competitor-crawler`:
 
 ```bash
 docker compose up -d --build
