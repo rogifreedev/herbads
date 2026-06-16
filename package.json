@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "worker:competitor-crawler": "NODE_OPTIONS=--conditions=react-server tsx workers/competitor-crawler/index.ts"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.2",
@@ -34,13 +35,15 @@
     "mammoth": "^1.12.0",
     "next": "^15.1.4",
     "pdf-parse": "^2.4.5",
+    "playwright": "^1.61.0",
     "react": "^19.0.0",
     "react-day-picker": "^10.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.22.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

@@ -57,6 +57,40 @@ type AnalysisRow = {
   created_at: string;
 };
 
+type CreativeSummaryRow = {
+  id: string;
+  meta_creative_id: string;
+  creative_type: string | null;
+  name: string | null;
+  title: string | null;
+  body: string | null;
+  call_to_action_type: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
+  video_id: string | null;
+  video_url: string | null;
+  video_embed_url: string | null;
+  video_permalink_url: string | null;
+  landing_url: string | null;
+  display_name: string | null;
+  ad_count: number | string | null;
+  creative_status: string | null;
+  first_active_date: string | null;
+  spend: number | string | null;
+  impressions: number | string | null;
+  reach: number | string | null;
+  clicks: number | string | null;
+  link_clicks: number | string | null;
+  outbound_clicks: number | string | null;
+  purchases: number | string | null;
+  purchase_value: number | string | null;
+  engagement: number | string | null;
+  video_3s_views: number | string | null;
+  thruplays: number | string | null;
+  funnel_stage: string | null;
+  has_ai_analysis: boolean | null;
+};
+
 type SupabaseQuery = {
   range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
 };
@@ -163,6 +197,47 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function ratio(numerator: number, denominator: number, multiplier = 1) {
+  return denominator > 0 ? (numerator / denominator) * multiplier : null;
+}
+
+function metricsFromSummary(row: CreativeSummaryRow): PerformanceMetrics {
+  const spend = numberValue(row.spend);
+  const impressions = numberValue(row.impressions);
+  const reach = numberValue(row.reach);
+  const clicks = numberValue(row.clicks);
+  const linkClicks = numberValue(row.link_clicks);
+  const outboundClicks = numberValue(row.outbound_clicks ?? row.link_clicks);
+  const purchases = numberValue(row.purchases);
+  const purchaseValue = numberValue(row.purchase_value);
+  const engagement = numberValue(row.engagement);
+  const video3sViews = numberValue(row.video_3s_views);
+  const thruplays = numberValue(row.thruplays);
+
+  return {
+    spend,
+    impressions,
+    reach,
+    clicks,
+    linkClicks,
+    outboundClicks,
+    purchases,
+    purchaseValue,
+    engagement,
+    video3sViews,
+    thruplays,
+    ctr: ratio(clicks, impressions, 100),
+    cpc: ratio(spend, clicks),
+    cpm: ratio(spend, impressions, 1000),
+    roas: ratio(purchaseValue, spend),
+    costPerPurchase: ratio(spend, purchases),
+    frequency: ratio(impressions, reach),
+    hookRate: ratio(video3sViews, impressions, 100),
+    holdRate: ratio(thruplays, video3sViews, 100),
+    outboundCvr: ratio(purchases, outboundClicks, 100)
+  };
+}
+
 function firstActiveDate(ads: AdRow[], insights: InsightRow[]) {
   const deliveredDates = insights
     .filter((insight) => insight.date && (numberValue(insight.impressions) > 0 || numberValue(insight.spend) > 0))
@@ -207,10 +282,60 @@ function mapCreative(creative: CreativeRow, ads: AdRow[], insights: InsightRow[]
   };
 }
 
+function mapCreativeSummary(row: CreativeSummaryRow): CreativeListItem {
+  const metrics = metricsFromSummary(row);
+
+  return {
+    id: row.id,
+    metaCreativeId: row.meta_creative_id,
+    name: row.display_name ?? row.name ?? row.title ?? row.meta_creative_id,
+    title: row.title,
+    body: row.body,
+    type: row.creative_type ?? "unknown",
+    imageUrl: row.image_url,
+    thumbnailUrl: row.thumbnail_url,
+    videoId: row.video_id,
+    videoUrl: row.video_url,
+    videoEmbedUrl: row.video_embed_url,
+    videoPermalinkUrl: row.video_permalink_url,
+    landingUrl: row.landing_url,
+    cta: row.call_to_action_type,
+    funnelStage: row.funnel_stage,
+    hasAiAnalysis: Boolean(row.has_ai_analysis),
+    adCount: numberValue(row.ad_count),
+    status: row.creative_status ?? "UNKNOWN",
+    firstActiveDate: row.first_active_date,
+    metrics,
+    performanceScore: calculateCreativePerformanceScore(metrics)
+  };
+}
+
+function isMissingCreativeSummaryRpcError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return error.code === "42883" || error.code === "PGRST202" || /get_client_creative_summaries/i.test(error.message ?? "");
+}
+
+async function listClientCreativesFromRpc(clientId: string, since?: string | null, until?: string | null) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase.rpc("get_client_creative_summaries", {
+    p_client_id: clientId,
+    p_since: since ?? null,
+    p_until: until ?? null
+  });
+
+  if (isMissingCreativeSummaryRpcError(error)) return null;
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as CreativeSummaryRow[]).map(mapCreativeSummary);
+}
+
 async function listClientCreativesUncached(clientId: string, since?: string | null, until?: string | null): Promise<{ creatives: CreativeListItem[]; error: string | null }> {
   const dateRange = { since, until };
 
   try {
+    const summarizedCreatives = await listClientCreativesFromRpc(clientId, since, until);
+    if (summarizedCreatives) return { creatives: summarizedCreatives, error: null };
+
     const supabase = createSupabaseServiceRoleClient();
     const [
       { data: creatives, error: creativesError },

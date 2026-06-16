@@ -1,0 +1,14 @@
+.git
+.next
+.vercel
+node_modules
+coverage
+playwright-report
+test-results
+tsconfig.tsbuildinfo
+.env
+.env.*
+!.env.example
+workers/competitor-crawler/.env
+workers/competitor-crawler/.env.*
+README.local.md

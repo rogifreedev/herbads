@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,23 @@ type Props = {
   clientId: string;
   competitors: Competitor[];
 };
+
+type BulkCompetitorAnalysisStatus = {
+  id: string;
+  status: string;
+  totalItems: number;
+  completedItems: number;
+  failedItems: number;
+  processedItems: number;
+  percent: number;
+  pauseUntil: string | null;
+  errorMessage: string | null;
+  activeItem: { creativeId: string; index: number; status: string; attempts: number; errorMessage: string | null } | null;
+};
+
+function isActiveBulkStatus(status?: string) {
+  return status === "pending" || status === "running" || status === "paused";
+}
 
 export function CompetitorCreateForm({ clientId }: { clientId: string }) {
   const router = useRouter();
@@ -227,6 +244,148 @@ export function CompetitorAnalyzeButton({ clientId, creativeId }: { clientId: st
   );
 }
 
+export function CompetitorBulkAnalyzeButton({ clientId, creativeIds, label = "Alle Ads analysieren" }: { clientId: string; creativeIds: string[]; label?: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [status, setStatus] = useState<BulkCompetitorAnalysisStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const previousStatusRef = useRef<string | null>(null);
+  const processingRef = useRef(false);
+
+  const loadStatus = useCallback(async () => {
+    const response = await fetch(`/api/clients/${clientId}/competitors/creatives/bulk-analyze`, { cache: "no-store" });
+    if (!response.ok) return;
+    const result = await response.json();
+    setStatus(result.status ?? null);
+  }, [clientId]);
+
+  const kickWorker = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    try {
+      await fetch(`/api/clients/${clientId}/competitors/creatives/bulk-analyze/process`, { method: "POST" });
+    } finally {
+      processingRef.current = false;
+    }
+  }, [clientId]);
+
+  useEffect(() => {
+    loadStatus().catch(() => undefined);
+  }, [loadStatus]);
+
+  useEffect(() => {
+    if (!isActiveBulkStatus(status?.status)) return;
+
+    const interval = window.setInterval(() => {
+      loadStatus().catch(() => undefined);
+      if (status?.status !== "paused") kickWorker().catch(() => undefined);
+    }, 4000);
+
+    return () => window.clearInterval(interval);
+  }, [kickWorker, loadStatus, status?.status]);
+
+  useEffect(() => {
+    if (!status) return;
+
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = status.status;
+
+    if (previousStatus && isActiveBulkStatus(previousStatus) && !isActiveBulkStatus(status.status)) {
+      if (status.failedItems > 0) toast.warning(`Competitor Bulk Analyse fertig mit ${status.failedItems} Fehlern.`);
+      else toast.success("Competitor Bulk Analyse abgeschlossen.");
+      startTransition(() => router.refresh());
+    }
+  }, [router, status]);
+
+  async function analyzeAll() {
+    if (creativeIds.length === 0) return;
+    const confirmed = window.confirm(`${creativeIds.length} Competitor Ads im Hintergrund analysieren? Das startet ${creativeIds.length} AI-Anfragen und kann Kosten verursachen.`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/clients/${clientId}/competitors/creatives/bulk-analyze`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ creativeIds })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Bulk Analyse fehlgeschlagen.");
+      setStatus(result.status ?? null);
+      toast.success("Competitor Bulk Analyse wurde als Hintergrundjob gestartet.");
+      kickWorker().catch(() => undefined);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bulk Analyse fehlgeschlagen.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (isActiveBulkStatus(status?.status)) {
+    const pausedUntil = status?.pauseUntil ? new Date(status.pauseUntil).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : null;
+    return (
+      <div className="flex flex-col gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-white md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="font-medium">Competitor Bulk Analyse laeuft im Hintergrund</p>
+          <p className="mt-1 text-xs text-white/60">
+            {status.processedItems} von {status.totalItems} verarbeitet ({status.percent}%){status.failedItems > 0 ? `, ${status.failedItems} Fehler` : ""}
+            {pausedUntil ? `, pausiert bis ${pausedUntil}` : ""}
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={loading || isPending} onClick={() => loadStatus().catch(() => undefined)}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Aktualisieren
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={loading || creativeIds.length === 0} onClick={analyzeAll}>
+      {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+      {label} ({creativeIds.length})
+    </Button>
+  );
+}
+
+export function CompetitorCrawlToggle({ clientId, competitorId, enabled }: { clientId: string; competitorId: string; enabled: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [loading, setLoading] = useState(false);
+
+  async function update(nextEnabled: boolean) {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/clients/${clientId}/competitors/${competitorId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ crawlEnabled: nextEnabled })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Settings konnten nicht gespeichert werden.");
+      toast.success(nextEnabled ? "Competitor zum Crawlen verbunden." : "Competitor vom Crawl getrennt.");
+      startTransition(() => router.refresh());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Settings konnten nicht gespeichert werden.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <label className="inline-flex items-center gap-2 text-sm text-white">
+      <input
+        type="checkbox"
+        className="h-4 w-4 accent-primary"
+        checked={enabled}
+        disabled={loading || pending}
+        onChange={(event) => update(event.target.checked)}
+      />
+      {enabled ? "Crawl verbunden" : "Nicht crawlen"}
+    </label>
+  );
+}
+
 export function CompetitorSourceCrawlButton({ clientId, sourceId, status }: { clientId: string; sourceId: string; status: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -239,7 +398,7 @@ export function CompetitorSourceCrawlButton({ clientId, sourceId, status }: { cl
       const response = await fetch(`/api/clients/${clientId}/competitors/sources/${sourceId}/crawl`, { method: "POST" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Crawl fehlgeschlagen.");
-      toast.success("Competitor Source gecrawlt.");
+      toast.success("Competitor Crawl Job gestartet.");
       startTransition(() => router.refresh());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Crawl fehlgeschlagen.");

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import type { BrowserContext, Page } from "playwright";
 import { CACHE_TAGS, COMPETITOR_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -15,6 +16,7 @@ type CompetitorRow = {
   meta_page_id: string | null;
   meta_ad_library_url: string | null;
   notes: string | null;
+  crawl_enabled?: boolean | null;
   created_at: string;
 };
 
@@ -57,6 +59,11 @@ type CreativeRow = {
   headline: string | null;
   hook: string | null;
   cta: string | null;
+  demographic_signals?: JsonRecord | null;
+  age_ranges?: unknown;
+  gender_signals?: unknown;
+  audience_locations?: unknown;
+  audience_interests?: unknown;
   created_at: string;
 };
 
@@ -79,6 +86,10 @@ type AnalysisRow = {
   weaknesses: unknown;
   hypotheses: unknown;
   adaptation_ideas: unknown;
+  target_audience?: string | null;
+  age_signal?: string | null;
+  audience_reasoning?: string | null;
+  thesis?: string | null;
   ranking_score: number | string | null;
   raw: JsonRecord | null;
   created_at: string;
@@ -102,30 +113,54 @@ type OpenRouterResponse = {
   error?: { message?: string };
 };
 
-type MetaAdArchiveResponse = {
-  data?: MetaAdArchiveItem[];
-  error?: { message?: string; type?: string; code?: number; error_subcode?: number };
+type PublicAdLibraryItem = {
+  id: string | null;
+  sourceUrl: string;
+  status: string;
+  format: string;
+  platforms: string[];
+  startedAt: string | null;
+  endedAt: string | null;
+  reachMin: number | null;
+  reachMax: number | null;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+  landingUrl: string | null;
+  primaryText: string | null;
+  headline: string | null;
+  hook: string | null;
+  cta: string | null;
+  demographicSignals: JsonRecord;
+  ageRanges: string[];
+  genderSignals: string[];
+  audienceLocations: string[];
+  audienceInterests: string[];
+  raw: JsonRecord;
 };
 
-type MetaRange = {
-  lower_bound?: string | number;
-  upper_bound?: string | number;
+type BrowserAdLibraryCard = {
+  id: string;
+  text: string;
+  images: string[];
+  videos: string[];
+  links: string[];
 };
 
-type MetaAdArchiveItem = {
-  id?: string;
-  ad_snapshot_url?: string;
-  ad_delivery_start_time?: string;
-  ad_delivery_stop_time?: string;
-  ad_creative_bodies?: string[];
-  ad_creative_link_titles?: string[];
-  ad_creative_link_captions?: string[];
-  ad_creative_link_descriptions?: string[];
-  page_id?: string;
-  page_name?: string;
-  publisher_platforms?: string[];
-  impressions?: MetaRange;
-  spend?: MetaRange;
+type EuTransparencySignals = {
+  source: "meta_eu_transparency";
+  scrapedAt: string;
+  targetLocations: Array<{ location: string; locationType: string; includedOrExcluded: string }>;
+  targetAgeRange: string | null;
+  targetGender: string | null;
+  euReach: number | null;
+  reachBreakdown: Array<{ location: string; ageRange: string; gender: string; reach: number }>;
+  rawSectionPreview: string;
+};
+
+type BrowserCrawlResult = {
+  items: PublicAdLibraryItem[];
+  raw: JsonRecord;
 };
 
 type GeneratedAnalysis = {
@@ -143,6 +178,10 @@ type GeneratedAnalysis = {
   weaknesses: string[];
   hypotheses: string[];
   adaptationIdeas: string[];
+  targetAudience: string;
+  ageSignal: string;
+  audienceReasoning: string;
+  thesis: string;
   rankingScore: number | null;
 };
 
@@ -153,6 +192,7 @@ export type Competitor = {
   metaPageId: string | null;
   metaAdLibraryUrl: string | null;
   notes: string | null;
+  crawlEnabled: boolean;
   createdAt: string;
 };
 
@@ -184,6 +224,10 @@ export type CompetitorCreativeAnalysis = {
   weaknesses: string[];
   hypotheses: string[];
   adaptationIdeas: string[];
+  targetAudience: string | null;
+  ageSignal: string | null;
+  audienceReasoning: string | null;
+  thesis: string | null;
   rankingScore: number | null;
   createdAt: string;
 };
@@ -216,6 +260,11 @@ export type CompetitorCreative = {
   headline: string | null;
   hook: string | null;
   cta: string | null;
+  demographicSignals: JsonRecord;
+  ageRanges: string[];
+  genderSignals: string[];
+  audienceLocations: string[];
+  audienceInterests: string[];
   rankingScore: number;
   analysis: CompetitorCreativeAnalysis | null;
   createdAt: string;
@@ -294,6 +343,10 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.map(stringValue).filter(Boolean) : [];
 }
 
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
+}
+
 function clampScore(value: unknown) {
   const score = nullableNumber(value);
   if (score === null) return null;
@@ -337,14 +390,6 @@ function parseDate(value: string | null | undefined) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
 }
 
-function rangeBounds(range: MetaRange | undefined) {
-  if (!range) return { min: null, max: null };
-  return {
-    min: nullableNumber(range.lower_bound),
-    max: nullableNumber(range.upper_bound)
-  };
-}
-
 function parseAdLibraryUrl(value: string) {
   try {
     const url = new URL(value);
@@ -357,28 +402,350 @@ function parseAdLibraryUrl(value: string) {
   }
 }
 
-function adLibraryCountries() {
-  return getOptionalEnv("COMPETITOR_AD_LIBRARY_COUNTRIES", "DE,AT,IT,CH")
-    .split(",")
-    .map((country) => country.trim().toUpperCase())
+function normalizePublicAdLibraryUrl(value: string) {
+  const url = new URL(value);
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Nur HTTP/HTTPS Ad Library Links koennen gecrawlt werden.");
+  if (!/(^|\.)facebook\.com$/i.test(url.hostname)) throw new Error("Bitte nutze einen facebook.com Ad Library Link.");
+  return url.toString();
+}
+
+function publicAdUrl(adId: string) {
+  return `https://www.facebook.com/ads/library/?id=${encodeURIComponent(adId)}`;
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+function decodeJsonString(value: string) {
+  try {
+    return JSON.parse(`"${value.replace(/"/g, "\\\"")}"`) as string;
+  } catch {
+    return value;
+  }
+}
+
+function normalizeSerializedString(value: string) {
+  return decodeHtmlEntities(
+    decodeJsonString(value)
+      .replace(/\\u0025/g, "%")
+      .replace(/\\\//g, "/")
+      .replace(/\\n/g, "\n")
+      .replace(/\\t/g, " ")
+      .replace(/\\"/g, "\"")
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function visibleTextFromHtml(html: string) {
+  return decodeHtmlEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+function extractStringValuesForKeys(html: string, keys: string[], limit = 20, options: { allowUrls?: boolean } = {}) {
+  const values: string[] = [];
+  const escapedKeys = keys.map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const pairPattern = new RegExp(`"(?:${escapedKeys})"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "gi");
+  const arrayPattern = new RegExp(`"(?:${escapedKeys})"\\s*:\\s*\\[((?:\\s*"(?:(?:\\\\.|[^"\\\\])*)"\\s*,?)+)\\]`, "gi");
+
+  for (const match of html.matchAll(pairPattern)) {
+    values.push(normalizeSerializedString(match[1]));
+  }
+
+  for (const match of html.matchAll(arrayPattern)) {
+    const arrayContent = match[1] ?? "";
+    for (const item of arrayContent.matchAll(/"((?:\\.|[^"\\])*)"/g)) {
+      values.push(normalizeSerializedString(item[1]));
+    }
+  }
+
+  return uniqueStrings(values)
+    .filter((value) => value.length >= 2 && value.length <= 1200 && (options.allowUrls || !/^https?:\/\//i.test(value)))
+    .slice(0, limit);
+}
+
+function extractUrlValues(html: string, keys: string[], limit = 12) {
+  return extractStringValuesForKeys(html, keys, limit, { allowUrls: true })
+    .map((value) => {
+      try {
+        const url = new URL(value);
+        if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+        return url.toString();
+      } catch {
+        return null;
+      }
+    })
+    .filter((value): value is string => Boolean(value));
+}
+
+function extractAdIdsFromHtml(html: string) {
+  const ids = [
+    ...Array.from(html.matchAll(/["\\]ad_archive_id["\\]?\s*[:=]\s*["\\]?(\d{8,})/gi)).map((match) => match[1]),
+    ...Array.from(html.matchAll(/["\\]adLibraryID["\\]?\s*[:=]\s*["\\]?(\d{8,})/gi)).map((match) => match[1]),
+    ...Array.from(html.matchAll(/[?&](?:id|ad_archive_id|ad_id)=(\d{8,})/gi)).map((match) => match[1])
+  ];
+  return uniqueStrings(ids);
+}
+
+function extractDateFromHtml(html: string, keys: string[]) {
+  const direct = extractStringValuesForKeys(html, keys, 1)[0];
+  if (direct) return parseDate(direct);
+  return null;
+}
+
+function extractReachFromText(text: string) {
+  const normalized = text.replace(/\./g, "").replace(/,/g, "");
+  const rangeMatch = normalized.match(/\b(?:reach|impressions|reichweite|impressionen)[^\d]{0,30}(\d{2,})\s*[-–]\s*(\d{2,})/i);
+  if (rangeMatch) return { min: nullableNumber(rangeMatch[1]), max: nullableNumber(rangeMatch[2]) };
+  const singleMatch = normalized.match(/\b(?:reach|impressions|reichweite|impressionen)[^\d]{0,30}(\d{2,})/i);
+  if (singleMatch) return { min: nullableNumber(singleMatch[1]), max: null };
+  return { min: null, max: null };
+}
+
+function extractAgeRanges(text: string) {
+  return uniqueStrings(Array.from(text.matchAll(/\b(?:13-17|18-24|25-34|35-44|45-54|55-64|65\+)\b/g)).map((match) => match[0]));
+}
+
+function extractGenderSignals(text: string) {
+  const signals: string[] = [];
+  if (/\b(?:women|female|frauen|weiblich)\b/i.test(text)) signals.push("female");
+  if (/\b(?:men|male|maenner|männer|maennlich|männlich)\b/i.test(text)) signals.push("male");
+  if (/\b(?:all genders|alle geschlechter)\b/i.test(text)) signals.push("all");
+  return uniqueStrings(signals);
+}
+
+function extractAudienceLocations(text: string) {
+  const locations = ["Germany", "Deutschland", "Austria", "Oesterreich", "Österreich", "Switzerland", "Schweiz", "Italy", "Italien", "DE", "AT", "CH", "IT"];
+  return locations.filter((location) => new RegExp(`\\b${location}\\b`, "i").test(text));
+}
+
+function compactTextLines(text: string) {
+  return text
+    .split(/\n+/)
+    .map((line) => line.replace(/\u200b/g, "").trim())
     .filter(Boolean);
 }
 
-function firstString(values: string[] | undefined) {
-  return values?.map((value) => value.trim()).find(Boolean) ?? null;
+function numberFromDisplay(value: string | null | undefined) {
+  const parsed = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function metaAdLibraryAccessToken() {
-  return getOptionalEnv("META_AD_LIBRARY_ACCESS_TOKEN") || getOptionalEnv("META_SYSTEM_USER_ACCESS_TOKEN");
+function parseAdLibraryDisplayDate(value: string | null | undefined) {
+  const match = value?.match(/Started running on ([A-Za-z]+) (\d{1,2}), (\d{4})/);
+  if (!match) return null;
+  const months: Record<string, number> = {
+    Jan: 1,
+    January: 1,
+    Feb: 2,
+    February: 2,
+    Mar: 3,
+    March: 3,
+    Apr: 4,
+    April: 4,
+    May: 5,
+    Jun: 6,
+    June: 6,
+    Jul: 7,
+    July: 7,
+    Aug: 8,
+    August: 8,
+    Sep: 9,
+    Sept: 9,
+    September: 9,
+    Oct: 10,
+    October: 10,
+    Nov: 11,
+    November: 11,
+    Dec: 12,
+    December: 12
+  };
+  const month = months[match[1]];
+  if (!month) return null;
+  return `${match[3]}-${String(month).padStart(2, "0")}-${String(Number(match[2])).padStart(2, "0")}`;
 }
 
-function metaAdArchiveErrorMessage(error?: MetaAdArchiveResponse["error"]) {
-  const message = error?.message ?? "Meta Ad Library Crawl fehlgeschlagen.";
-  const lowerMessage = message.toLowerCase();
-  if (lowerMessage.includes("permission") || lowerMessage.includes("permissions")) {
-    return "Meta blockiert den Ad Library Crawl: Die Meta App bzw. der verwendete Token hat keine Berechtigung fuer /ads_archive. Hinterlege einen Token mit Meta Ad Library API Zugriff als META_AD_LIBRARY_ACCESS_TOKEN oder ergaenze das Creative manuell ueber Advanced.";
+function isAdDomainLine(line: string | undefined) {
+  return Boolean(line && /^[A-Z0-9][A-Z0-9.-]*\.[A-Z]{2,}(?:\/\S*)?$/i.test(line) && line === line.toUpperCase());
+}
+
+function urlFromAdDomainLine(line: string | undefined) {
+  return isAdDomainLine(line) ? `https://${line?.toLowerCase()}` : null;
+}
+
+function landingUrlFromCard(card: BrowserAdLibraryCard, domainLine: string | undefined) {
+  for (const link of card.links) {
+    try {
+      const url = new URL(link);
+      if (url.hostname === "l.facebook.com") {
+        const target = url.searchParams.get("u");
+        if (target) return target;
+      }
+      if (!/(^|\.)facebook\.com$/i.test(url.hostname)) return url.toString();
+    } catch {
+      continue;
+    }
   }
-  return message;
+  return urlFromAdDomainLine(domainLine);
+}
+
+function firstSentence(value: string | null | undefined) {
+  const normalized = (value ?? "").replace(/\s+/g, " ").trim();
+  return normalized.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) || null;
+}
+
+function parseBrowserAdCard(card: BrowserAdLibraryCard): PublicAdLibraryItem {
+  const lines = compactTextLines(card.text);
+  const startedAt = parseAdLibraryDisplayDate(lines.find((line) => line.startsWith("Started running on ")));
+  const active = lines.includes("Active");
+  const sponsoredIndex = lines.lastIndexOf("Sponsored");
+  const content = sponsoredIndex >= 0 ? lines.slice(sponsoredIndex + 1) : lines;
+  const videoIndex = content.findIndex((line) => /^\d+:\d+\s*\/\s*\d+:\d+$/.test(line));
+  const domainIndex = content.findIndex((line) => isAdDomainLine(line));
+  const endCandidates = [videoIndex, domainIndex].filter((index) => index >= 0);
+  const primaryEnd = endCandidates.length ? Math.min(...endCandidates) : Math.max(1, content.length - 2);
+  const primaryText = content.slice(0, primaryEnd).join("\n").trim() || null;
+  const afterMetaIndex = domainIndex >= 0 ? domainIndex + 1 : videoIndex >= 0 ? videoIndex + 1 : primaryEnd;
+  const cta = content.slice(afterMetaIndex).reverse().find((line) => /^(order|shop|learn|buy|contact|mehr|jetzt|zum|anfragen)/i.test(line)) ?? null;
+  const headline = content.slice(afterMetaIndex).find((line) => line !== cta && !isAdDomainLine(line)) ?? null;
+  const imageUrl = card.images.find((url) => /^https?:\/\//i.test(url)) ?? null;
+  const videoUrl = card.videos.find((url) => /^https?:\/\//i.test(url)) ?? null;
+
+  return {
+    id: card.id,
+    sourceUrl: publicAdUrl(card.id),
+    status: active ? "active" : "inactive",
+    format: videoUrl || videoIndex >= 0 ? "video" : imageUrl ? "static" : "unknown",
+    platforms: [],
+    startedAt,
+    endedAt: active ? null : null,
+    reachMin: null,
+    reachMax: null,
+    imageUrl,
+    videoUrl,
+    thumbnailUrl: imageUrl,
+    landingUrl: landingUrlFromCard(card, content[domainIndex]),
+    primaryText,
+    headline,
+    hook: firstSentence(primaryText || headline),
+    cta,
+    demographicSignals: {
+      source: "public_ad_library_browser",
+      note: "Creative-Daten aus der gerenderten Meta Ad Library extrahiert. EU-Transparency wird im Detailpanel separat angereichert."
+    },
+    ageRanges: [],
+    genderSignals: [],
+    audienceLocations: [],
+    audienceInterests: [],
+    raw: {
+      source: "public_ad_library_browser",
+      text: card.text,
+      images: card.images,
+      videos: card.videos,
+      links: card.links
+    }
+  };
+}
+
+function parseEuTransparencySignals(bodyText: string): EuTransparencySignals | null {
+  const textLines = compactTextLines(bodyText);
+  const start = textLines.lastIndexOf("EU ad audience");
+  if (start < 0) return null;
+  const endCandidates = [
+    textLines.indexOf("About the advertiser", start),
+    textLines.indexOf("Advertiser and payer", start),
+    textLines.indexOf("About ads and data use", start)
+  ].filter((index) => index > start);
+  const end = endCandidates.length ? Math.min(...endCandidates) : textLines.length;
+  const sectionLines = textLines.slice(start, end);
+  const ageIndex = sectionLines.indexOf("Age");
+  const genderIndex = sectionLines.indexOf("Gender");
+  const deliveryIndex = sectionLines.indexOf("EU ad delivery");
+  const includedHeaderIndex = sectionLines.indexOf("Included or excluded");
+  const targetLocations: EuTransparencySignals["targetLocations"] = [];
+
+  if (includedHeaderIndex >= 0 && ageIndex > includedHeaderIndex) {
+    for (let index = includedHeaderIndex + 1; index + 2 < ageIndex; index += 3) {
+      const location = sectionLines[index];
+      const locationType = sectionLines[index + 1];
+      const includedOrExcluded = sectionLines[index + 2];
+      if (!location || !locationType || !includedOrExcluded) continue;
+      targetLocations.push({ location, locationType, includedOrExcluded });
+    }
+  }
+
+  const targetAge = ageIndex >= 0 ? sectionLines[ageIndex + 1] ?? null : null;
+  const targetAgeRange = targetAge?.match(/(\d{1,2}-\d{1,2}\+?|\d{1,2}\+)/)?.[1] ?? targetAge;
+  const targetGender = genderIndex >= 0 ? sectionLines[genderIndex + 1] ?? null : null;
+  const reachLabelIndex = deliveryIndex >= 0 ? sectionLines.indexOf("Reach", deliveryIndex) : -1;
+  const euReach = reachLabelIndex >= 0 ? numberFromDisplay(sectionLines[reachLabelIndex + 1]) : null;
+  const breakdownHeaderIndex = sectionLines.findIndex((line, index) =>
+    index > deliveryIndex &&
+    line === "Location" &&
+    sectionLines[index + 1] === "Age Range" &&
+    sectionLines[index + 2] === "Gender" &&
+    sectionLines[index + 3] === "Reach"
+  );
+  const reachBreakdown: EuTransparencySignals["reachBreakdown"] = [];
+
+  if (breakdownHeaderIndex >= 0) {
+    for (let index = breakdownHeaderIndex + 4; index + 3 < sectionLines.length; index += 4) {
+      const location = sectionLines[index];
+      const ageRange = sectionLines[index + 1];
+      const gender = sectionLines[index + 2];
+      const reach = numberFromDisplay(sectionLines[index + 3]);
+      if (!location || !ageRange || !gender || reach === null) break;
+      reachBreakdown.push({ location, ageRange, gender, reach });
+    }
+  }
+
+  if (!targetLocations.length && !targetAgeRange && !targetGender && euReach === null && !reachBreakdown.length) return null;
+
+  return {
+    source: "meta_eu_transparency",
+    scrapedAt: new Date().toISOString(),
+    targetLocations,
+    targetAgeRange,
+    targetGender,
+    euReach,
+    reachBreakdown,
+    rawSectionPreview: sectionLines.join("\n").slice(0, 12000)
+  };
+}
+
+function extractPlatforms(html: string, text: string) {
+  const serialized = extractStringValuesForKeys(html, ["publisher_platforms", "platforms"], 12);
+  const platformText = `${serialized.join(" ")} ${text}`;
+  const platforms = [
+    /instagram/i.test(platformText) ? "instagram" : null,
+    /facebook/i.test(platformText) ? "facebook" : null,
+    /messenger/i.test(platformText) ? "messenger" : null,
+    /audience_network/i.test(platformText) ? "audience_network" : null
+  ];
+  return uniqueStrings(platforms);
+}
+
+function inferFormatFromPublicAd(input: { html: string; imageUrl: string | null; videoUrl: string | null }) {
+  if (input.videoUrl || /video|reel|playable_video/i.test(input.html)) return "video";
+  if (/carousel|multi_share/i.test(input.html)) return "carousel";
+  if (input.imageUrl) return "static";
+  return "unknown";
 }
 
 function estimateConfidence(input: { reachEstimate: number | null; activeDays: number | null; ownCpmConfidence: string }) {
@@ -422,6 +789,7 @@ function mapCompetitor(row: CompetitorRow): Competitor {
     metaPageId: row.meta_page_id,
     metaAdLibraryUrl: row.meta_ad_library_url,
     notes: row.notes,
+    crawlEnabled: row.crawl_enabled !== false,
     createdAt: row.created_at
   };
 }
@@ -458,6 +826,10 @@ function mapAnalysis(row: AnalysisRow | null | undefined): CompetitorCreativeAna
     weaknesses: stringArray(row.weaknesses),
     hypotheses: stringArray(row.hypotheses),
     adaptationIdeas: stringArray(row.adaptation_ideas),
+    targetAudience: row.target_audience ?? null,
+    ageSignal: row.age_signal ?? null,
+    audienceReasoning: row.audience_reasoning ?? null,
+    thesis: row.thesis ?? null,
     rankingScore: nullableNumber(row.ranking_score),
     createdAt: row.created_at
   };
@@ -492,6 +864,11 @@ function mapCreative(row: CreativeRow, competitorsById: Map<string, CompetitorRo
     headline: row.headline,
     hook: row.hook,
     cta: row.cta,
+    demographicSignals: row.demographic_signals ?? {},
+    ageRanges: stringArray(row.age_ranges),
+    genderSignals: stringArray(row.gender_signals),
+    audienceLocations: stringArray(row.audience_locations),
+    audienceInterests: stringArray(row.audience_interests),
     rankingScore: scoreCreative(row, analysis),
     analysis: mapAnalysis(analysis),
     createdAt: row.created_at
@@ -537,7 +914,7 @@ async function latestAnalyses(clientId: string) {
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from("competitor_creative_analyses")
-    .select("id,competitor_creative_id,model,status,hook,hook_explanation,body,ending,visual_elements,detected_text,offer,angle,funnel_stage,emotion_scores,strengths,weaknesses,hypotheses,adaptation_ideas,ranking_score,raw,created_at")
+    .select("id,competitor_creative_id,model,status,hook,hook_explanation,body,ending,visual_elements,detected_text,offer,angle,funnel_stage,emotion_scores,strengths,weaknesses,hypotheses,adaptation_ideas,target_audience,age_signal,audience_reasoning,thesis,ranking_score,raw,created_at")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -554,9 +931,9 @@ async function getCompetitorOverviewUncached(clientId: string): Promise<Competit
   try {
     const supabase = createSupabaseServiceRoleClient();
     const [{ data: competitors, error: competitorsError }, { data: sources, error: sourcesError }, { data: creatives, error: creativesError }, cpmBase, links, analyses] = await Promise.all([
-      supabase.from("competitors").select("id,client_id,name,website_url,meta_page_id,meta_ad_library_url,notes,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
+      supabase.from("competitors").select("id,client_id,name,website_url,meta_page_id,meta_ad_library_url,notes,crawl_enabled,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
       supabase.from("competitor_ad_library_sources").select("id,client_id,competitor_id,url,status,error_message,last_checked_at,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
-      supabase.from("competitor_creatives").select("id,client_id,competitor_id,source_id,source_url,ad_library_id,status,format,platforms,started_at,ended_at,active_days,reach_min,reach_max,reach_estimate,estimated_cpm,estimated_spend,estimated_daily_spend,estimate_confidence,thumbnail_url,video_url,image_url,landing_url,primary_text,headline,hook,cta,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
+      supabase.from("competitor_creatives").select("id,client_id,competitor_id,source_id,source_url,ad_library_id,status,format,platforms,started_at,ended_at,active_days,reach_min,reach_max,reach_estimate,estimated_cpm,estimated_spend,estimated_daily_spend,estimate_confidence,thumbnail_url,video_url,image_url,landing_url,primary_text,headline,hook,cta,demographic_signals,age_ranges,gender_signals,audience_locations,audience_interests,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
       ownCpm(clientId),
       detectedLinks(clientId),
       latestAnalyses(clientId)
@@ -611,7 +988,12 @@ export async function getCompetitorOverview(clientId: string): Promise<Competito
 }
 
 function revalidateCompetitorCaches() {
-  revalidateCacheTags(...COMPETITOR_CACHE_TAGS);
+  try {
+    revalidateCacheTags(...COMPETITOR_CACHE_TAGS);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message.includes("static generation store missing")) throw error;
+  }
 }
 
 export async function createCompetitor(clientId: string, input: CreateCompetitorInput) {
@@ -658,86 +1040,420 @@ export async function createCompetitorSource(clientId: string, input: { competit
   return getCompetitorOverview(clientId);
 }
 
-async function fetchAdArchiveByPage(pageId: string) {
-  const token = metaAdLibraryAccessToken();
-  if (!token) throw new Error("META_AD_LIBRARY_ACCESS_TOKEN oder META_SYSTEM_USER_ACCESS_TOKEN fehlt.");
-  const apiVersion = getOptionalEnv("META_API_VERSION", "v20.0");
-  const limit = Math.max(1, Math.min(100, Number(getOptionalEnv("COMPETITOR_CRAWL_LIMIT", "25")) || 25));
-  const fields = [
-    "id",
-    "ad_snapshot_url",
-    "ad_delivery_start_time",
-    "ad_delivery_stop_time",
-    "ad_creative_bodies",
-    "ad_creative_link_titles",
-    "ad_creative_link_captions",
-    "ad_creative_link_descriptions",
-    "page_id",
-    "page_name",
-    "publisher_platforms",
-    "impressions",
-    "spend"
-  ].join(",");
-  const params = new URLSearchParams({
-    access_token: token,
-    ad_type: "ALL",
-    ad_active_status: "ALL",
-    ad_reached_countries: JSON.stringify(adLibraryCountries()),
-    search_page_ids: JSON.stringify([pageId]),
-    fields,
-    limit: String(limit)
-  });
-  const response = await fetch(`https://graph.facebook.com/${apiVersion}/ads_archive?${params.toString()}`, { cache: "no-store" });
-  const payload = (await response.json()) as MetaAdArchiveResponse;
-  if (!response.ok || payload.error) throw new Error(metaAdArchiveErrorMessage(payload.error));
-  return payload.data ?? [];
+export async function updateCompetitorCrawlSettings(clientId: string, competitorId: string, input: { crawlEnabled: boolean }) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .from("competitors")
+    .update({ crawl_enabled: input.crawlEnabled })
+    .eq("client_id", clientId)
+    .eq("id", competitorId);
+  if (error) throw new Error(error.message);
+  revalidateCompetitorCaches();
+  return getCompetitorOverview(clientId);
 }
 
-async function upsertArchiveItem(clientId: string, source: SourceRow, item: MetaAdArchiveItem, cpmBase: Awaited<ReturnType<typeof ownCpm>>) {
-  if (!item.id) return false;
-  const supabase = createSupabaseServiceRoleClient();
-  const reach = rangeBounds(item.impressions);
-  const startedAt = parseDate(item.ad_delivery_start_time);
-  const endedAt = parseDate(item.ad_delivery_stop_time);
-  const estimates = estimateCreativeMetrics({
-    reachMin: reach.min,
-    reachMax: reach.max,
+async function fetchPublicAdLibraryHtml(url: string) {
+  const normalizedUrl = normalizePublicAdLibraryUrl(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const response = await fetch(normalizedUrl, {
+      cache: "no-store",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
+      }
+    });
+
+    if (!response.ok) throw new Error(`Ad Library Link konnte nicht geladen werden (${response.status}).`);
+    return { html: await response.text(), finalUrl: response.url };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function publicAdItemFromHtml(html: string, sourceUrl: string, adId: string | null): PublicAdLibraryItem {
+  const text = visibleTextFromHtml(html);
+  const bodyCandidates = extractStringValuesForKeys(html, ["ad_creative_bodies", "ad_creative_body", "message", "body", "primary_text"], 10);
+  const headlineCandidates = extractStringValuesForKeys(html, ["ad_creative_link_titles", "ad_creative_link_title", "title", "headline", "caption"], 10);
+  const ctaCandidates = extractStringValuesForKeys(html, ["call_to_action_type", "cta_text", "cta"], 4);
+  const imageUrls = extractUrlValues(html, ["image_url", "thumbnail_url", "resized_image_url", "original_image_url"], 8);
+  const videoUrls = extractUrlValues(html, ["video_url", "video_hd_url", "video_sd_url", "playable_url"], 4);
+  const landingUrls = extractUrlValues(html, ["link_url", "website_url", "landing_url", "url"], 8)
+    .filter((url) => !url.includes("facebook.com/ads/library") && !url.includes("facebook.com/ads/archive"));
+  const startedAt = extractDateFromHtml(html, ["ad_delivery_start_time", "start_date", "started_at"]);
+  const endedAt = extractDateFromHtml(html, ["ad_delivery_stop_time", "end_date", "ended_at"]);
+  const reach = extractReachFromText(text);
+  const ageRanges = extractAgeRanges(text);
+  const genderSignals = extractGenderSignals(text);
+  const audienceLocations = extractAudienceLocations(text);
+  const platforms = extractPlatforms(html, text);
+  const primaryText = bodyCandidates[0] ?? null;
+  const headline = headlineCandidates[0] ?? null;
+  const imageUrl = imageUrls[0] ?? null;
+  const videoUrl = videoUrls[0] ?? null;
+  const demographicSignals = {
+    source: ageRanges.length || genderSignals.length || audienceLocations.length ? "public_ad_library_html" : "not_publicly_visible",
+    ageRanges,
+    genderSignals,
+    audienceLocations,
+    note: ageRanges.length || genderSignals.length || audienceLocations.length
+      ? "Aus oeffentlich sichtbarem/serialisiertem Ad-Library-HTML extrahiert."
+      : "Keine echten Delivery-Demografien im oeffentlichen HTML gefunden; Zielgruppe kann nur per AI aus Creative/Copy inferiert werden."
+  };
+
+  return {
+    id: adId,
+    sourceUrl,
+    status: endedAt ? "inactive" : "active",
+    format: inferFormatFromPublicAd({ html, imageUrl, videoUrl }),
+    platforms,
     startedAt,
     endedAt,
+    reachMin: reach.min,
+    reachMax: reach.max,
+    imageUrl,
+    videoUrl,
+    thumbnailUrl: imageUrl,
+    landingUrl: landingUrls[0] ?? null,
+    primaryText,
+    headline,
+    hook: primaryText?.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ?? headline,
+    cta: ctaCandidates[0] ?? null,
+    demographicSignals,
+    ageRanges,
+    genderSignals,
+    audienceLocations,
+    audienceInterests: [],
+    raw: {
+      source: "public_ad_library_html",
+      sourceUrl,
+      adId,
+      extractedBodyCandidates: bodyCandidates.slice(0, 3),
+      extractedHeadlineCandidates: headlineCandidates.slice(0, 3),
+      extractedAssetUrls: { imageUrls: imageUrls.slice(0, 3), videoUrls: videoUrls.slice(0, 2), landingUrls: landingUrls.slice(0, 3) },
+      textPreview: text.slice(0, 4000)
+    }
+  };
+}
+
+async function fetchPublicAdLibraryItems(sourceUrl: string) {
+  const parsed = parseAdLibraryUrl(sourceUrl);
+  const sourcePage = await fetchPublicAdLibraryHtml(sourceUrl);
+  const ids = uniqueStrings([
+    parsed.adId,
+    ...extractAdIdsFromHtml(sourcePage.html)
+  ]);
+  const limit = Math.max(1, Math.min(100, Number(getOptionalEnv("COMPETITOR_CRAWL_LIMIT", "25")) || 25));
+  const selectedIds = ids.slice(0, limit);
+
+  if (selectedIds.length === 0) {
+    return [publicAdItemFromHtml(sourcePage.html, sourcePage.finalUrl, null)];
+  }
+
+  const items: PublicAdLibraryItem[] = [];
+  for (const adId of selectedIds) {
+    try {
+      const adPage = parsed.adId === adId ? sourcePage : await fetchPublicAdLibraryHtml(publicAdUrl(adId));
+      items.push(publicAdItemFromHtml(adPage.html, adPage.finalUrl, adId));
+    } catch {
+      items.push({
+        id: adId,
+        sourceUrl: publicAdUrl(adId),
+        status: "pending_public_enrichment",
+        format: "unknown",
+        platforms: [],
+        startedAt: null,
+        endedAt: null,
+        reachMin: null,
+        reachMax: null,
+        imageUrl: null,
+        videoUrl: null,
+        thumbnailUrl: null,
+        landingUrl: null,
+        primaryText: null,
+        headline: null,
+        hook: null,
+        cta: null,
+        demographicSignals: { source: "public_ad_library_html", note: "Ad-ID gefunden, Detailseite konnte aber nicht ausgelesen werden." },
+        ageRanges: [],
+        genderSignals: [],
+        audienceLocations: [],
+        audienceInterests: [],
+        raw: { source: "public_ad_library_html", adId, sourceUrl: publicAdUrl(adId), status: "detail_fetch_failed" }
+      });
+    }
+  }
+
+  return items;
+}
+
+function competitorCrawlLimit() {
+  return Math.max(1, Math.min(100, Number(getOptionalEnv("COMPETITOR_CRAWL_LIMIT", "100")) || 100));
+}
+
+function competitorCrawlConcurrency() {
+  return Math.max(1, Math.min(6, Number(getOptionalEnv("COMPETITOR_CRAWL_CONCURRENCY", "4")) || 4));
+}
+
+async function waitForBodyText(page: Page, predicate: (text: string) => boolean, timeout = 12000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    const text = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+    if (predicate(text)) return text;
+    await page.waitForTimeout(350);
+  }
+  return page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+}
+
+async function extractBrowserAdCards(page: Page, sourceUrl: string, limit: number) {
+  const response = await page.goto(normalizePublicAdLibraryUrl(sourceUrl), { waitUntil: "domcontentloaded", timeout: 60000 });
+  await waitForBodyText(page, (text) => text.includes("Library ID:") || text.includes("No ads"), 15000);
+
+  let lastCount = 0;
+  let stableRounds = 0;
+  const maxScrolls = Math.max(8, Math.min(40, Math.ceil(limit / 6)));
+  for (let index = 0; index < maxScrolls; index += 1) {
+    const count = await page.evaluate(() => {
+      const ids = new Set<string>();
+      for (const node of Array.from(document.querySelectorAll("div"))) {
+        if (!(node instanceof HTMLElement)) continue;
+        const match = node.innerText.match(/Library ID:\s*(\d{8,})/);
+        if (match) ids.add(match[1]);
+      }
+      return ids.size;
+    });
+    if (count >= limit) break;
+    stableRounds = count === lastCount ? stableRounds + 1 : 0;
+    if (stableRounds >= 3 && count > 0) break;
+    lastCount = count;
+    await page.mouse.wheel(0, 2400);
+    await page.waitForTimeout(850);
+  }
+
+  const cards = await page.evaluate((cardLimit) => {
+    function uniqueBrowserStrings(values: Array<string | null | undefined>) {
+      return Array.from(new Set(values.filter(Boolean) as string[]));
+    }
+
+    const candidates = Array.from(document.querySelectorAll("div"))
+      .flatMap((node) => {
+        if (!(node instanceof HTMLElement)) return [];
+        const text = node.innerText || "";
+        const match = text.match(/Library ID:\s*(\d{8,})/);
+        if (!match || !text.includes("Sponsored")) return [];
+        return [{ node, id: match[1], text, length: text.length }];
+      })
+      .sort((a, b) => a.length - b.length);
+
+    const byId = new Map<string, { node: HTMLElement; id: string; text: string; length: number }>();
+    for (const candidate of candidates) {
+      if (!byId.has(candidate.id)) byId.set(candidate.id, candidate);
+    }
+
+    return Array.from(byId.values()).slice(0, cardLimit).map((candidate) => ({
+      id: candidate.id,
+      text: candidate.text,
+      images: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("img")).map((image) => image.currentSrc || image.src)),
+      videos: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("video")).map((video) => video.currentSrc || video.src || video.poster)),
+      links: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("a")).map((anchor) => anchor.href))
+    }));
+  }, limit);
+
+  return { cards, pageStatus: response?.status() ?? null, finalUrl: page.url() };
+}
+
+async function targetAdButtonRect(page: Page, adId: string, label: string) {
+  return page.evaluate(({ targetAdId, buttonLabel }) => {
+    const matches = Array.from(document.querySelectorAll("div"))
+      .flatMap((node) => {
+        if (!(node instanceof HTMLElement)) return [];
+        return [{ node, text: node.innerText || "" }];
+      })
+      .filter((item) => item.text.includes(`Library ID: ${targetAdId}`) && item.text.includes("Sponsored"))
+      .sort((a, b) => a.text.length - b.text.length);
+
+    for (const match of matches.slice(0, 6)) {
+      const buttons = Array.from(match.node.querySelectorAll("[role='button'], button"));
+      const button = buttons.find((node) => (node instanceof HTMLElement ? node.innerText || node.textContent || "" : "").includes(buttonLabel));
+      if (!(button instanceof HTMLElement)) continue;
+      button.scrollIntoView({ block: "center", inline: "center" });
+      const box = button.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    }
+
+    return null;
+  }, { targetAdId: adId, buttonLabel: label });
+}
+
+async function exactTextRect(page: Page, text: string) {
+  return page.evaluate((targetText) => {
+    const candidates = Array.from(document.querySelectorAll("[role='button'], button, div, span"))
+      .flatMap((node) => {
+        if (!(node instanceof HTMLElement)) return [];
+        return [{ node, text: (node.innerText || node.textContent || "").trim() }];
+      })
+      .filter((item) => item.text === targetText)
+      .map((item) => item.node);
+    const node = candidates[candidates.length - 1] ?? null;
+    if (!node) return null;
+    node.scrollIntoView({ block: "center", inline: "center" });
+    const box = node.getBoundingClientRect();
+    return { x: box.x, y: box.y, width: box.width, height: box.height };
+  }, text);
+}
+
+async function openEuTransparencyText(page: Page, adId: string) {
+  await page.goto(publicAdUrl(adId), { waitUntil: "domcontentloaded", timeout: 60000 });
+  await waitForBodyText(page, (text) => text.includes(`Library ID: ${adId}`), 18000);
+
+  let detailsRect = await targetAdButtonRect(page, adId, "See ad details");
+  for (let attempt = 0; !detailsRect && attempt < 4; attempt += 1) {
+    await page.mouse.wheel(0, 1800);
+    await page.waitForTimeout(600);
+    detailsRect = await targetAdButtonRect(page, adId, "See ad details");
+  }
+  if (!detailsRect) throw new Error("See ad details button not found.");
+  await page.mouse.click(detailsRect.x + detailsRect.width / 2, detailsRect.y + detailsRect.height / 2);
+  await waitForBodyText(page, (text) => text.includes("Ad Details") && text.includes("Transparency by location"), 18000);
+
+  const transparencyRect = await exactTextRect(page, "Transparency by location");
+  if (!transparencyRect) throw new Error("Transparency by location section not found.");
+  await page.mouse.click(transparencyRect.x + transparencyRect.width / 2, transparencyRect.y + transparencyRect.height / 2);
+  return waitForBodyText(page, (text) => text.includes("EU ad audience") && text.includes("EU ad delivery"), 18000);
+}
+
+async function enrichItemsWithEuTransparency(context: BrowserContext, items: PublicAdLibraryItem[], skippedIds: Set<string>, concurrency: number) {
+  const targets = items.filter((item) => item.id && !skippedIds.has(item.id));
+  let cursor = 0;
+  let updated = 0;
+  let failed = 0;
+
+  async function worker() {
+    const page = await context.newPage();
+    try {
+      while (cursor < targets.length) {
+        const item = targets[cursor];
+        cursor += 1;
+        if (!item.id) continue;
+
+        try {
+          const text = await openEuTransparencyText(page, item.id);
+          const signals = parseEuTransparencySignals(text);
+          if (!signals) throw new Error("EU transparency section not parseable.");
+          item.reachMin = signals.euReach;
+          item.reachMax = signals.euReach;
+          item.demographicSignals = signals as unknown as JsonRecord;
+          item.ageRanges = uniqueStrings([signals.targetAgeRange, ...signals.reachBreakdown.map((row) => row.ageRange)]);
+          item.genderSignals = uniqueStrings([signals.targetGender, ...signals.reachBreakdown.map((row) => row.gender)]).map((value) => value.toLowerCase());
+          item.audienceLocations = uniqueStrings(signals.targetLocations.map((row) => row.location));
+          item.raw = { ...item.raw, euTransparency: { source: signals.source, euReach: signals.euReach, targetAgeRange: signals.targetAgeRange, targetGender: signals.targetGender, targetLocations: signals.targetLocations } };
+          updated += 1;
+        } catch (error) {
+          failed += 1;
+          item.raw = { ...item.raw, euTransparencyError: error instanceof Error ? error.message : "EU transparency crawl failed." };
+        }
+      }
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, targets.length)) }, () => worker()));
+  return { updated, failed, skipped: skippedIds.size };
+}
+
+async function fetchPublicAdLibraryItemsWithBrowser(sourceUrl: string, skippedEuTransparencyIds: Set<string>): Promise<BrowserCrawlResult> {
+  const { chromium } = await import("playwright");
+  const limit = competitorCrawlLimit();
+  const concurrency = competitorCrawlConcurrency();
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    locale: "en-US",
+    viewport: { width: 1440, height: 1200 },
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  });
+
+  try {
+    const page = await context.newPage();
+    const { cards, pageStatus, finalUrl } = await extractBrowserAdCards(page, sourceUrl, limit);
+    await page.close().catch(() => {});
+
+    const items = cards.map(parseBrowserAdCard);
+    if (items.length === 0) throw new Error("Browser-Crawl fand keine Ad-Karten in der Meta Ad Library.");
+    const euTransparency = await enrichItemsWithEuTransparency(context, items, skippedEuTransparencyIds, concurrency);
+
+    return {
+      items,
+      raw: {
+        crawler: "public_ad_library_browser",
+        pageStatus,
+        finalUrl,
+        totalCards: cards.length,
+        concurrency,
+        euTransparency
+      }
+    };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+async function upsertPublicAdLibraryItem(clientId: string, source: SourceRow, item: PublicAdLibraryItem, cpmBase: Awaited<ReturnType<typeof ownCpm>>) {
+  const supabase = createSupabaseServiceRoleClient();
+  const estimates = estimateCreativeMetrics({
+    reachMin: item.reachMin,
+    reachMax: item.reachMax,
+    startedAt: item.startedAt,
+    endedAt: item.endedAt,
     cpm: cpmBase.cpm,
     cpmConfidence: cpmBase.confidence
   });
-  const primaryText = firstString(item.ad_creative_bodies);
-  const headline = firstString(item.ad_creative_link_titles) ?? firstString(item.ad_creative_link_captions);
-  const existing = await supabase
-    .from("competitor_creatives")
-    .select("id")
-    .eq("client_id", clientId)
-    .eq("ad_library_id", item.id)
-    .maybeSingle();
+  const existing = item.id
+    ? await supabase
+        .from("competitor_creatives")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("ad_library_id", item.id)
+        .maybeSingle()
+    : { data: null, error: null };
   const payload = {
     client_id: clientId,
     competitor_id: source.competitor_id,
     source_id: source.id,
-    source_url: item.ad_snapshot_url ?? source.url,
+    source_url: item.sourceUrl,
     ad_library_id: item.id,
-    status: endedAt ? "inactive" : "active",
-    format: "unknown",
-    platforms: item.publisher_platforms ?? [],
-    started_at: startedAt,
-    ended_at: endedAt,
+    status: item.status,
+    format: item.format,
+    platforms: item.platforms,
+    started_at: item.startedAt,
+    ended_at: item.endedAt,
     active_days: estimates.activeDays,
-    reach_min: reach.min,
-    reach_max: reach.max,
+    reach_min: item.reachMin,
+    reach_max: item.reachMax,
     reach_estimate: estimates.reachEstimate,
     estimated_cpm: estimates.estimatedCpm,
     estimated_spend: estimates.estimatedSpend,
     estimated_daily_spend: estimates.estimatedDailySpend,
     estimate_confidence: estimates.estimateConfidence,
-    primary_text: primaryText,
-    headline,
-    hook: primaryText?.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ?? headline,
-    raw: item as unknown as JsonRecord
+    thumbnail_url: item.thumbnailUrl,
+    video_url: item.videoUrl,
+    image_url: item.imageUrl,
+    landing_url: item.landingUrl,
+    primary_text: item.primaryText,
+    headline: item.headline,
+    hook: item.hook,
+    cta: item.cta,
+    demographic_signals: item.demographicSignals,
+    age_ranges: item.ageRanges,
+    gender_signals: item.genderSignals,
+    audience_locations: item.audienceLocations,
+    audience_interests: item.audienceInterests,
+    raw: item.raw
   };
 
   if (existing.data?.id) {
@@ -751,30 +1467,16 @@ async function upsertArchiveItem(clientId: string, source: SourceRow, item: Meta
   return true;
 }
 
-async function createPlaceholderFromAdId(clientId: string, source: SourceRow, adId: string, cpmBase: Awaited<ReturnType<typeof ownCpm>>) {
+async function existingEuTransparencyAdIds(clientId: string, sourceId: string) {
   const supabase = createSupabaseServiceRoleClient();
-  const existing = await supabase
+  const { data, error } = await supabase
     .from("competitor_creatives")
-    .select("id")
+    .select("ad_library_id")
     .eq("client_id", clientId)
-    .eq("ad_library_id", adId)
-    .maybeSingle();
-  if (existing.data?.id) return false;
-
-  const { error } = await supabase.from("competitor_creatives").insert({
-    client_id: clientId,
-    competitor_id: source.competitor_id,
-    source_id: source.id,
-    source_url: source.url,
-    ad_library_id: adId,
-    status: "pending_manual_enrichment",
-    format: "unknown",
-    estimated_cpm: cpmBase.cpm,
-    estimate_confidence: "low",
-    raw: { source: "ad_library_url_placeholder" }
-  });
+    .eq("source_id", sourceId)
+    .eq("demographic_signals->>source", "meta_eu_transparency");
   if (error) throw new Error(error.message);
-  return true;
+  return new Set(((data ?? []) as Array<{ ad_library_id: string | null }>).map((row) => row.ad_library_id).filter(Boolean) as string[]);
 }
 
 export async function crawlCompetitorSource(clientId: string, sourceId: string) {
@@ -793,34 +1495,66 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
   try {
     const cpmBase = await ownCpm(clientId);
     const parsed = parseAdLibraryUrl(typedSource.url);
+    const skippedEuTransparencyIds = await existingEuTransparencyAdIds(clientId, sourceId);
     let pageId = parsed.pageId;
-    if (!pageId && typedSource.competitor_id) {
-      const { data: competitor } = await supabase.from("competitors").select("meta_page_id").eq("id", typedSource.competitor_id).maybeSingle();
-      pageId = typeof competitor?.meta_page_id === "string" ? competitor.meta_page_id : null;
+    if (typedSource.competitor_id) {
+      const { data: competitor } = await supabase.from("competitors").select("meta_page_id,crawl_enabled").eq("id", typedSource.competitor_id).maybeSingle();
+      if (competitor?.crawl_enabled === false) {
+        throw new Error("Dieser Competitor ist in den Competitor Settings nicht zum Crawlen verbunden.");
+      }
+      if (!pageId) pageId = typeof competitor?.meta_page_id === "string" ? competitor.meta_page_id : null;
     }
 
-    let imported = 0;
-    if (pageId) {
-      const items = await fetchAdArchiveByPage(pageId);
-      for (const item of items) {
-        if (await upsertArchiveItem(clientId, typedSource, item, cpmBase)) imported += 1;
+    let crawlRaw: JsonRecord = {};
+    let publicItems: PublicAdLibraryItem[];
+    if (getOptionalEnv("COMPETITOR_BROWSER_CRAWL", "1") === "0") {
+      publicItems = await fetchPublicAdLibraryItems(typedSource.url);
+      crawlRaw = { crawler: "public_ad_library_html" };
+    } else {
+      try {
+        const browserResult = await fetchPublicAdLibraryItemsWithBrowser(typedSource.url, skippedEuTransparencyIds);
+        publicItems = browserResult.items;
+        crawlRaw = browserResult.raw;
+      } catch (browserError) {
+        publicItems = await fetchPublicAdLibraryItems(typedSource.url);
+        crawlRaw = {
+          crawler: "public_ad_library_html",
+          browserError: browserError instanceof Error ? browserError.message : "Browser-Crawl fehlgeschlagen."
+        };
       }
     }
 
-    if (imported === 0 && parsed.adId) {
-      imported += await createPlaceholderFromAdId(clientId, typedSource, parsed.adId, cpmBase) ? 1 : 0;
+    let imported = 0;
+    let skippedExisting = 0;
+    for (const item of publicItems) {
+      if (item.id && skippedEuTransparencyIds.has(item.id) && item.demographicSignals.source !== "meta_eu_transparency") {
+        skippedExisting += 1;
+        continue;
+      }
+      if (await upsertPublicAdLibraryItem(clientId, typedSource, item, cpmBase)) imported += 1;
     }
 
-    if (imported === 0) {
-      throw new Error("Keine Ads importiert. Der Link enthaelt eventuell keine Page-ID, oder die Meta Ad Library API liefert fuer diese Source keine Daten. Nutze Advanced, um das Creative manuell zu ergaenzen.");
+    if (imported === 0 && skippedExisting === 0) {
+      throw new Error("Keine Ads importiert. Der oeffentliche Ad Library Link enthielt keine auslesbaren Ad-IDs oder Creative-Daten. Nutze einen konkreten Ad-Link oder ergaenze das Creative manuell ueber Advanced.");
     }
 
     await supabase
       .from("competitor_ad_library_sources")
-      .update({ status: "completed", error_message: null, last_checked_at: new Date().toISOString(), raw: { imported, pageId, adId: parsed.adId } })
+      .update({
+        status: "completed",
+        error_message: null,
+        last_checked_at: new Date().toISOString(),
+        raw: {
+          ...crawlRaw,
+          imported,
+          skippedExisting,
+          pageId,
+          adId: parsed.adId
+        }
+      })
       .eq("id", sourceId);
     revalidateCompetitorCaches();
-    return getCompetitorOverview(clientId);
+    return getCompetitorOverview(clientId).catch(() => getCompetitorOverviewUncached(clientId));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Competitor Crawl fehlgeschlagen.";
     await supabase
@@ -908,6 +1642,10 @@ function normalizeGeneratedAnalysis(payload: JsonRecord): GeneratedAnalysis {
     weaknesses: stringArray(payload.weaknesses),
     hypotheses: stringArray(payload.hypotheses),
     adaptationIdeas: stringArray(payload.adaptationIdeas),
+    targetAudience: stringValue(payload.targetAudience),
+    ageSignal: stringValue(payload.ageSignal),
+    audienceReasoning: stringValue(payload.audienceReasoning),
+    thesis: stringValue(payload.thesis),
     rankingScore: clampScore(payload.rankingScore)
   };
 }
@@ -945,7 +1683,7 @@ export async function analyzeCompetitorCreative(clientId: string, creativeId: st
   const supabase = createSupabaseServiceRoleClient();
   const [{ data: creative, error: creativeError }, { data: competitors }, cpmBase] = await Promise.all([
     supabase.from("competitor_creatives").select("*").eq("client_id", clientId).eq("id", creativeId).single(),
-    supabase.from("competitors").select("id,name,website_url,meta_page_id,meta_ad_library_url,notes").eq("client_id", clientId),
+    supabase.from("competitors").select("id,client_id,name,website_url,meta_page_id,meta_ad_library_url,notes,crawl_enabled,created_at").eq("client_id", clientId),
     ownCpm(clientId)
   ]);
   if (creativeError || !creative) throw new Error(creativeError?.message ?? "Competitor Creative wurde nicht gefunden.");
@@ -972,16 +1710,26 @@ ${JSON.stringify({
     headline: typedCreative.headline,
     hook: typedCreative.hook,
     cta: typedCreative.cta,
-    landingUrl: typedCreative.landing_url
+    landingUrl: typedCreative.landing_url,
+    publicAudienceSignals: {
+      demographicSignals: typedCreative.demographic_signals ?? {},
+      ageRanges: stringArray(typedCreative.age_ranges),
+      genderSignals: stringArray(typedCreative.gender_signals),
+      audienceLocations: stringArray(typedCreative.audience_locations),
+      audienceInterests: stringArray(typedCreative.audience_interests)
+    }
   }, null, 2)}
 
 Antworte exakt als JSON mit Keys:
-hook, hookExplanation, body, ending, visualElements, detectedText, offer, angle, funnelStage, emotionScores, strengths, weaknesses, hypotheses, adaptationIdeas, rankingScore.
+hook, hookExplanation, body, ending, visualElements, detectedText, offer, angle, funnelStage, emotionScores, strengths, weaknesses, hypotheses, adaptationIdeas, targetAudience, ageSignal, audienceReasoning, thesis, rankingScore.
 
 Regeln:
 - hook ist nur der sichtbare oder angegebene Hook-Text, keine Analyse.
 - emotionScores hat Keys curiosity, desire, trust, urgency, joy, fearOfMissingOut mit 0-100.
 - adaptationIdeas sind konkrete Ideen, wie wir das Pattern fuer den Kunden adaptieren koennen, ohne zu kopieren.
+- targetAudience und ageSignal duerfen echte Delivery-Daten nur behaupten, wenn publicAudienceSignals diese Daten enthalten. Sonst als "AI-Inferenz" formulieren.
+- audienceReasoning erklaert knapp, ob die Zielgruppenannahme aus oeffentlichen Demografie-Signalen oder aus Copy/Visual/Offer abgeleitet ist.
+- thesis ist die zentrale These, warum diese Ad funktionieren koennte, mit Bezug auf Hook, Angle, Emotion und Reach/Laufzeit.
 - rankingScore bewertet Competitor-Relevanz und Adaptierbarkeit von 0-100.`;
 
   const imageUrl = typedCreative.image_url ?? typedCreative.thumbnail_url;
@@ -1007,6 +1755,10 @@ Regeln:
       weaknesses: generated.weaknesses,
       hypotheses: generated.hypotheses,
       adaptation_ideas: generated.adaptationIdeas,
+      target_audience: generated.targetAudience || null,
+      age_signal: generated.ageSignal || null,
+      audience_reasoning: generated.audienceReasoning || null,
+      thesis: generated.thesis || null,
       ranking_score: generated.rankingScore,
       raw: generated as unknown as JsonRecord
     })
@@ -1015,6 +1767,29 @@ Regeln:
   if (insertError || !inserted) throw new Error(insertError?.message ?? "Competitor Analyse konnte nicht gespeichert werden.");
   revalidateCompetitorCaches();
   return getCompetitorOverview(clientId);
+}
+
+export async function analyzeCompetitorCreatives(clientId: string, creativeIds: string[]) {
+  const uniqueIds = uniqueStrings(creativeIds).slice(0, 100);
+  if (uniqueIds.length === 0) throw new Error("Keine Competitor Creatives fuer die Analyse ausgewaehlt.");
+
+  const results: Array<{ creativeId: string; status: "completed" | "failed"; error?: string }> = [];
+  for (const creativeId of uniqueIds) {
+    try {
+      await analyzeCompetitorCreative(clientId, creativeId);
+      results.push({ creativeId, status: "completed" });
+    } catch (error) {
+      results.push({ creativeId, status: "failed", error: error instanceof Error ? error.message : "Analyse fehlgeschlagen." });
+    }
+  }
+
+  revalidateCompetitorCaches();
+  return {
+    total: results.length,
+    completed: results.filter((result) => result.status === "completed").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    results
+  };
 }
 
 export async function getCompetitorIdeaPatterns(clientId: string) {

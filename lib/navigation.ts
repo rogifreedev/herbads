@@ -24,7 +24,8 @@ export const navItems: NavItem[] = [
       { title: "Creatives", href: "/clients/[clientId]/creatives" },
       { title: "Angles", href: "/clients/[clientId]/angles" },
       { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
-      { title: "Competitors", href: "/clients/[clientId]/competitors" },
+      { title: "Competitor Creatives", href: "/clients/[clientId]/competitors/creatives" },
+      { title: "Competitor Settings", href: "/clients/[clientId]/competitors/settings" },
       { title: "Landingpages", href: "/clients/[clientId]/creatives/landingpages" },
       { title: "Pattern Analyse", href: "/analysis" }
     ]
