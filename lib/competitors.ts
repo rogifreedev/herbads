@@ -1482,11 +1482,27 @@ async function fetchPublicAdLibraryItemsWithBrowser(sourceUrl: string, skippedEu
   const { chromium } = await import("playwright");
   const limit = competitorCrawlLimit();
   const concurrency = competitorCrawlConcurrency();
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      "--disable-dev-shm-usage",
+      "--disable-features=IsolateOrigins,site-per-process",
+      "--disable-setuid-sandbox",
+      "--no-sandbox"
+    ]
+  });
   const context = await browser.newContext({
     locale: "en-US",
+    timezoneId: "Europe/Berlin",
     viewport: { width: 1440, height: 1200 },
-    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    extraHTTPHeaders: {
+      "Accept-Language": "en-US,en;q=0.9,de;q=0.8"
+    }
+  });
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
   });
 
   try {
@@ -1646,11 +1662,17 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
         publicItems = browserResult.items;
         crawlRaw = browserResult.raw;
       } catch (browserError) {
-        publicItems = await fetchPublicAdLibraryItems(typedSource.url);
-        crawlRaw = {
-          crawler: "public_ad_library_html",
-          browserError: browserError instanceof Error ? browserError.message : "Browser-Crawl fehlgeschlagen."
-        };
+        const browserErrorMessage = browserError instanceof Error ? browserError.message : "Browser-Crawl fehlgeschlagen.";
+        try {
+          publicItems = await fetchPublicAdLibraryItems(typedSource.url);
+          crawlRaw = {
+            crawler: "public_ad_library_html",
+            browserError: browserErrorMessage
+          };
+        } catch (fallbackError) {
+          const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "HTML-Fallback fehlgeschlagen.";
+          throw new Error(`Browser-Crawl fehlgeschlagen: ${browserErrorMessage}; HTML-Fallback fehlgeschlagen: ${fallbackMessage}`);
+        }
       }
     }
 
