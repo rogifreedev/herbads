@@ -2,8 +2,11 @@ services:
   competitor-crawler:
     container_name: herbads-competitor-crawler
     build:
-      context: ../..
-      dockerfile: workers/competitor-crawler/Dockerfile
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HERBADS_REPO_URL: ${HERBADS_REPO_URL:-https://github.com/rogifreedev/herbads.git}
+        HERBADS_REF: ${HERBADS_REF:-main}
     env_file:
       - .env
     environment:
