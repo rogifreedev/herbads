@@ -1258,8 +1258,45 @@ async function extractBrowserAdCards(page: Page, sourceUrl: string, limit: numbe
     return Array.from(byId.values()).slice(0, cardLimit).map((candidate) => ({
       id: candidate.id,
       text: candidate.text,
-      images: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("img")).map((image) => image.currentSrc || image.src)),
-      videos: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("video")).map((video) => video.currentSrc || video.src || video.poster)),
+      images: (() => {
+        type MediaCandidate = { url: string; area: number; width: number; height: number };
+
+        function isHttpUrl(value: string | null | undefined) {
+          return Boolean(value && /^https?:\/\//i.test(value));
+        }
+
+        function candidateFromElement(element: Element, url: string | null | undefined): MediaCandidate | null {
+          if (!isHttpUrl(url)) return null;
+          const rect = element.getBoundingClientRect();
+          const renderedWidth = Math.round(rect.width);
+          const renderedHeight = Math.round(rect.height);
+          const naturalWidth = element instanceof HTMLImageElement ? element.naturalWidth : 0;
+          const naturalHeight = element instanceof HTMLImageElement ? element.naturalHeight : 0;
+          const width = Math.max(renderedWidth, naturalWidth);
+          const height = Math.max(renderedHeight, naturalHeight);
+          const area = Math.max(renderedWidth * renderedHeight, naturalWidth * naturalHeight, width * height);
+          const isTinySquare = renderedWidth <= 96 && renderedHeight <= 96 && Math.abs(renderedWidth - renderedHeight) <= 24;
+          const isLargeEnough = (renderedWidth >= 120 && renderedHeight >= 90) || naturalWidth >= 220 || naturalHeight >= 220 || area >= 20000;
+          if (isTinySquare || !isLargeEnough) return null;
+          return { url: url as string, area, width, height };
+        }
+
+        function urlsFromBackground(element: Element) {
+          const matches = Array.from(window.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g));
+          return matches.map((match) => match[1]).filter(isHttpUrl) as string[];
+        }
+
+        const imageCandidates = [
+          ...Array.from(candidate.node.querySelectorAll("img")).map((image) => candidateFromElement(image, image.currentSrc || image.src)),
+          ...Array.from(candidate.node.querySelectorAll("video")).map((video) => candidateFromElement(video, video.poster)),
+          ...Array.from(candidate.node.querySelectorAll("*")).flatMap((element) => urlsFromBackground(element).map((url) => candidateFromElement(element, url)))
+        ]
+          .filter((item): item is MediaCandidate => Boolean(item))
+          .sort((a, b) => b.area - a.area || (b.width * b.height) - (a.width * a.height));
+
+        return uniqueBrowserStrings(imageCandidates.map((image) => image.url));
+      })(),
+      videos: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("video")).map((video) => video.currentSrc || video.src).filter((url) => /^https?:\/\//i.test(url))),
       links: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("a")).map((anchor) => anchor.href))
     }));
   }, limit);
@@ -1307,9 +1344,71 @@ async function exactTextRect(page: Page, text: string) {
   }, text);
 }
 
+async function extractRenderedAdMedia(page: Page, adId: string) {
+  return page.evaluate((targetAdId) => {
+    type MediaCandidate = { url: string; area: number; width: number; height: number };
+
+    function uniqueBrowserStrings(values: Array<string | null | undefined>) {
+      return Array.from(new Set(values.filter(Boolean) as string[]));
+    }
+
+    function isHttpUrl(value: string | null | undefined) {
+      return Boolean(value && /^https?:\/\//i.test(value));
+    }
+
+    function candidateFromElement(element: Element, url: string | null | undefined): MediaCandidate | null {
+      if (!isHttpUrl(url)) return null;
+      const rect = element.getBoundingClientRect();
+      const renderedWidth = Math.round(rect.width);
+      const renderedHeight = Math.round(rect.height);
+      const naturalWidth = element instanceof HTMLImageElement ? element.naturalWidth : 0;
+      const naturalHeight = element instanceof HTMLImageElement ? element.naturalHeight : 0;
+      const width = Math.max(renderedWidth, naturalWidth);
+      const height = Math.max(renderedHeight, naturalHeight);
+      const area = Math.max(renderedWidth * renderedHeight, naturalWidth * naturalHeight, width * height);
+      const isTinySquare = renderedWidth <= 96 && renderedHeight <= 96 && Math.abs(renderedWidth - renderedHeight) <= 24;
+      const isLargeEnough = (renderedWidth >= 120 && renderedHeight >= 90) || naturalWidth >= 220 || naturalHeight >= 220 || area >= 20000;
+      if (isTinySquare || !isLargeEnough) return null;
+      return { url: url as string, area, width, height };
+    }
+
+    function urlsFromBackground(element: Element) {
+      const matches = Array.from(window.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g));
+      return matches.map((match) => match[1]).filter(isHttpUrl) as string[];
+    }
+
+    const scopedNodes = Array.from(document.querySelectorAll("div"))
+      .flatMap((node) => {
+        if (!(node instanceof HTMLElement)) return [];
+        const text = node.innerText || "";
+        if (!text.includes(`Library ID: ${targetAdId}`)) return [];
+        return [node];
+      })
+      .sort((a, b) => (a.innerText || "").length - (b.innerText || "").length)
+      .slice(0, 4);
+    const roots = scopedNodes.length ? scopedNodes : [document.body];
+
+    const imageCandidates = roots.flatMap((root) => [
+      ...Array.from(root.querySelectorAll("img")).map((image) => candidateFromElement(image, image.currentSrc || image.src)),
+      ...Array.from(root.querySelectorAll("video")).map((video) => candidateFromElement(video, video.poster)),
+      ...Array.from(root.querySelectorAll("*")).flatMap((element) => urlsFromBackground(element).map((url) => candidateFromElement(element, url)))
+    ])
+      .filter((item): item is MediaCandidate => Boolean(item))
+      .sort((a, b) => b.area - a.area || (b.width * b.height) - (a.width * a.height));
+
+    const videos = roots.flatMap((root) => Array.from(root.querySelectorAll("video")).map((video) => video.currentSrc || video.src).filter(isHttpUrl) as string[]);
+
+    return {
+      images: uniqueBrowserStrings(imageCandidates.map((image) => image.url)),
+      videos: uniqueBrowserStrings(videos)
+    };
+  }, adId);
+}
+
 async function openEuTransparencyText(page: Page, adId: string) {
   await page.goto(publicAdUrl(adId), { waitUntil: "domcontentloaded", timeout: 60000 });
   await waitForBodyText(page, (text) => text.includes(`Library ID: ${adId}`), 18000);
+  const mediaBeforeDetails = await extractRenderedAdMedia(page, adId).catch(() => ({ images: [], videos: [] }));
 
   let detailsRect = await targetAdButtonRect(page, adId, "See ad details");
   for (let attempt = 0; !detailsRect && attempt < 4; attempt += 1) {
@@ -1320,15 +1419,24 @@ async function openEuTransparencyText(page: Page, adId: string) {
   if (!detailsRect) throw new Error("See ad details button not found.");
   await page.mouse.click(detailsRect.x + detailsRect.width / 2, detailsRect.y + detailsRect.height / 2);
   await waitForBodyText(page, (text) => text.includes("Ad Details") && text.includes("Transparency by location"), 18000);
+  const mediaAfterDetails = await extractRenderedAdMedia(page, adId).catch(() => ({ images: [], videos: [] }));
 
   const transparencyRect = await exactTextRect(page, "Transparency by location");
   if (!transparencyRect) throw new Error("Transparency by location section not found.");
   await page.mouse.click(transparencyRect.x + transparencyRect.width / 2, transparencyRect.y + transparencyRect.height / 2);
-  return waitForBodyText(page, (text) => text.includes("EU ad audience") && text.includes("EU ad delivery"), 18000);
+  const text = await waitForBodyText(page, (bodyText) => bodyText.includes("EU ad audience") && bodyText.includes("EU ad delivery"), 18000);
+  return {
+    text,
+    media: {
+      images: uniqueStrings([...mediaAfterDetails.images, ...mediaBeforeDetails.images]),
+      videos: uniqueStrings([...mediaAfterDetails.videos, ...mediaBeforeDetails.videos])
+    }
+  };
 }
 
 async function enrichItemsWithEuTransparency(context: BrowserContext, items: PublicAdLibraryItem[], skippedIds: Set<string>, concurrency: number) {
-  const targets = items.filter((item) => item.id && !skippedIds.has(item.id));
+  const refreshExistingMedia = getOptionalEnv("COMPETITOR_REFRESH_EXISTING_MEDIA", "1") !== "0";
+  const targets = items.filter((item) => item.id && (!skippedIds.has(item.id) || refreshExistingMedia));
   let cursor = 0;
   let updated = 0;
   let failed = 0;
@@ -1342,9 +1450,12 @@ async function enrichItemsWithEuTransparency(context: BrowserContext, items: Pub
         if (!item.id) continue;
 
         try {
-          const text = await openEuTransparencyText(page, item.id);
-          const signals = parseEuTransparencySignals(text);
+          const detail = await openEuTransparencyText(page, item.id);
+          const signals = parseEuTransparencySignals(detail.text);
           if (!signals) throw new Error("EU transparency section not parseable.");
+          item.imageUrl = detail.media.images[0] ?? item.imageUrl;
+          item.thumbnailUrl = detail.media.images[0] ?? item.thumbnailUrl;
+          item.videoUrl = detail.media.videos[0] ?? item.videoUrl;
           item.reachMin = signals.euReach;
           item.reachMax = signals.euReach;
           item.demographicSignals = signals as unknown as JsonRecord;
@@ -1364,7 +1475,7 @@ async function enrichItemsWithEuTransparency(context: BrowserContext, items: Pub
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, targets.length)) }, () => worker()));
-  return { updated, failed, skipped: skippedIds.size };
+  return { updated, failed, skipped: refreshExistingMedia ? 0 : skippedIds.size, refreshExistingMedia };
 }
 
 async function fetchPublicAdLibraryItemsWithBrowser(sourceUrl: string, skippedEuTransparencyIds: Set<string>): Promise<BrowserCrawlResult> {
@@ -1479,6 +1590,25 @@ async function existingEuTransparencyAdIds(clientId: string, sourceId: string) {
   return new Set(((data ?? []) as Array<{ ad_library_id: string | null }>).map((row) => row.ad_library_id).filter(Boolean) as string[]);
 }
 
+async function refreshExistingPublicAdMedia(clientId: string, sourceId: string, item: PublicAdLibraryItem) {
+  if (!item.id) return false;
+  const mediaPayload: Record<string, string> = {};
+  if (item.thumbnailUrl) mediaPayload.thumbnail_url = item.thumbnailUrl;
+  if (item.imageUrl) mediaPayload.image_url = item.imageUrl;
+  if (item.videoUrl) mediaPayload.video_url = item.videoUrl;
+  if (Object.keys(mediaPayload).length === 0) return false;
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .from("competitor_creatives")
+    .update(mediaPayload)
+    .eq("client_id", clientId)
+    .eq("source_id", sourceId)
+    .eq("ad_library_id", item.id);
+  if (error) throw new Error(error.message);
+  return true;
+}
+
 export async function crawlCompetitorSource(clientId: string, sourceId: string) {
   const supabase = createSupabaseServiceRoleClient();
   const { data: source, error: sourceError } = await supabase
@@ -1526,8 +1656,10 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
 
     let imported = 0;
     let skippedExisting = 0;
+    let refreshedMedia = 0;
     for (const item of publicItems) {
       if (item.id && skippedEuTransparencyIds.has(item.id) && item.demographicSignals.source !== "meta_eu_transparency") {
+        if (await refreshExistingPublicAdMedia(clientId, sourceId, item)) refreshedMedia += 1;
         skippedExisting += 1;
         continue;
       }
@@ -1548,6 +1680,7 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
           ...crawlRaw,
           imported,
           skippedExisting,
+          refreshedMedia,
           pageId,
           adId: parsed.adId
         }
