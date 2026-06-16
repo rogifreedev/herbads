@@ -1236,9 +1236,38 @@ async function extractBrowserAdCards(page: Page, sourceUrl: string, limit: numbe
   }
 
   const cards = await page.evaluate((cardLimit) => {
-    function uniqueBrowserStrings(values: Array<string | null | undefined>) {
-      return Array.from(new Set(values.filter(Boolean) as string[]));
-    }
+    const helper = {
+      uniqueBrowserStrings(values: Array<string | null | undefined>) {
+        return Array.from(new Set(values.filter(Boolean) as string[]));
+      },
+
+      isHttpUrl(value: string | null | undefined) {
+        return Boolean(value && /^https?:\/\//i.test(value));
+      },
+
+      candidateFromElement(element: Element, url: string | null | undefined): MediaCandidate | null {
+        if (!helper.isHttpUrl(url)) return null;
+        const rect = element.getBoundingClientRect();
+        const renderedWidth = Math.round(rect.width);
+        const renderedHeight = Math.round(rect.height);
+        const naturalWidth = element instanceof HTMLImageElement ? element.naturalWidth : 0;
+        const naturalHeight = element instanceof HTMLImageElement ? element.naturalHeight : 0;
+        const width = Math.max(renderedWidth, naturalWidth);
+        const height = Math.max(renderedHeight, naturalHeight);
+        const area = Math.max(renderedWidth * renderedHeight, naturalWidth * naturalHeight, width * height);
+        const isTinySquare = renderedWidth <= 96 && renderedHeight <= 96 && Math.abs(renderedWidth - renderedHeight) <= 24;
+        const isLargeEnough = (renderedWidth >= 120 && renderedHeight >= 90) || naturalWidth >= 220 || naturalHeight >= 220 || area >= 20000;
+        if (isTinySquare || !isLargeEnough) return null;
+        return { url: url as string, area, width, height };
+      },
+
+      urlsFromBackground(element: Element) {
+        const matches = Array.from(window.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g));
+        return matches.map((match) => match[1]).filter(helper.isHttpUrl) as string[];
+      }
+    };
+
+    type MediaCandidate = { url: string; area: number; width: number; height: number };
 
     const candidates = Array.from(document.querySelectorAll("div"))
       .flatMap((node) => {
@@ -1259,45 +1288,18 @@ async function extractBrowserAdCards(page: Page, sourceUrl: string, limit: numbe
       id: candidate.id,
       text: candidate.text,
       images: (() => {
-        type MediaCandidate = { url: string; area: number; width: number; height: number };
-
-        function isHttpUrl(value: string | null | undefined) {
-          return Boolean(value && /^https?:\/\//i.test(value));
-        }
-
-        function candidateFromElement(element: Element, url: string | null | undefined): MediaCandidate | null {
-          if (!isHttpUrl(url)) return null;
-          const rect = element.getBoundingClientRect();
-          const renderedWidth = Math.round(rect.width);
-          const renderedHeight = Math.round(rect.height);
-          const naturalWidth = element instanceof HTMLImageElement ? element.naturalWidth : 0;
-          const naturalHeight = element instanceof HTMLImageElement ? element.naturalHeight : 0;
-          const width = Math.max(renderedWidth, naturalWidth);
-          const height = Math.max(renderedHeight, naturalHeight);
-          const area = Math.max(renderedWidth * renderedHeight, naturalWidth * naturalHeight, width * height);
-          const isTinySquare = renderedWidth <= 96 && renderedHeight <= 96 && Math.abs(renderedWidth - renderedHeight) <= 24;
-          const isLargeEnough = (renderedWidth >= 120 && renderedHeight >= 90) || naturalWidth >= 220 || naturalHeight >= 220 || area >= 20000;
-          if (isTinySquare || !isLargeEnough) return null;
-          return { url: url as string, area, width, height };
-        }
-
-        function urlsFromBackground(element: Element) {
-          const matches = Array.from(window.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g));
-          return matches.map((match) => match[1]).filter(isHttpUrl) as string[];
-        }
-
         const imageCandidates = [
-          ...Array.from(candidate.node.querySelectorAll("img")).map((image) => candidateFromElement(image, image.currentSrc || image.src)),
-          ...Array.from(candidate.node.querySelectorAll("video")).map((video) => candidateFromElement(video, video.poster)),
-          ...Array.from(candidate.node.querySelectorAll("*")).flatMap((element) => urlsFromBackground(element).map((url) => candidateFromElement(element, url)))
+          ...Array.from(candidate.node.querySelectorAll("img")).map((image) => helper.candidateFromElement(image, image.currentSrc || image.src)),
+          ...Array.from(candidate.node.querySelectorAll("video")).map((video) => helper.candidateFromElement(video, video.poster)),
+          ...Array.from(candidate.node.querySelectorAll("*")).flatMap((element) => helper.urlsFromBackground(element).map((url) => helper.candidateFromElement(element, url)))
         ]
           .filter((item): item is MediaCandidate => Boolean(item))
           .sort((a, b) => b.area - a.area || (b.width * b.height) - (a.width * a.height));
 
-        return uniqueBrowserStrings(imageCandidates.map((image) => image.url));
+        return helper.uniqueBrowserStrings(imageCandidates.map((image) => image.url));
       })(),
-      videos: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("video")).map((video) => video.currentSrc || video.src).filter((url) => /^https?:\/\//i.test(url))),
-      links: uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("a")).map((anchor) => anchor.href))
+      videos: helper.uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("video")).map((video) => video.currentSrc || video.src).filter((url) => /^https?:\/\//i.test(url))),
+      links: helper.uniqueBrowserStrings(Array.from(candidate.node.querySelectorAll("a")).map((anchor) => anchor.href))
     }));
   }, limit);
 
@@ -1348,34 +1350,36 @@ async function extractRenderedAdMedia(page: Page, adId: string) {
   return page.evaluate((targetAdId) => {
     type MediaCandidate = { url: string; area: number; width: number; height: number };
 
-    function uniqueBrowserStrings(values: Array<string | null | undefined>) {
-      return Array.from(new Set(values.filter(Boolean) as string[]));
-    }
+    const helper = {
+      uniqueBrowserStrings(values: Array<string | null | undefined>) {
+        return Array.from(new Set(values.filter(Boolean) as string[]));
+      },
 
-    function isHttpUrl(value: string | null | undefined) {
-      return Boolean(value && /^https?:\/\//i.test(value));
-    }
+      isHttpUrl(value: string | null | undefined) {
+        return Boolean(value && /^https?:\/\//i.test(value));
+      },
 
-    function candidateFromElement(element: Element, url: string | null | undefined): MediaCandidate | null {
-      if (!isHttpUrl(url)) return null;
-      const rect = element.getBoundingClientRect();
-      const renderedWidth = Math.round(rect.width);
-      const renderedHeight = Math.round(rect.height);
-      const naturalWidth = element instanceof HTMLImageElement ? element.naturalWidth : 0;
-      const naturalHeight = element instanceof HTMLImageElement ? element.naturalHeight : 0;
-      const width = Math.max(renderedWidth, naturalWidth);
-      const height = Math.max(renderedHeight, naturalHeight);
-      const area = Math.max(renderedWidth * renderedHeight, naturalWidth * naturalHeight, width * height);
-      const isTinySquare = renderedWidth <= 96 && renderedHeight <= 96 && Math.abs(renderedWidth - renderedHeight) <= 24;
-      const isLargeEnough = (renderedWidth >= 120 && renderedHeight >= 90) || naturalWidth >= 220 || naturalHeight >= 220 || area >= 20000;
-      if (isTinySquare || !isLargeEnough) return null;
-      return { url: url as string, area, width, height };
-    }
+      candidateFromElement(element: Element, url: string | null | undefined): MediaCandidate | null {
+        if (!helper.isHttpUrl(url)) return null;
+        const rect = element.getBoundingClientRect();
+        const renderedWidth = Math.round(rect.width);
+        const renderedHeight = Math.round(rect.height);
+        const naturalWidth = element instanceof HTMLImageElement ? element.naturalWidth : 0;
+        const naturalHeight = element instanceof HTMLImageElement ? element.naturalHeight : 0;
+        const width = Math.max(renderedWidth, naturalWidth);
+        const height = Math.max(renderedHeight, naturalHeight);
+        const area = Math.max(renderedWidth * renderedHeight, naturalWidth * naturalHeight, width * height);
+        const isTinySquare = renderedWidth <= 96 && renderedHeight <= 96 && Math.abs(renderedWidth - renderedHeight) <= 24;
+        const isLargeEnough = (renderedWidth >= 120 && renderedHeight >= 90) || naturalWidth >= 220 || naturalHeight >= 220 || area >= 20000;
+        if (isTinySquare || !isLargeEnough) return null;
+        return { url: url as string, area, width, height };
+      },
 
-    function urlsFromBackground(element: Element) {
-      const matches = Array.from(window.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g));
-      return matches.map((match) => match[1]).filter(isHttpUrl) as string[];
-    }
+      urlsFromBackground(element: Element) {
+        const matches = Array.from(window.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g));
+        return matches.map((match) => match[1]).filter(helper.isHttpUrl) as string[];
+      }
+    };
 
     const scopedNodes = Array.from(document.querySelectorAll("div"))
       .flatMap((node) => {
@@ -1389,18 +1393,18 @@ async function extractRenderedAdMedia(page: Page, adId: string) {
     const roots = scopedNodes.length ? scopedNodes : [document.body];
 
     const imageCandidates = roots.flatMap((root) => [
-      ...Array.from(root.querySelectorAll("img")).map((image) => candidateFromElement(image, image.currentSrc || image.src)),
-      ...Array.from(root.querySelectorAll("video")).map((video) => candidateFromElement(video, video.poster)),
-      ...Array.from(root.querySelectorAll("*")).flatMap((element) => urlsFromBackground(element).map((url) => candidateFromElement(element, url)))
+      ...Array.from(root.querySelectorAll("img")).map((image) => helper.candidateFromElement(image, image.currentSrc || image.src)),
+      ...Array.from(root.querySelectorAll("video")).map((video) => helper.candidateFromElement(video, video.poster)),
+      ...Array.from(root.querySelectorAll("*")).flatMap((element) => helper.urlsFromBackground(element).map((url) => helper.candidateFromElement(element, url)))
     ])
       .filter((item): item is MediaCandidate => Boolean(item))
       .sort((a, b) => b.area - a.area || (b.width * b.height) - (a.width * a.height));
 
-    const videos = roots.flatMap((root) => Array.from(root.querySelectorAll("video")).map((video) => video.currentSrc || video.src).filter(isHttpUrl) as string[]);
+    const videos = roots.flatMap((root) => Array.from(root.querySelectorAll("video")).map((video) => video.currentSrc || video.src).filter(helper.isHttpUrl) as string[]);
 
     return {
-      images: uniqueBrowserStrings(imageCandidates.map((image) => image.url)),
-      videos: uniqueBrowserStrings(videos)
+      images: helper.uniqueBrowserStrings(imageCandidates.map((image) => image.url)),
+      videos: helper.uniqueBrowserStrings(videos)
     };
   }, adId);
 }
