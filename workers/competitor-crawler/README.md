@@ -56,11 +56,11 @@ docker run --rm --env-file workers/competitor-crawler/.env --shm-size=1g herbads
 From `workers/competitor-crawler`:
 
 ```bash
-cp docker-compose.example.yml docker-compose.yml
-cp .env.example .env
 docker compose up -d --build
 docker compose logs -f competitor-crawler
 ```
+
+`docker-compose.yml` is the server-ready compose file. `docker-compose.example.yml` is kept only as a minimal reference.
 
 ## Useful env vars
 
