@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -19,6 +20,17 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   info: 20,
   warn: 30,
   error: 40
+};
+
+const workerState = {
+  startedAt: new Date().toISOString(),
+  lastLoopAt: null as string | null,
+  activeJobs: 0,
+  completedJobs: 0,
+  failedJobs: 0,
+  lastJobId: null as string | null,
+  lastError: null as string | null,
+  shuttingDown: false
 };
 
 function loadEnvFile(filePath: string) {
@@ -75,6 +87,43 @@ function normalizeEnv() {
   process.env.COMPETITOR_CRAWL_WORKER_ID ??= `competitor-crawler-${os.hostname()}-${process.pid}`;
   process.env.COMPETITOR_BROWSER_CRAWL ??= "1";
   process.env.COMPETITOR_CRAWL_MODE ??= "worker";
+  process.env.COMPETITOR_CRAWLER_HEALTH_HOST ??= "0.0.0.0";
+  process.env.COMPETITOR_CRAWLER_HEALTH_PORT ??= "39123";
+}
+
+function startHealthServer(workerId: string) {
+  const port = numberEnv("COMPETITOR_CRAWLER_HEALTH_PORT", 39123, { min: 1, max: 65535 });
+  const host = process.env.COMPETITOR_CRAWLER_HEALTH_HOST ?? "0.0.0.0";
+  const server = createServer((request, response) => {
+    if (request.url !== "/healthz" && request.url !== "/readyz" && request.url !== "/") {
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: false, error: "not_found" }));
+      return;
+    }
+
+    response.writeHead(workerState.shuttingDown ? 503 : 200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      ok: !workerState.shuttingDown,
+      workerId,
+      uptimeSeconds: Math.round(process.uptime()),
+      ...workerState
+    }));
+  });
+
+  server.listen(port, host, () => {
+    log("info", "health server listening", { host, port });
+  });
+  server.on("error", (error) => {
+    log("error", "health server error", { error: error instanceof Error ? error.message : String(error), host, port });
+  });
+
+  return server;
+}
+
+async function closeHealthServer(server: Server) {
+  await new Promise<void>((resolve) => {
+    server.close(() => resolve());
+  });
 }
 
 async function withHeartbeat<T>(job: CompetitorCrawlJob, workerId: string, work: () => Promise<T>) {
@@ -97,6 +146,10 @@ async function processOne(workerId: string) {
   const job = await claimNextCompetitorCrawlJob(workerId);
   if (!job) return false;
 
+  workerState.activeJobs += 1;
+  workerState.lastJobId = job.id;
+  workerState.lastError = null;
+
   log("info", "claimed competitor crawl job", {
     jobId: job.id,
     clientId: job.clientId,
@@ -115,8 +168,11 @@ async function processOne(workerId: string) {
       importedItems: completed.importedItems,
       skippedItems: completed.skippedItems
     });
+    workerState.completedJobs += 1;
   } catch (error) {
     const failed = await failCompetitorCrawlJob(job, workerId, error);
+    workerState.failedJobs += 1;
+    workerState.lastError = failed.errorMessage;
     log(failed.status === "retry" ? "warn" : "error", "competitor crawl job failed", {
       jobId: failed.id,
       status: failed.status,
@@ -124,12 +180,15 @@ async function processOne(workerId: string) {
       maxAttempts: failed.maxAttempts,
       error: failed.errorMessage
     });
+  } finally {
+    workerState.activeJobs = Math.max(0, workerState.activeJobs - 1);
   }
 
   return true;
 }
 
 async function processBatch(workerId: string) {
+  workerState.lastLoopAt = new Date().toISOString();
   await resetStaleCompetitorCrawlJobs();
 
   const batchSize = numberEnv("COMPETITOR_CRAWL_WORKER_BATCH_SIZE", 1, { min: 1, max: 4 });
@@ -144,14 +203,17 @@ async function main() {
   const workerId = process.env.COMPETITOR_CRAWL_WORKER_ID!;
   const pollIntervalMs = numberEnv("COMPETITOR_CRAWL_POLL_INTERVAL_MS", 5000, { min: 1000, max: 60000 });
   const runOnce = process.env.COMPETITOR_CRAWL_RUN_ONCE === "1";
+  const healthServer = startHealthServer(workerId);
   let shuttingDown = false;
 
   process.on("SIGINT", () => {
     shuttingDown = true;
+    workerState.shuttingDown = true;
     log("info", "received SIGINT, shutting down after current batch");
   });
   process.on("SIGTERM", () => {
     shuttingDown = true;
+    workerState.shuttingDown = true;
     log("info", "received SIGTERM, shutting down after current batch");
   });
 
@@ -176,6 +238,7 @@ async function main() {
   }
 
   log("info", "competitor crawler worker stopped");
+  await closeHealthServer(healthServer);
 }
 
 main().catch((error) => {

@@ -62,6 +62,12 @@ docker compose logs -f competitor-crawler
 
 `docker-compose.yml` is the server-ready compose file. `docker-compose.example.yml` is kept only as a minimal reference.
 
+The container exposes a lightweight health endpoint on port `39123`:
+
+```bash
+curl http://localhost:39123/healthz
+```
+
 ## Useful env vars
 
 ```bash
@@ -70,6 +76,7 @@ COMPETITOR_CRAWL_CONCURRENCY=4
 COMPETITOR_CRAWL_POLL_INTERVAL_MS=5000
 COMPETITOR_CRAWL_JOB_MAX_ATTEMPTS=3
 COMPETITOR_CRAWL_RUN_ONCE=0
+COMPETITOR_CRAWLER_HEALTH_PORT=39123
 LOG_LEVEL=info
 ```
 
