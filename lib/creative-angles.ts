@@ -2,7 +2,9 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache-tags";
+import { calculateCreativePerformanceScore } from "@/lib/creative-score";
 import { listClientCreatives, type CreativeInsightDateRange, type CreativeListItem } from "@/lib/creatives";
+import { aggregateInsightRows, emptyMetrics, type PerformanceMetrics } from "@/lib/metrics";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type JsonRecord = Record<string, unknown>;
@@ -21,6 +23,43 @@ type AnalysisRow = {
   created_at: string;
 };
 
+type AdsetRow = {
+  id: string;
+  name: string | null;
+  optimization_goal: string | null;
+  status: string | null;
+  effective_status: string | null;
+};
+
+type AdRow = {
+  id: string;
+  adset_id: string | null;
+  creative_id: string | null;
+  name: string | null;
+  status: string | null;
+  effective_status: string | null;
+};
+
+type InsightRow = {
+  adset_id: string | null;
+  creative_id: string | null;
+  spend: number | string | null;
+  impressions: number | null;
+  reach: number | null;
+  clicks: number | null;
+  link_clicks: number | null;
+  outbound_clicks?: number | null;
+  purchases: number | null;
+  purchase_value: number | string | null;
+  engagement: number | null;
+  video_3s_views: number | null;
+  thruplays: number | null;
+};
+
+type SupabaseQuery = {
+  range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+};
+
 type AngleRule = {
   label: string;
   summary: string;
@@ -31,12 +70,21 @@ type AngleRule = {
   wrapper?: boolean;
 };
 
-export type CreativeAngleItem = {
-  creativeId: string;
-  creativeName: string;
+export type AdsetAngleItem = {
+  adsetId: string;
+  adsetName: string;
+  optimizationGoal: string | null;
+  adCount: number;
+  creativeCount: number;
+  representativeCreativeId: string | null;
+  representativeCreativeName: string | null;
+  creativeIds: string[];
+  creativeNames: string[];
+  formats: string[];
   type: string;
   status: string;
   funnelStage: string | null;
+  funnelStages: string[];
   angle: string;
   reason: string;
   confidence: number;
@@ -46,14 +94,21 @@ export type CreativeAngleItem = {
   headline: string | null;
   spend: number;
   impressions: number;
+  clicks: number;
+  outboundClicks: number;
   purchases: number;
+  purchaseValue: number;
+  video3sViews: number;
   roas: number | null;
   ctr: number | null;
 };
 
+export type CreativeAngleItem = AdsetAngleItem;
+
 export type AngleInsight = {
   angle: string;
   summary: string;
+  adsetCount: number;
   creativeCount: number;
   score: number;
   avgCreativeScore: number;
@@ -68,14 +123,17 @@ export type AngleInsight = {
   formats: string[];
   funnelStages: string[];
   topHooks: string[];
+  exampleAdsets: Array<{ id: string; name: string; score: number; representativeCreativeId: string | null }>;
   exampleCreatives: Array<{ id: string; name: string; score: number }>;
 };
 
 export type CreativeAnglesOverview = {
   angles: AngleInsight[];
-  creatives: CreativeAngleItem[];
+  adsets: AdsetAngleItem[];
+  creatives: AdsetAngleItem[];
   totals: {
     angles: number;
+    adsets: number;
     creatives: number;
     analyzedCreatives: number;
     avgScore: number;
@@ -229,12 +287,14 @@ function keywordMatches(text: string, keyword: string) {
   return new RegExp(`(^|[^a-z0-9])${escapeRegex(normalizedKeyword)}([^a-z0-9]|$)`).test(text);
 }
 
-function searchFields(input: { creative: CreativeListItem; analysis?: AnalysisRow }) {
+function searchFields(input: { creative: CreativeListItem; analysis?: AnalysisRow; adsetName?: string | null; adNames?: string[] }) {
   return [
     { label: "Hook", text: normalizeSearchText(input.analysis?.hook ?? ""), weight: 2.4 },
+    { label: "Adset Name", text: normalizeSearchText(input.adsetName ?? ""), weight: 2 },
     { label: "Headline", text: normalizeSearchText(input.creative.title ?? ""), weight: 1.8 },
     { label: "Primary Text", text: normalizeSearchText(input.creative.body ?? ""), weight: 1.2 },
     { label: "AI Summary", text: normalizeSearchText(input.analysis?.summary ?? ""), weight: 0.8 },
+    { label: "Ad Names", text: normalizeSearchText((input.adNames ?? []).join(" ")), weight: 0.7 },
     { label: "Creative Name", text: normalizeSearchText(input.creative.name), weight: 0.6 }
   ].filter((field) => field.text);
 }
@@ -303,7 +363,7 @@ function normalizeExplicitAngle(value: string) {
   return aliases.find((alias) => alias.signals.some((signal) => normalized.includes(signal)))?.label ?? null;
 }
 
-function inferAngle(input: { creative: CreativeListItem; analysis?: AnalysisRow }) {
+function inferAngle(input: { creative: CreativeListItem; analysis?: AnalysisRow; adsetName?: string | null; adNames?: string[] }) {
   const aiAngle = normalizeExplicitAngle(explicitAngle(input.analysis));
   if (aiAngle) {
     return { angle: aiAngle, confidence: 92, reason: "Aus vorhandener AI Analyse uebernommen und auf die strategische Angle-Taxonomie normalisiert." };
@@ -355,51 +415,180 @@ function roas(value: number, spend: number) {
   return spend > 0 ? value / spend : null;
 }
 
-function buildCreativeAngle(creative: CreativeListItem, analysis?: AnalysisRow): CreativeAngleItem {
-  const detected = inferAngle({ creative, analysis });
-  return {
-    creativeId: creative.id,
-    creativeName: creative.name,
-    type: creative.type,
-    status: creative.status,
-    funnelStage: analysis?.funnel_stage ?? creative.funnelStage,
-    angle: detected.angle,
-    reason: detected.reason,
-    confidence: detected.confidence,
-    score: creative.performanceScore.score,
-    hook: analysis?.hook ?? null,
-    primaryText: creative.body,
-    headline: creative.title,
-    spend: creative.metrics.spend,
-    impressions: creative.metrics.impressions,
-    purchases: creative.metrics.purchases,
-    roas: creative.metrics.roas,
-    ctr: creative.metrics.ctr
-  };
+const PAGE_SIZE = 1000;
+
+type AdsetCreativeCandidate = {
+  creative: CreativeListItem;
+  analysis?: AnalysisRow;
+  detected: ReturnType<typeof inferAngle>;
+  metrics: PerformanceMetrics;
+  score: number;
+};
+
+async function fetchAllPages<T>(query: SupabaseQuery) {
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as T[]));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+
+  return rows;
 }
 
-function buildAngleInsights(creatives: CreativeListItem[], items: CreativeAngleItem[]): AngleInsight[] {
-  const creativesById = new Map(creatives.map((creative) => [creative.id, creative]));
-  const groups = new Map<string, CreativeAngleItem[]>();
+function applyInsightDateRange<T extends { gte: (column: string, value: string) => T; lte: (column: string, value: string) => T }>(query: T, dateRange: CreativeInsightDateRange) {
+  let scopedQuery = query;
+  if (dateRange.since) scopedQuery = scopedQuery.gte("date", dateRange.since);
+  if (dateRange.until) scopedQuery = scopedQuery.lte("date", dateRange.until);
+  return scopedQuery;
+}
+
+function metricsFromRows(rows: InsightRow[]) {
+  return rows.length > 0 ? aggregateInsightRows(rows) : emptyMetrics;
+}
+
+function adsetDisplayName(adset: AdsetRow) {
+  return adset.name ?? adset.id;
+}
+
+function statusFromAdset(adset: AdsetRow, ads: AdRow[]) {
+  if (adset.effective_status || adset.status) return adset.effective_status ?? adset.status ?? "UNKNOWN";
+  if (ads.some((ad) => ad.effective_status === "ACTIVE" || ad.status === "ACTIVE")) return "ACTIVE";
+  if (ads.some((ad) => ad.effective_status === "PAUSED" || ad.status === "PAUSED")) return "PAUSED";
+  return ads[0]?.effective_status ?? ads[0]?.status ?? "UNKNOWN";
+}
+
+function candidateWeight(candidate: AdsetCreativeCandidate) {
+  return Math.max(candidate.metrics.spend, candidate.metrics.impressions / 1000, 1) * Math.max(candidate.detected.confidence, 1) / 100;
+}
+
+function dominantCandidateGroup(candidates: AdsetCreativeCandidate[]) {
+  const groups = new Map<string, { weight: number; candidates: AdsetCreativeCandidate[] }>();
+  for (const candidate of candidates) {
+    const current = groups.get(candidate.detected.angle) ?? { weight: 0, candidates: [] };
+    current.weight += candidateWeight(candidate);
+    current.candidates.push(candidate);
+    groups.set(candidate.detected.angle, current);
+  }
+
+  return [...groups.entries()]
+    .map(([angle, group]) => ({ angle, ...group }))
+    .sort((a, b) => b.weight - a.weight || b.candidates.length - a.candidates.length)[0] ?? null;
+}
+
+function representativeCandidate(candidates: AdsetCreativeCandidate[]) {
+  return candidates
+    .slice()
+    .sort((a, b) => candidateWeight(b) - candidateWeight(a) || b.score - a.score || b.detected.confidence - a.detected.confidence)[0] ?? null;
+}
+
+function buildAdsetAngles(input: { adsets: AdsetRow[]; ads: AdRow[]; insights: InsightRow[]; creatives: CreativeListItem[]; analysisByCreative: Map<string, AnalysisRow> }) {
+  const creativesById = new Map(input.creatives.map((creative) => [creative.id, creative]));
+  const adsByAdset = new Map<string, AdRow[]>();
+  const insightsByAdset = new Map<string, InsightRow[]>();
+  const insightsByAdsetCreative = new Map<string, InsightRow[]>();
+
+  for (const ad of input.ads) {
+    if (!ad.adset_id) continue;
+    adsByAdset.set(ad.adset_id, [...(adsByAdset.get(ad.adset_id) ?? []), ad]);
+  }
+
+  for (const insight of input.insights) {
+    if (!insight.adset_id) continue;
+    insightsByAdset.set(insight.adset_id, [...(insightsByAdset.get(insight.adset_id) ?? []), insight]);
+    if (insight.creative_id) {
+      const key = `${insight.adset_id}:${insight.creative_id}`;
+      insightsByAdsetCreative.set(key, [...(insightsByAdsetCreative.get(key) ?? []), insight]);
+    }
+  }
+
+  return input.adsets.flatMap((adset): AdsetAngleItem[] => {
+    const adsetAds = adsByAdset.get(adset.id) ?? [];
+    const adsetInsights = insightsByAdset.get(adset.id) ?? [];
+    if (adsetAds.length === 0 && adsetInsights.length === 0) return [];
+
+    const adNames = uniqueCompact(adsetAds.map((ad) => ad.name), 20);
+    const creativeIds = [...new Set(adsetAds.map((ad) => ad.creative_id).filter(Boolean) as string[])];
+    const candidates = creativeIds.flatMap((creativeId): AdsetCreativeCandidate[] => {
+      const creative = creativesById.get(creativeId);
+      if (!creative) return [];
+      const analysis = input.analysisByCreative.get(creative.id);
+      const metrics = metricsFromRows(insightsByAdsetCreative.get(`${adset.id}:${creative.id}`) ?? []);
+      const detected = inferAngle({ creative, analysis, adsetName: adset.name, adNames });
+      return [{ creative, analysis, detected, metrics, score: calculateCreativePerformanceScore(metrics).score }];
+    });
+
+    const metrics = metricsFromRows(adsetInsights);
+    const adsetScore = calculateCreativePerformanceScore(metrics).score;
+    const dominant = dominantCandidateGroup(candidates);
+    const representative = representativeCandidate(dominant?.candidates ?? candidates);
+    const formats = uniqueCompact(candidates.map((candidate) => candidate.creative.type), 5);
+    const funnelStages = uniqueCompact(candidates.map((candidate) => candidate.analysis?.funnel_stage ?? candidate.creative.funnelStage), 5);
+    const confidence = dominant ? Math.round(dominant.candidates.reduce((sum, candidate) => sum + candidate.detected.confidence, 0) / dominant.candidates.length) : 0;
+    const reason = dominant && representative
+      ? `Adset-Level: ${dominant.candidates.length} von ${candidates.length} Creatives zeigen diesen Angle. Repraesentatives Signal: ${representative.detected.reason}`
+      : "Kein ausreichend starkes Angle-Signal aus den Creatives dieses Adsets erkannt.";
+
+    return [{
+      adsetId: adset.id,
+      adsetName: adsetDisplayName(adset),
+      optimizationGoal: adset.optimization_goal,
+      adCount: adsetAds.length,
+      creativeCount: creativeIds.length,
+      representativeCreativeId: representative?.creative.id ?? null,
+      representativeCreativeName: representative?.creative.name ?? null,
+      creativeIds,
+      creativeNames: uniqueCompact(creativeIds.map((creativeId) => creativesById.get(creativeId)?.name), 10),
+      formats,
+      type: formats[0] ?? "unknown",
+      status: statusFromAdset(adset, adsetAds),
+      funnelStage: funnelStages[0] ?? null,
+      funnelStages,
+      angle: dominant?.angle ?? "Unklarer Marketing Angle",
+      reason,
+      confidence,
+      score: adsetScore,
+      hook: representative?.analysis?.hook ?? null,
+      primaryText: representative?.creative.body ?? null,
+      headline: representative?.creative.title ?? null,
+      spend: metrics.spend,
+      impressions: metrics.impressions,
+      clicks: metrics.clicks,
+      outboundClicks: metrics.outboundClicks,
+      purchases: metrics.purchases,
+      purchaseValue: metrics.purchaseValue,
+      video3sViews: metrics.video3sViews,
+      roas: metrics.roas,
+      ctr: metrics.ctr
+    }];
+  }).sort((a, b) => b.score - a.score || b.spend - a.spend);
+}
+
+function buildAngleInsights(items: AdsetAngleItem[]): AngleInsight[] {
+  const groups = new Map<string, AdsetAngleItem[]>();
   for (const item of items) groups.set(item.angle, [...(groups.get(item.angle) ?? []), item]);
 
   return [...groups.entries()]
     .map(([angle, angleItems]) => {
-      const sourceCreatives = angleItems.map((item) => creativesById.get(item.creativeId)).filter((creative): creative is CreativeListItem => Boolean(creative));
-      const spend = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.spend, 0);
-      const impressions = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.impressions, 0);
-      const clicks = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.clicks, 0);
-      const outboundClicks = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.outboundClicks, 0);
-      const purchases = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.purchases, 0);
-      const purchaseValue = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.purchaseValue, 0);
-      const video3s = sourceCreatives.reduce((sum, creative) => sum + creative.metrics.video3sViews, 0);
+      const creativeIds = new Set(angleItems.flatMap((item) => item.creativeIds));
+      const spend = angleItems.reduce((sum, item) => sum + item.spend, 0);
+      const impressions = angleItems.reduce((sum, item) => sum + item.impressions, 0);
+      const clicks = angleItems.reduce((sum, item) => sum + item.clicks, 0);
+      const outboundClicks = angleItems.reduce((sum, item) => sum + item.outboundClicks, 0);
+      const purchases = angleItems.reduce((sum, item) => sum + item.purchases, 0);
+      const purchaseValue = angleItems.reduce((sum, item) => sum + item.purchaseValue, 0);
+      const video3s = angleItems.reduce((sum, item) => sum + item.video3sViews, 0);
       const avgCreativeScore = Math.round(angleItems.reduce((sum, item) => sum + item.score, 0) / angleItems.length);
       const avgConfidence = Math.round(angleItems.reduce((sum, item) => sum + item.confidence, 0) / angleItems.length);
+      const rankedItems = angleItems.slice().sort((a, b) => b.score - a.score || b.spend - a.spend);
 
       return {
         angle,
         summary: angleSummary(angle),
-        creativeCount: angleItems.length,
+        adsetCount: angleItems.length,
+        creativeCount: creativeIds.size,
         score: Math.round(avgCreativeScore * 0.75 + avgConfidence * 0.25),
         avgCreativeScore,
         avgConfidence,
@@ -410,17 +599,19 @@ function buildAngleInsights(creatives: CreativeListItem[], items: CreativeAngleI
         ctr: rate(clicks, impressions),
         hookRate: rate(video3s, impressions),
         outboundCvr: rate(purchases, outboundClicks),
-        formats: uniqueCompact(angleItems.map((item) => item.type), 5),
-        funnelStages: uniqueCompact(angleItems.map((item) => item.funnelStage), 5),
-        topHooks: uniqueCompact(angleItems.sort((a, b) => b.score - a.score).map((item) => item.hook), 4),
-        exampleCreatives: angleItems
-          .slice()
-          .sort((a, b) => b.score - a.score || b.spend - a.spend)
+        formats: uniqueCompact(angleItems.flatMap((item) => item.formats), 5),
+        funnelStages: uniqueCompact(angleItems.flatMap((item) => item.funnelStages), 5),
+        topHooks: uniqueCompact(rankedItems.map((item) => item.hook), 4),
+        exampleAdsets: rankedItems
           .slice(0, 4)
-          .map((item) => ({ id: item.creativeId, name: item.creativeName, score: item.score }))
+          .map((item) => ({ id: item.adsetId, name: item.adsetName, score: item.score, representativeCreativeId: item.representativeCreativeId })),
+        exampleCreatives: rankedItems
+          .filter((item) => item.representativeCreativeId && item.representativeCreativeName)
+          .slice(0, 4)
+          .map((item) => ({ id: item.representativeCreativeId as string, name: item.representativeCreativeName as string, score: item.score }))
       };
     })
-    .sort((a, b) => b.score - a.score || b.spend - a.spend || b.creativeCount - a.creativeCount);
+    .sort((a, b) => b.score - a.score || b.spend - a.spend || b.adsetCount - a.adsetCount);
 }
 
 async function getCreativeAnglesOverviewUncached(clientId: string, since?: string | null, until?: string | null): Promise<CreativeAnglesOverview> {
@@ -428,31 +619,55 @@ async function getCreativeAnglesOverviewUncached(clientId: string, since?: strin
 
   try {
     const supabase = createSupabaseServiceRoleClient();
-    const [{ creatives, error: creativesError }, { data: analyses, error: analysesError }] = await Promise.all([
+    const [{ creatives, error: creativesError }, { data: analyses, error: analysesError }, { data: adsets, error: adsetsError }, { data: ads, error: adsError }, insights] = await Promise.all([
       listClientCreatives(clientId, dateRange),
       supabase
         .from("creative_ai_analyses")
         .select("creative_id,hook,summary,funnel_stage,target_audience_fit_score,brand_fit_score,clarity_score,scrollstopper_score,cta_score,raw,created_at")
         .eq("client_id", clientId)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("meta_ad_sets")
+        .select("id,name,optimization_goal,status,effective_status")
+        .eq("client_id", clientId),
+      supabase
+        .from("meta_ads")
+        .select("id,adset_id,creative_id,name,status,effective_status")
+        .eq("client_id", clientId),
+      fetchAllPages<InsightRow>(
+        applyInsightDateRange(
+          supabase
+            .from("creative_insights_daily")
+            .select("adset_id,creative_id,spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays")
+            .eq("client_id", clientId),
+          dateRange
+        )
+      )
     ]);
 
-    const error = creativesError ?? analysesError?.message ?? null;
+    const error = creativesError ?? analysesError?.message ?? adsetsError?.message ?? adsError?.message ?? null;
     if (error) throw new Error(error);
 
     const analysisByCreative = latestAnalyses((analyses ?? []) as AnalysisRow[]);
-    const creativeAngles = creatives
-      .map((creative) => buildCreativeAngle(creative, analysisByCreative.get(creative.id)))
-      .sort((a, b) => b.score - a.score || b.spend - a.spend);
-    const angles = buildAngleInsights(creatives, creativeAngles);
-    const avgScore = creativeAngles.length > 0 ? Math.round(creativeAngles.reduce((sum, item) => sum + item.score, 0) / creativeAngles.length) : 0;
+    const adsetAngles = buildAdsetAngles({
+      adsets: (adsets ?? []) as AdsetRow[],
+      ads: (ads ?? []) as AdRow[],
+      insights,
+      creatives,
+      analysisByCreative
+    });
+    const angles = buildAngleInsights(adsetAngles);
+    const creativeCount = new Set(adsetAngles.flatMap((item) => item.creativeIds)).size;
+    const avgScore = adsetAngles.length > 0 ? Math.round(adsetAngles.reduce((sum, item) => sum + item.score, 0) / adsetAngles.length) : 0;
 
     return {
       angles,
-      creatives: creativeAngles,
+      adsets: adsetAngles,
+      creatives: adsetAngles,
       totals: {
         angles: angles.length,
-        creatives: creativeAngles.length,
+        adsets: adsetAngles.length,
+        creatives: creativeCount,
         analyzedCreatives: analysisByCreative.size,
         avgScore
       },
@@ -461,8 +676,9 @@ async function getCreativeAnglesOverviewUncached(clientId: string, since?: strin
   } catch (error) {
     return {
       angles: [],
+      adsets: [],
       creatives: [],
-      totals: { angles: 0, creatives: 0, analyzedCreatives: 0, avgScore: 0 },
+      totals: { angles: 0, adsets: 0, creatives: 0, analyzedCreatives: 0, avgScore: 0 },
       error: error instanceof Error ? error.message : "Creative Angles konnten nicht geladen werden."
     };
   }
@@ -470,7 +686,7 @@ async function getCreativeAnglesOverviewUncached(clientId: string, since?: strin
 
 const getCreativeAnglesOverviewCached = unstable_cache(
   getCreativeAnglesOverviewUncached,
-  ["creative-angles-overview-v2"],
+  ["creative-angles-overview-v3"],
   { revalidate: 120, tags: [CACHE_TAGS.creativeAngles] }
 );
 

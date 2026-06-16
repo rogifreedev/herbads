@@ -1,4 +1,4 @@
-import { AngleRankingDataTable, CreativeAnglesDataTable } from "@/components/angle-ranking-data-table";
+import { AdsetAnglesDataTable, AngleRankingDataTable } from "@/components/angle-ranking-data-table";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -52,8 +52,8 @@ export default async function CreativeAnglesPage({ params, searchParams }: { par
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="font-heading text-4xl">Creative Angles</h2>
-          <p className="mt-2 text-sm text-white/60">Messaging-Angles aus Hooks, Primary Texts und Creative Performance zusammengefasst.</p>
+          <h2 className="font-heading text-4xl">Adset Angles</h2>
+          <p className="mt-2 text-sm text-white/60">Messaging-Angles auf Adset-Basis, mit Creative-Signalen erkannt und Adset-Performance bewertet.</p>
         </div>
         <CreativeDateRangePicker defaultDays={30} />
       </div>
@@ -61,21 +61,22 @@ export default async function CreativeAnglesPage({ params, searchParams }: { par
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
       {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-5">
         <SummaryCard label="Angles" value={formatNumber(overview.totals.angles)} />
+        <SummaryCard label="Adsets" value={formatNumber(overview.totals.adsets)} />
         <SummaryCard label="Creatives" value={formatNumber(overview.totals.creatives)} />
         <SummaryCard label="AI analysiert" value={formatNumber(overview.totals.analyzedCreatives)} />
         <SummaryCard label="Ø Punkte" value={`${formatNumber(overview.totals.avgScore)}/100`} />
       </section>
 
       <Card className="border-herb-border bg-herb-surface/90">
-        <CardHeader>
-          <CardTitle>Angle Ranking</CardTitle>
-          <CardDescription>Punktestand kombiniert Creative Performance und Erkennungs-Sicherheit des Angles.</CardDescription>
-        </CardHeader>
+          <CardHeader>
+            <CardTitle>Angle Ranking</CardTitle>
+          <CardDescription>Punktestand kombiniert Adset Performance und Erkennungs-Sicherheit des dominanten Angles.</CardDescription>
+          </CardHeader>
         <CardContent>
           {overview.angles.length === 0 ? (
-            <EmptyState title="Noch keine Angles" description="Synchronisiere und analysiere Creatives, damit Angles aus Hooks und Primary Texts erkannt werden koennen." />
+            <EmptyState title="Noch keine Angles" description="Synchronisiere Meta Ads und analysiere Creatives, damit Adset-Angles erkannt werden koennen." />
           ) : (
             <AngleRankingDataTable clientId={clientId} angles={overview.angles} />
           )}
@@ -83,15 +84,15 @@ export default async function CreativeAnglesPage({ params, searchParams }: { par
       </Card>
 
       <Card className="border-herb-border bg-herb-surface/90">
-        <CardHeader>
-          <CardTitle>Anzeigen nach Angle</CardTitle>
-          <CardDescription>Jede Anzeige mit erkanntem Angle, Hook, Primary Text und Punktestand.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {overview.creatives.length === 0 ? (
-            <EmptyState title="Keine Anzeigen" description="Noch keine Creative-Daten fuer diese Auswahl vorhanden." />
+          <CardHeader>
+          <CardTitle>Adsets nach Angle</CardTitle>
+          <CardDescription>Jedes Adset mit dominantem Angle, repraesentativem Hook, Primary Text und Adset-Punktestand.</CardDescription>
+          </CardHeader>
+          <CardContent>
+          {overview.adsets.length === 0 ? (
+            <EmptyState title="Keine Adsets" description="Noch keine Adset-Daten fuer diese Auswahl vorhanden." />
           ) : (
-            <CreativeAnglesDataTable clientId={clientId} creatives={overview.creatives} />
+            <AdsetAnglesDataTable clientId={clientId} adsets={overview.adsets} />
           )}
         </CardContent>
       </Card>

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
-import type { AngleInsight, CreativeAngleItem } from "@/lib/creative-angles";
+import type { AdsetAngleItem, AngleInsight } from "@/lib/creative-angles";
 import { formatCurrency, formatDecimal, formatNumber, formatPercent } from "@/lib/format";
 
 type AngleRankingDataTableProps = {
@@ -16,9 +16,9 @@ type AngleRankingDataTableProps = {
   angles: AngleInsight[];
 };
 
-type CreativeAnglesDataTableProps = {
+type AdsetAnglesDataTableProps = {
   clientId: string;
-  creatives: CreativeAngleItem[];
+  adsets: AdsetAngleItem[];
 };
 
 function scoreVariant(score: number): "success" | "warning" | "secondary" {
@@ -43,21 +43,24 @@ function angleSearchText(angle: AngleInsight) {
     ...angle.formats,
     ...angle.funnelStages,
     ...angle.topHooks,
+    ...angle.exampleAdsets.flatMap((adset) => [adset.name, String(adset.score)]),
     ...angle.exampleCreatives.flatMap((creative) => [creative.name, String(creative.score)])
   ].join(" ").toLowerCase();
 }
 
-function creativeSearchText(creative: CreativeAngleItem) {
+function adsetSearchText(adset: AdsetAngleItem) {
   return [
-    creative.creativeName,
-    creative.angle,
-    creative.reason,
-    creative.type,
-    creative.status,
-    creative.funnelStage,
-    creative.hook,
-    creative.primaryText,
-    creative.headline
+    adset.adsetName,
+    adset.angle,
+    adset.reason,
+    adset.optimizationGoal,
+    adset.status,
+    ...adset.formats,
+    ...adset.funnelStages,
+    ...adset.creativeNames,
+    adset.hook,
+    adset.primaryText,
+    adset.headline
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
@@ -87,10 +90,10 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
       meta: { label: "Punkte" }
     },
     {
-      accessorKey: "creativeCount",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Creatives" />,
-      cell: ({ row }) => <span className="text-white">{formatNumber(row.original.creativeCount)}</span>,
-      meta: { label: "Creatives" }
+      accessorKey: "adsetCount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Adsets" />,
+      cell: ({ row }) => <span className="text-white">{formatNumber(row.original.adsetCount)}</span>,
+      meta: { label: "Adsets" }
     },
     {
       accessorKey: "spend",
@@ -149,13 +152,17 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
                 </div>
               ) : null}
               <div>
-                <p className="mb-1 uppercase tracking-[0.14em] text-white/35">Beispiele</p>
+                <p className="mb-1 uppercase tracking-[0.14em] text-white/35">Beispiel-Adsets</p>
                 <div className="space-y-1">
-                  {angle.exampleCreatives.map((creative) => (
-                    <Link key={creative.id} href={`/clients/${clientId}/creatives/${creative.id}`} className="flex items-center justify-between gap-2 text-primary hover:text-white">
-                      <span className="truncate">{creative.name}</span>
-                      <span className="shrink-0 text-white/40">{creative.score}</span>
-                    </Link>
+                  {angle.exampleAdsets.map((adset) => (
+                    <div key={adset.id} className="flex items-center justify-between gap-2 rounded bg-white/[0.03] px-2 py-1">
+                      {adset.representativeCreativeId ? (
+                        <Link href={`/clients/${clientId}/creatives/${adset.representativeCreativeId}`} className="truncate text-primary hover:text-white">{adset.name}</Link>
+                      ) : (
+                        <span className="truncate text-white/65">{adset.name}</span>
+                      )}
+                      <span className="shrink-0 text-white/40">{adset.score}</span>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -168,25 +175,30 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
   ];
 }
 
-function creativeColumns(clientId: string): ColumnDef<CreativeAngleItem>[] {
+function adsetColumns(clientId: string): ColumnDef<AdsetAngleItem>[] {
   return [
     {
-      accessorKey: "creativeName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Anzeige" />,
+      accessorKey: "adsetName",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Adset" />,
       cell: ({ row }) => {
-        const creative = row.original;
+        const adset = row.original;
         return (
-          <div className="min-w-[220px] space-y-2">
-            <Link href={`/clients/${clientId}/creatives/${creative.creativeId}`} className="font-medium text-primary hover:text-white">{creative.creativeName}</Link>
+          <div className="min-w-[260px] space-y-2">
+            <p className="font-medium text-white">{adset.adsetName}</p>
             <div className="flex flex-wrap gap-1">
-              <Badge variant="outline">{creative.type}</Badge>
-              <Badge variant={creative.status === "ACTIVE" ? "success" : "secondary"}>{creative.status}</Badge>
-              {creative.funnelStage ? <Badge variant="secondary">{creative.funnelStage}</Badge> : null}
+              <Badge variant={adset.status === "ACTIVE" ? "success" : "secondary"}>{adset.status}</Badge>
+              {adset.optimizationGoal ? <Badge variant="outline">{adset.optimizationGoal}</Badge> : null}
+              {adset.funnelStages.map((stage) => <Badge key={stage} variant="secondary">{stage}</Badge>)}
             </div>
+            {adset.representativeCreativeId && adset.representativeCreativeName ? (
+              <Link href={`/clients/${clientId}/creatives/${adset.representativeCreativeId}`} className="block truncate text-xs text-primary hover:text-white">
+                Beispiel: {adset.representativeCreativeName}
+              </Link>
+            ) : null}
           </div>
         );
       },
-      meta: { label: "Anzeige" }
+      meta: { label: "Adset" }
     },
     {
       accessorKey: "angle",
@@ -207,6 +219,18 @@ function creativeColumns(clientId: string): ColumnDef<CreativeAngleItem>[] {
       meta: { label: "Confidence" }
     },
     {
+      accessorKey: "adCount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ads" />,
+      cell: ({ row }) => <span className="text-white">{formatNumber(row.original.adCount)}</span>,
+      meta: { label: "Ads" }
+    },
+    {
+      accessorKey: "creativeCount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Creatives" />,
+      cell: ({ row }) => <span className="text-white">{formatNumber(row.original.creativeCount)}</span>,
+      meta: { label: "Creatives" }
+    },
+    {
       accessorKey: "hook",
       header: "Hook",
       cell: ({ row }) => <span className="block max-w-[260px] text-xs text-white/65">{truncate(row.original.hook, 110)}</span>,
@@ -214,7 +238,7 @@ function creativeColumns(clientId: string): ColumnDef<CreativeAngleItem>[] {
     },
     {
       id: "primaryText",
-      accessorFn: (creative) => creative.primaryText ?? creative.headline ?? "",
+      accessorFn: (adset) => adset.primaryText ?? adset.headline ?? "",
       header: "Primary Text",
       cell: ({ row }) => <span className="block max-w-[320px] text-xs text-white/65">{truncate(row.original.primaryText ?? row.original.headline, 160)}</span>,
       meta: { label: "Primary Text" }
@@ -227,14 +251,14 @@ function creativeColumns(clientId: string): ColumnDef<CreativeAngleItem>[] {
     },
     {
       id: "roas",
-      accessorFn: (creative) => creative.roas ?? -1,
+      accessorFn: (adset) => adset.roas ?? -1,
       header: ({ column }) => <DataTableColumnHeader column={column} title="ROAS" />,
       cell: ({ row }) => <span className="text-white">{formatDecimal(row.original.roas)}</span>,
       meta: { label: "ROAS" }
     },
     {
       id: "ctr",
-      accessorFn: (creative) => creative.ctr ?? -1,
+      accessorFn: (adset) => adset.ctr ?? -1,
       header: ({ column }) => <DataTableColumnHeader column={column} title="CTR" />,
       cell: ({ row }) => <span className="text-white">{formatPercent(row.original.ctr)}</span>,
       meta: { label: "CTR" }
@@ -270,7 +294,7 @@ export function AngleRankingDataTable({ clientId, angles }: AngleRankingDataTabl
       pageSize={10}
       minWidthClassName="min-w-[1420px]"
       emptyLabel="Keine Angles fuer die aktuelle Suche."
-      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Angle, Hook, Beispiel-Creative" className="h-9 sm:w-96" />}
+      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Angle, Hook, Beispiel-Adset" className="h-9 sm:w-96" />}
       toolbarActions={
         <>
           <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(angles.length)}</span>
@@ -281,26 +305,26 @@ export function AngleRankingDataTable({ clientId, angles }: AngleRankingDataTabl
   );
 }
 
-export function CreativeAnglesDataTable({ clientId, creatives }: CreativeAnglesDataTableProps) {
+export function AdsetAnglesDataTable({ clientId, adsets }: AdsetAnglesDataTableProps) {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRows = useMemo(() => {
-    return creatives
-      .filter((creative) => !normalizedQuery || creativeSearchText(creative).includes(normalizedQuery))
+    return adsets
+      .filter((adset) => !normalizedQuery || adsetSearchText(adset).includes(normalizedQuery))
       .sort((a, b) => b.score - a.score || b.spend - a.spend);
-  }, [creatives, normalizedQuery]);
+  }, [adsets, normalizedQuery]);
 
   return (
     <DataTable
-      columns={creativeColumns(clientId)}
+      columns={adsetColumns(clientId)}
       data={filteredRows}
       pageSize={12}
       minWidthClassName="min-w-[1680px]"
-      emptyLabel="Keine Anzeigen fuer die aktuelle Suche."
-      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Anzeige, Angle, Hook oder Primary Text" className="h-9 sm:w-96" />}
+      emptyLabel="Keine Adsets fuer die aktuelle Suche."
+      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Adset, Angle, Hook oder Primary Text" className="h-9 sm:w-96" />}
       toolbarActions={
         <>
-          <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(creatives.length)}</span>
+          <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(adsets.length)}</span>
           {query ? <Button type="button" variant="outline" size="sm" className="border-herb-border" onClick={() => setQuery("")}>Reset</Button> : null}
         </>
       }
