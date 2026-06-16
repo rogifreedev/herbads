@@ -11,4 +11,6 @@ tsconfig.tsbuildinfo
 !.env.example
 workers/competitor-crawler/.env
 workers/competitor-crawler/.env.*
+deploy/competitor-crawler/.env
+deploy/competitor-crawler/.env.*
 README.local.md

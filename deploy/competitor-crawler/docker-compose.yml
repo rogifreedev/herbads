@@ -1,0 +1,26 @@
+services:
+  competitor-crawler:
+    container_name: herbads-competitor-crawler
+    build:
+      context: ../..
+      dockerfile: workers/competitor-crawler/Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      COMPETITOR_CRAWL_MODE: worker
+      COMPETITOR_BROWSER_CRAWL: "1"
+      COMPETITOR_CRAWLER_HEALTH_HOST: "0.0.0.0"
+      COMPETITOR_CRAWLER_HEALTH_PORT: "39123"
+    ports:
+      - "39123:39123"
+    restart: unless-stopped
+    init: true
+    shm_size: "1gb"
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
