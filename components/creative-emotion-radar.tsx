@@ -43,8 +43,8 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
 
   return (
     <div className="rounded-xl border border-herb-border bg-black/20 p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-        <div className="mx-auto w-full max-w-[340px]">
+      <div className="flex flex-col gap-4">
+        <div className="mx-auto w-full max-w-[320px]">
           <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Emotion Radar Chart" className="h-auto w-full">
             {[0.25, 0.5, 0.75, 1].map((level) => (
               <polygon
@@ -79,11 +79,11 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
             })}
           </svg>
         </div>
-        <div className="grid flex-1 gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
           {emotions.map((emotion) => (
-            <div key={emotion.key} className="rounded-lg bg-white/[0.03] px-3 py-2">
+            <div key={emotion.key} className="min-w-0 rounded-lg bg-white/[0.03] px-3 py-2">
               <p className="text-xs text-white/45">{emotion.label}</p>
-              <p className="mt-1 font-heading text-2xl text-white">{scoreValue(scores, emotion.key)}/100</p>
+              <p className="mt-1 whitespace-nowrap font-heading text-xl text-white 2xl:text-2xl">{scoreValue(scores, emotion.key)}/100</p>
             </div>
           ))}
         </div>
