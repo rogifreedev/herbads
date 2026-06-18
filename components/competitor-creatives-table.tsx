@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { getCompetitorDeliveryLocations } from "@/lib/competitor-demographics";
+import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
 import type { CompetitorCreative } from "@/lib/competitors";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 
@@ -85,7 +86,11 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
       id: "status",
       accessorFn: (creative) => creative.status,
       header: "Status",
-      cell: ({ row }) => <Badge variant={row.original.status === "active" ? "success" : "outline"}>{row.original.status}</Badge>,
+      cell: ({ row }) => (
+        <Badge variant={isCompetitorCreativeDisabled(row.original.status) ? "destructive" : "success"}>
+          {competitorCreativeStatusLabel(row.original.status)}
+        </Badge>
+      ),
       meta: { label: "Status" }
     },
     {
@@ -191,6 +196,7 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
         creative.adLibraryId,
         creative.format,
         creative.status,
+        competitorCreativeStatusLabel(creative.status),
         formatDate(creative.startedAt),
         formatDate(creative.endedAt),
         formatDate(creative.createdAt),

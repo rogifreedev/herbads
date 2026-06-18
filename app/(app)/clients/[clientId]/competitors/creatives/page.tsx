@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
 import { getCompetitorReachBreakdown, getCompetitorReachByLocation } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type Competitor, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
@@ -345,7 +346,7 @@ function GridCreativeCard({ clientId, creative }: { clientId: string; creative: 
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{creative.competitorName}</Badge>
           <Badge variant="secondary">{creative.format}</Badge>
-          <Badge variant={creative.status === "active" ? "success" : "outline"}>{creative.status}</Badge>
+          <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status)}</Badge>
         </div>
         <p className="line-clamp-2 font-medium text-white">{creative.analysis?.hook ?? creative.hook ?? creative.headline ?? "Ohne Hook"}</p>
         <div className="grid grid-cols-2 gap-2 text-xs text-white/60">

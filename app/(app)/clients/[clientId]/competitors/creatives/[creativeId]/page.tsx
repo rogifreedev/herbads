@@ -6,6 +6,7 @@ import { CreativeEmotionRadar, hasEmotionScores } from "@/components/creative-em
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
 import { getCompetitorDeliveryLocations, getCompetitorReachBreakdown, getCompetitorReachByLocation } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
@@ -37,7 +38,7 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
             <div className="flex flex-wrap items-center gap-2">
               <Badge>{creative.competitorName}</Badge>
               <Badge variant="secondary">{creative.format}</Badge>
-              <Badge variant={creative.status === "active" ? "success" : "outline"}>{creative.status}</Badge>
+              <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status)}</Badge>
               <Badge variant="outline">Score {creative.rankingScore}/100</Badge>
             </div>
           </CardHeader>

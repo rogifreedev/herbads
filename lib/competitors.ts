@@ -352,6 +352,10 @@ function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
 }
 
+function jsonRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
+}
+
 function clampScore(value: unknown) {
   const score = nullableNumber(value);
   if (score === null) return null;
@@ -1155,7 +1159,7 @@ async function fetchPublicAdLibraryItems(sourceUrl: string) {
     parsed.adId,
     ...extractAdIdsFromHtml(sourcePage.html)
   ]);
-  const limit = Math.max(1, Math.min(100, Number(getOptionalEnv("COMPETITOR_CRAWL_LIMIT", "25")) || 25));
+  const limit = competitorCrawlLimit();
   const selectedIds = ids.slice(0, limit);
 
   if (selectedIds.length === 0) {
@@ -1570,17 +1574,14 @@ async function upsertPublicAdLibraryItem(clientId: string, source: SourceRow, it
         .eq("ad_library_id", item.id)
         .maybeSingle()
     : { data: null, error: null };
-  const existingRaw =
-    existing.data?.raw && typeof existing.data.raw === "object" && !Array.isArray(existing.data.raw)
-      ? (existing.data.raw as JsonRecord)
-      : {};
+  const existingRaw = jsonRecord(existing.data?.raw);
   const payload = {
     client_id: clientId,
     competitor_id: source.competitor_id,
     source_id: source.id,
     source_url: item.sourceUrl,
     ad_library_id: item.id,
-    status: item.status,
+    status: "active",
     format: item.format,
     platforms: item.platforms,
     started_at: item.startedAt,
@@ -1624,6 +1625,37 @@ async function upsertPublicAdLibraryItem(clientId: string, source: SourceRow, it
   return true;
 }
 
+async function refreshExistingPublicAdCreative(clientId: string, sourceId: string, item: PublicAdLibraryItem) {
+  if (!item.id) return false;
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: existing, error: selectError } = await supabase
+    .from("competitor_creatives")
+    .select("id,raw")
+    .eq("client_id", clientId)
+    .eq("source_id", sourceId)
+    .eq("ad_library_id", item.id)
+    .maybeSingle();
+  if (selectError) throw new Error(selectError.message);
+  if (!existing?.id) return false;
+
+  const payload: Record<string, unknown> = {
+    status: "active",
+    source_url: item.sourceUrl,
+    raw: {
+      ...jsonRecord(existing.raw),
+      ...item.raw,
+      lastSeenAt: new Date().toISOString()
+    }
+  };
+  if (item.thumbnailUrl) payload.thumbnail_url = item.thumbnailUrl;
+  if (item.imageUrl) payload.image_url = item.imageUrl;
+  if (item.videoUrl) payload.video_url = item.videoUrl;
+
+  const { error } = await supabase.from("competitor_creatives").update(payload).eq("id", existing.id);
+  if (error) throw new Error(error.message);
+  return true;
+}
+
 async function existingEuTransparencyAdIds(clientId: string, sourceId: string) {
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
@@ -1636,23 +1668,35 @@ async function existingEuTransparencyAdIds(clientId: string, sourceId: string) {
   return new Set(((data ?? []) as Array<{ ad_library_id: string | null }>).map((row) => row.ad_library_id).filter(Boolean) as string[]);
 }
 
-async function refreshExistingPublicAdMedia(clientId: string, sourceId: string, item: PublicAdLibraryItem) {
-  if (!item.id) return false;
-  const mediaPayload: Record<string, string> = {};
-  if (item.thumbnailUrl) mediaPayload.thumbnail_url = item.thumbnailUrl;
-  if (item.imageUrl) mediaPayload.image_url = item.imageUrl;
-  if (item.videoUrl) mediaPayload.video_url = item.videoUrl;
-  if (Object.keys(mediaPayload).length === 0) return false;
-
+async function markUnavailablePublicAdLibraryCreatives(clientId: string, sourceId: string, seenAdIds: Set<string>, checkedAt: string) {
+  if (seenAdIds.size === 0) return 0;
   const supabase = createSupabaseServiceRoleClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("competitor_creatives")
-    .update(mediaPayload)
+    .select("id,ad_library_id,status,raw")
     .eq("client_id", clientId)
-    .eq("source_id", sourceId)
-    .eq("ad_library_id", item.id);
+    .eq("source_id", sourceId);
   if (error) throw new Error(error.message);
-  return true;
+
+  const unavailableRows = ((data ?? []) as Array<{ id: string; ad_library_id: string | null; status: string | null; raw: JsonRecord | null }>)
+    .filter((row) => row.ad_library_id && !seenAdIds.has(row.ad_library_id) && row.status !== "disabled");
+
+  for (const row of unavailableRows) {
+    const { error: updateError } = await supabase
+      .from("competitor_creatives")
+      .update({
+        status: "disabled",
+        raw: {
+          ...jsonRecord(row.raw),
+          disabledAt: checkedAt,
+          lastUnavailableAt: checkedAt
+        }
+      })
+      .eq("id", row.id);
+    if (updateError) throw new Error(updateError.message);
+  }
+
+  return unavailableRows.length;
 }
 
 export async function crawlCompetitorSource(clientId: string, sourceId: string) {
@@ -1708,10 +1752,11 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
 
     let imported = 0;
     let skippedExisting = 0;
-    let refreshedMedia = 0;
+    let refreshedExisting = 0;
+    const seenAdIds = new Set(publicItems.map((item) => item.id).filter(Boolean) as string[]);
     for (const item of publicItems) {
       if (item.id && skippedEuTransparencyIds.has(item.id) && item.demographicSignals.source !== "meta_eu_transparency") {
-        if (await refreshExistingPublicAdMedia(clientId, sourceId, item)) refreshedMedia += 1;
+        if (await refreshExistingPublicAdCreative(clientId, sourceId, item)) refreshedExisting += 1;
         skippedExisting += 1;
         continue;
       }
@@ -1722,17 +1767,25 @@ export async function crawlCompetitorSource(clientId: string, sourceId: string) 
       throw new Error("Keine Ads importiert. Der oeffentliche Ad Library Link enthielt keine auslesbaren Ad-IDs oder Creative-Daten. Nutze einen konkreten Ad-Link oder ergaenze das Creative manuell ueber Advanced.");
     }
 
+    const checkedAt = new Date().toISOString();
+    const disableUnavailable = publicItems.length < competitorCrawlLimit();
+    const disabledCreatives = disableUnavailable
+      ? await markUnavailablePublicAdLibraryCreatives(clientId, sourceId, seenAdIds, checkedAt)
+      : 0;
+
     await supabase
       .from("competitor_ad_library_sources")
       .update({
         status: "completed",
         error_message: null,
-        last_checked_at: new Date().toISOString(),
+        last_checked_at: checkedAt,
         raw: {
           ...crawlRaw,
           imported,
           skippedExisting,
-          refreshedMedia,
+          refreshedExisting,
+          disabledCreatives,
+          disabledCreativesSkipped: disableUnavailable ? null : "crawl_limit_reached",
           pageId,
           adId: parsed.adId
         }
