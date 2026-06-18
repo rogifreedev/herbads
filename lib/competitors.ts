@@ -1862,6 +1862,18 @@ function extractJsonObject(text: string) {
   return JSON.parse(candidate.slice(start, end + 1)) as JsonRecord;
 }
 
+function normalizeAngle(value: unknown) {
+  const normalized = stringValue(value)
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "";
+
+  const words = normalized.split(" ");
+  const short = words.length > 4 ? words.slice(0, 4).join(" ") : normalized;
+  return short.length > 36 ? `${short.slice(0, 33).trim()}...` : short;
+}
+
 function normalizeGeneratedAnalysis(payload: JsonRecord): GeneratedAnalysis {
   const visualElements = payload.visualElements && typeof payload.visualElements === "object" && !Array.isArray(payload.visualElements) ? (payload.visualElements as JsonRecord) : {};
   const emotionScores = payload.emotionScores && typeof payload.emotionScores === "object" && !Array.isArray(payload.emotionScores) ? (payload.emotionScores as JsonRecord) : {};
@@ -1873,7 +1885,7 @@ function normalizeGeneratedAnalysis(payload: JsonRecord): GeneratedAnalysis {
     visualElements,
     detectedText: stringValue(payload.detectedText),
     offer: stringValue(payload.offer),
-    angle: stringValue(payload.angle),
+    angle: normalizeAngle(payload.angle),
     funnelStage: normalizeFunnel(payload.funnelStage),
     emotionScores,
     strengths: stringArray(payload.strengths),
@@ -1999,6 +2011,12 @@ export async function analyzeCompetitorCreative(clientId: string, creativeId: st
 Competitor: ${competitor?.name ?? "Unbekannt"}
 Eigener CPM fuer Budget-Schaetzung: ${cpmBase.cpm.toFixed(2)} (${cpmBase.confidence})
 
+Quellen-Prioritaet fuer Angle:
+- Wenn format "video" ist oder videoUrl vorhanden ist: Der angle MUSS aus dem Video-Transcript abgeleitet werden. Nutze primaryText/headline nur als Zusatzkontext, niemals als primaere Angle-Quelle.
+- Wenn videoTranscript.status nicht "completed" ist, markiere die Unsicherheit in thesis und leite den angle nur aus sichtbaren Video-/Thumbnail-Signalen ab.
+- Wenn format "static" oder "image" ist oder ein Bild beigefuegt ist: Der angle MUSS aus dem Bild/Visual, On-Screen-Text und Layout abgeleitet werden. Primary Text/headline sind nur Zusatzkontext und duerfen den angle nicht dominieren.
+- angle ist ein kurzes strategisches Label mit 2-4 Woertern, maximal 36 Zeichen. Keine ganzen Saetze, keine Copy-Headline, keine langen Beschreibungen.
+
 Creative JSON:
 ${JSON.stringify({
     format: typedCreative.format,
@@ -2033,6 +2051,8 @@ hook, hookExplanation, body, ending, visualElements, detectedText, offer, angle,
 Regeln:
 - hook ist nur der sichtbare oder angegebene Hook-Text, keine Analyse.
 - Wenn videoTranscript.status "completed" ist, nutze das Transcript als primaere Quelle fuer hook, body, ending und detectedText. body soll das Hauptscript der UGC Ad zusammenfassen, ending den Schluss/CTA.
+- angle muss bei Videos aus hookTranscript/sections/fullTranscript kommen. Bei Bildern muss angle aus visualElements/detectedText/Bildinhalt kommen.
+- Nutze primaryText/headline fuer angle nur, wenn kein Video-Transcript und kein Bildinhalt verfuegbar ist; kennzeichne diese Einschraenkung dann in thesis.
 - Wenn ein Full Transcript vorhanden ist, darfst du das komplette Script in detectedText oder body strukturiert wiedergeben, aber nicht halluzinieren.
 - emotionScores hat Keys curiosity, desire, trust, urgency, joy, fearOfMissingOut mit 0-100.
 - adaptationIdeas sind konkrete Ideen, wie wir das Pattern fuer den Kunden adaptieren koennen, ohne zu kopieren.
