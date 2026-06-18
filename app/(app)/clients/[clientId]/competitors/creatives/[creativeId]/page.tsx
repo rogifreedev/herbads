@@ -180,6 +180,7 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
               <LinkInfo label="Quelle" href={creative.sourceUrl ?? creative.landingUrl} />
             </CardContent>
           </Card>
+          {creative.videoTranscript || creative.videoUrl ? <CompetitorTranscriptCard transcript={creative.videoTranscript} hasVideo={Boolean(creative.videoUrl)} /> : null}
         </div>
       </section>
     </div>
@@ -239,6 +240,38 @@ function LinkInfo({ label, href }: { label: string; href: string | null | undefi
   );
 }
 
+function CompetitorTranscriptCard({ transcript, hasVideo }: { transcript: CompetitorCreative["videoTranscript"]; hasVideo: boolean }) {
+  return (
+    <Card className="border-herb-border bg-herb-surface/90">
+      <CardHeader>
+        <CardTitle>Video Transcript</CardTitle>
+        <CardDescription>
+          {transcript?.status === "completed"
+            ? `Transkribiert mit ${transcript.provider} ${transcript.model}${transcript.durationSeconds ? ` · ${formatSeconds(transcript.durationSeconds)}` : ""}${transcript.language ? ` · ${transcript.language}` : ""}`
+            : hasVideo
+              ? "Wird bei der naechsten Analyse oder Bulk Analyse automatisch transkribiert."
+              : "Keine Video-Quelle fuer dieses Creative gespeichert."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {transcript?.status === "failed" ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">{transcript.errorMessage ?? "Transkription fehlgeschlagen."}</p> : null}
+        {transcript?.status === "processing" ? <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-white">Transkription laeuft.</p> : null}
+        {transcript?.status === "completed" && transcript.transcript ? (
+          <>
+            <Info label="Hook Transcript" value={transcript.segments.length ? transcript.segments.slice(0, 3).map((segment) => segment.text).join(" ") : transcript.transcript.split(/\s+/).slice(0, 45).join(" ")} />
+            <div className="rounded-xl border border-herb-border bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Full Script</p>
+              <div className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-sm leading-6 text-white/70">
+                {transcript.transcript}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function displayLink(value: string | null | undefined) {
   if (!value) return "–";
   try {
@@ -251,6 +284,12 @@ function displayLink(value: string | null | undefined) {
 
 function emptyFallback(value: string) {
   return value.trim() || "–";
+}
+
+function formatSeconds(value: number) {
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.round(value % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
 function normalizeEmotionScores(value: Record<string, unknown>): CreativeEmotionScores {

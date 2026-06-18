@@ -20,6 +20,13 @@ type CreativeRow = {
   raw: JsonRecord | null;
 };
 
+type CompetitorCreativeVideoRow = {
+  id: string;
+  client_id: string;
+  video_url: string | null;
+  raw: JsonRecord | null;
+};
+
 type MetaAdAccountRow = {
   meta_account_id: string;
 };
@@ -92,6 +99,8 @@ type VideoSourceResult = {
   persistToCreative?: boolean;
 };
 
+const COMPETITOR_TRANSCRIPT_RAW_KEY = "competitorVideoTranscript";
+
 function toNumber(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -132,6 +141,31 @@ function mapTranscript(row: TranscriptRow): CreativeVideoTranscript {
   };
 }
 
+export function mapRawCompetitorVideoTranscript(raw: unknown): CreativeVideoTranscript | null {
+  const source = asRecord(raw);
+  const record = asRecord(source?.[COMPETITOR_TRANSCRIPT_RAW_KEY]);
+  if (!record) return null;
+
+  const status = stringValue(record.status);
+  const model = stringValue(record.model);
+  const provider = stringValue(record.provider);
+  if (!status || !model || !provider) return null;
+
+  return {
+    id: stringValue(record.id) ?? "competitor-video-transcript",
+    provider,
+    model,
+    status,
+    language: stringValue(record.language),
+    transcript: stringValue(record.transcript),
+    segments: normalizeSegments(record.segments),
+    durationSeconds: toNumber(record.durationSeconds),
+    errorMessage: stringValue(record.errorMessage),
+    createdAt: stringValue(record.createdAt) ?? new Date(0).toISOString(),
+    updatedAt: stringValue(record.updatedAt) ?? new Date(0).toISOString()
+  };
+}
+
 function extensionForContentType(contentType: string) {
   const normalized = contentType.toLowerCase();
   if (normalized.includes("webm")) return "webm";
@@ -148,7 +182,12 @@ function maxTranscriptFileBytes() {
 }
 
 async function downloadVideo(url: string) {
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    }
+  });
   if (!response.ok) throw new Error(`Video konnte nicht geladen werden (${response.status}).`);
 
   const maxBytes = maxTranscriptFileBytes();
@@ -561,6 +600,152 @@ export async function transcribeCreativeVideo(clientId: string, creativeId: stri
       { onConflict: "creative_id" }
     );
 
+    revalidateCacheTags(...VIDEO_TRANSCRIPT_CACHE_TAGS);
+    throw error;
+  }
+}
+
+function competitorTranscriptRecord(input: {
+  id: string;
+  provider: string;
+  model: string;
+  status: string;
+  language?: string | null;
+  transcript?: string | null;
+  segments?: TranscriptSegment[];
+  durationSeconds?: number | null;
+  sourceUrl?: string | null;
+  sourceContentType?: string | null;
+  sourceBytes?: number | null;
+  errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  raw?: JsonRecord;
+}) {
+  return {
+    id: input.id,
+    provider: input.provider,
+    model: input.model,
+    status: input.status,
+    language: input.language ?? null,
+    transcript: input.transcript ?? null,
+    segments: input.segments ?? [],
+    durationSeconds: input.durationSeconds ?? null,
+    sourceUrl: input.sourceUrl ?? null,
+    sourceContentType: input.sourceContentType ?? null,
+    sourceBytes: input.sourceBytes ?? null,
+    errorMessage: input.errorMessage ?? null,
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt,
+    raw: input.raw ?? {}
+  };
+}
+
+async function updateCompetitorCreativeTranscriptRaw(
+  clientId: string,
+  creativeId: string,
+  raw: JsonRecord,
+  transcript: ReturnType<typeof competitorTranscriptRecord>
+) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .from("competitor_creatives")
+    .update({ raw: { ...raw, [COMPETITOR_TRANSCRIPT_RAW_KEY]: transcript } })
+    .eq("client_id", clientId)
+    .eq("id", creativeId);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getLatestCompetitorCreativeVideoTranscript(clientId: string, creativeId: string): Promise<{ transcript: CreativeVideoTranscript | null; error: string | null }> {
+  try {
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase
+      .from("competitor_creatives")
+      .select("raw")
+      .eq("client_id", clientId)
+      .eq("id", creativeId)
+      .maybeSingle();
+
+    if (error) return { transcript: null, error: error.message };
+    return { transcript: mapRawCompetitorVideoTranscript((data as { raw?: unknown } | null)?.raw), error: null };
+  } catch (error) {
+    return { transcript: null, error: error instanceof Error ? error.message : "Competitor Transcript konnte nicht geladen werden." };
+  }
+}
+
+export async function transcribeCompetitorCreativeVideo(clientId: string, creativeId: string, options: { force?: boolean } = {}) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: creative, error: creativeError } = await supabase
+    .from("competitor_creatives")
+    .select("id,client_id,video_url,raw")
+    .eq("client_id", clientId)
+    .eq("id", creativeId)
+    .maybeSingle();
+
+  if (creativeError) throw new Error(creativeError.message);
+  if (!creative) throw new Error("Competitor Creative wurde nicht gefunden.");
+
+  const creativeRow = creative as CompetitorCreativeVideoRow;
+  const raw = asRecord(creativeRow.raw) ?? {};
+  const existing = mapRawCompetitorVideoTranscript(raw);
+  if (!options.force && existing?.status === "completed" && existing.transcript) return existing;
+  if (!creativeRow.video_url) throw new Error("Dieses Competitor Creative hat keine direkte Video-URL fuer Transkription.");
+
+  const model = transcriptionModel();
+  const now = new Date().toISOString();
+  const transcriptId = existing?.id ?? `competitor-${creativeId}`;
+  await updateCompetitorCreativeTranscriptRaw(
+    clientId,
+    creativeId,
+    raw,
+    competitorTranscriptRecord({
+      id: transcriptId,
+      provider: "openai",
+      model,
+      status: "processing",
+      createdAt: existing?.createdAt && existing.createdAt !== new Date(0).toISOString() ? existing.createdAt : now,
+      updatedAt: now
+    })
+  );
+
+  try {
+    const video = await downloadVideo(creativeRow.video_url);
+    const result = await callOpenAiTranscription(video);
+    const completed = competitorTranscriptRecord({
+      id: transcriptId,
+      provider: result.provider,
+      model: result.model,
+      status: "completed",
+      language: result.language,
+      transcript: result.text || null,
+      segments: result.segments,
+      durationSeconds: result.duration,
+      sourceUrl: creativeRow.video_url,
+      sourceContentType: video.contentType,
+      sourceBytes: video.bytes,
+      errorMessage: null,
+      createdAt: existing?.createdAt && existing.createdAt !== new Date(0).toISOString() ? existing.createdAt : now,
+      updatedAt: new Date().toISOString(),
+      raw: {
+        sourceResolver: "competitor_creative_video_url"
+      }
+    });
+
+    await updateCompetitorCreativeTranscriptRaw(clientId, creativeId, raw, completed);
+    revalidateCacheTags(...VIDEO_TRANSCRIPT_CACHE_TAGS);
+    return mapRawCompetitorVideoTranscript({ [COMPETITOR_TRANSCRIPT_RAW_KEY]: completed })!;
+  } catch (error) {
+    const failed = competitorTranscriptRecord({
+      id: transcriptId,
+      provider: "openai",
+      model,
+      status: "failed",
+      errorMessage: error instanceof Error ? error.message : "Competitor Transkription fehlgeschlagen.",
+      createdAt: existing?.createdAt && existing.createdAt !== new Date(0).toISOString() ? existing.createdAt : now,
+      updatedAt: new Date().toISOString()
+    });
+    await updateCompetitorCreativeTranscriptRaw(clientId, creativeId, raw, failed);
     revalidateCacheTags(...VIDEO_TRANSCRIPT_CACHE_TAGS);
     throw error;
   }

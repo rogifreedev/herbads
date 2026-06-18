@@ -6,6 +6,7 @@ import { CACHE_TAGS, COMPETITOR_CACHE_TAGS, revalidateCacheTags } from "@/lib/ca
 import { getCompetitorDeliveryLocations } from "@/lib/competitor-demographics";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { getHookTranscript, mapRawCompetitorVideoTranscript, transcribeCompetitorCreativeVideo, type CreativeVideoTranscript } from "@/lib/video-transcripts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -65,6 +66,7 @@ type CreativeRow = {
   gender_signals?: unknown;
   audience_locations?: unknown;
   audience_interests?: unknown;
+  raw?: JsonRecord | null;
   created_at: string;
 };
 
@@ -266,6 +268,7 @@ export type CompetitorCreative = {
   genderSignals: string[];
   audienceLocations: string[];
   audienceInterests: string[];
+  videoTranscript: CreativeVideoTranscript | null;
   rankingScore: number;
   analysis: CompetitorCreativeAnalysis | null;
   createdAt: string;
@@ -870,6 +873,7 @@ function mapCreative(row: CreativeRow, competitorsById: Map<string, CompetitorRo
     genderSignals: stringArray(row.gender_signals),
     audienceLocations: stringArray(row.audience_locations),
     audienceInterests: stringArray(row.audience_interests),
+    videoTranscript: mapRawCompetitorVideoTranscript(row.raw),
     rankingScore: scoreCreative(row, analysis),
     analysis: mapAnalysis(analysis),
     createdAt: row.created_at
@@ -934,7 +938,7 @@ async function getCompetitorOverviewUncached(clientId: string): Promise<Competit
     const [{ data: competitors, error: competitorsError }, { data: sources, error: sourcesError }, { data: creatives, error: creativesError }, cpmBase, links, analyses] = await Promise.all([
       supabase.from("competitors").select("id,client_id,name,website_url,meta_page_id,meta_ad_library_url,notes,crawl_enabled,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
       supabase.from("competitor_ad_library_sources").select("id,client_id,competitor_id,url,status,error_message,last_checked_at,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
-      supabase.from("competitor_creatives").select("id,client_id,competitor_id,source_id,source_url,ad_library_id,status,format,platforms,started_at,ended_at,active_days,reach_min,reach_max,reach_estimate,estimated_cpm,estimated_spend,estimated_daily_spend,estimate_confidence,thumbnail_url,video_url,image_url,landing_url,primary_text,headline,hook,cta,demographic_signals,age_ranges,gender_signals,audience_locations,audience_interests,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
+      supabase.from("competitor_creatives").select("id,client_id,competitor_id,source_id,source_url,ad_library_id,status,format,platforms,started_at,ended_at,active_days,reach_min,reach_max,reach_estimate,estimated_cpm,estimated_spend,estimated_daily_spend,estimate_confidence,thumbnail_url,video_url,image_url,landing_url,primary_text,headline,hook,cta,demographic_signals,age_ranges,gender_signals,audience_locations,audience_interests,raw,created_at").eq("client_id", clientId).order("created_at", { ascending: false }),
       ownCpm(clientId),
       detectedLinks(clientId),
       latestAnalyses(clientId)
@@ -1849,6 +1853,61 @@ async function callOpenRouterForCompetitorAnalysis(prompt: string, imageUrl?: st
   return { model, generated: normalizeGeneratedAnalysis(extractJsonObject(textFromContent(payload.choices?.[0]?.message?.content))) };
 }
 
+function truncateText(value: string, maxCharacters = 10000) {
+  return value.length > maxCharacters ? `${value.slice(0, maxCharacters)}...` : value;
+}
+
+function getTranscriptSection(transcript: CreativeVideoTranscript, section: "hook" | "body" | "ending") {
+  const completedSegments = transcript.segments.filter((segment) => segment.text.trim());
+  if (completedSegments.length > 0 && transcript.durationSeconds) {
+    const duration = transcript.durationSeconds;
+    const hookEnd = Math.min(5, duration * 0.2);
+    const endingStart = Math.max(hookEnd, duration - Math.min(5, duration * 0.2));
+    const selected = completedSegments.filter((segment) => {
+      const start = segment.start ?? 0;
+      if (section === "hook") return start < hookEnd;
+      if (section === "ending") return start >= endingStart;
+      return start >= hookEnd && start < endingStart;
+    });
+    const text = selected.map((segment) => segment.text).join(" ").trim();
+    if (text) return text;
+  }
+
+  const words = transcript.transcript?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (words.length === 0) return "";
+  const hookWords = Math.min(45, Math.ceil(words.length * 0.2));
+  const endingWords = Math.min(45, Math.ceil(words.length * 0.2));
+  if (section === "hook") return words.slice(0, hookWords).join(" ");
+  if (section === "ending") return words.slice(-endingWords).join(" ");
+  return words.slice(hookWords, Math.max(hookWords, words.length - endingWords)).join(" ");
+}
+
+function competitorVideoTranscriptContext(transcript: CreativeVideoTranscript | null, error: string | null) {
+  const hasTranscript = transcript?.status === "completed" && Boolean(transcript.transcript);
+  if (!hasTranscript) {
+    return {
+      status: transcript?.status ?? "missing",
+      error: error ?? transcript?.errorMessage ?? null
+    };
+  }
+
+  return {
+    status: transcript.status,
+    provider: transcript.provider,
+    model: transcript.model,
+    language: transcript.language,
+    durationSeconds: transcript.durationSeconds,
+    hookTranscript: getHookTranscript(transcript),
+    sections: {
+      hook: getTranscriptSection(transcript, "hook"),
+      body: getTranscriptSection(transcript, "body"),
+      ending: getTranscriptSection(transcript, "ending")
+    },
+    fullTranscript: truncateText(transcript.transcript ?? ""),
+    firstSegments: transcript.segments.slice(0, 16)
+  };
+}
+
 export async function analyzeCompetitorCreative(clientId: string, creativeId: string) {
   const supabase = createSupabaseServiceRoleClient();
   const [{ data: creative, error: creativeError }, { data: competitors }, cpmBase] = await Promise.all([
@@ -1859,6 +1918,18 @@ export async function analyzeCompetitorCreative(clientId: string, creativeId: st
   if (creativeError || !creative) throw new Error(creativeError?.message ?? "Competitor Creative wurde nicht gefunden.");
   const typedCreative = creative as CreativeRow;
   const competitor = ((competitors ?? []) as CompetitorRow[]).find((item) => item.id === typedCreative.competitor_id) ?? null;
+  let videoTranscript = mapRawCompetitorVideoTranscript(typedCreative.raw);
+  let videoTranscriptError: string | null = null;
+  const shouldTranscribeVideo = Boolean(typedCreative.video_url) && getOptionalEnv("COMPETITOR_TRANSCRIBE_VIDEOS_ON_ANALYSIS", "1") !== "0";
+
+  if (shouldTranscribeVideo && !(videoTranscript?.status === "completed" && videoTranscript.transcript)) {
+    try {
+      videoTranscript = await transcribeCompetitorCreativeVideo(clientId, creativeId);
+    } catch (error) {
+      videoTranscriptError = error instanceof Error ? error.message : "Competitor Video konnte nicht transkribiert werden.";
+    }
+  }
+
   const prompt = `Analysiere dieses Competitor Meta Creative fuer Paid Social.
 
 Competitor: ${competitor?.name ?? "Unbekannt"}
@@ -1881,6 +1952,8 @@ ${JSON.stringify({
     hook: typedCreative.hook,
     cta: typedCreative.cta,
     landingUrl: typedCreative.landing_url,
+    videoUrl: typedCreative.video_url,
+    videoTranscript: competitorVideoTranscriptContext(videoTranscript, videoTranscriptError),
     publicAudienceSignals: {
       demographicSignals: typedCreative.demographic_signals ?? {},
       ageRanges: stringArray(typedCreative.age_ranges),
@@ -1895,6 +1968,8 @@ hook, hookExplanation, body, ending, visualElements, detectedText, offer, angle,
 
 Regeln:
 - hook ist nur der sichtbare oder angegebene Hook-Text, keine Analyse.
+- Wenn videoTranscript.status "completed" ist, nutze das Transcript als primaere Quelle fuer hook, body, ending und detectedText. body soll das Hauptscript der UGC Ad zusammenfassen, ending den Schluss/CTA.
+- Wenn ein Full Transcript vorhanden ist, darfst du das komplette Script in detectedText oder body strukturiert wiedergeben, aber nicht halluzinieren.
 - emotionScores hat Keys curiosity, desire, trust, urgency, joy, fearOfMissingOut mit 0-100.
 - adaptationIdeas sind konkrete Ideen, wie wir das Pattern fuer den Kunden adaptieren koennen, ohne zu kopieren.
 - targetAudience und ageSignal duerfen echte Delivery-Daten nur behaupten, wenn publicAudienceSignals diese Daten enthalten. Sonst als "AI-Inferenz" formulieren.
@@ -1930,7 +2005,10 @@ Regeln:
       audience_reasoning: generated.audienceReasoning || null,
       thesis: generated.thesis || null,
       ranking_score: generated.rankingScore,
-      raw: generated as unknown as JsonRecord
+      raw: {
+        ...(generated as unknown as JsonRecord),
+        videoTranscript: competitorVideoTranscriptContext(videoTranscript, videoTranscriptError)
+      }
     })
     .select("id")
     .single();
