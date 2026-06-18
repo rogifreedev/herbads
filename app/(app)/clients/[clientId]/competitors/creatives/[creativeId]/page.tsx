@@ -137,7 +137,6 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
                   </table>
                 </div>
               ) : null}
-              {euTransparency?.rawSectionPreview ? <p className="rounded-xl border border-herb-border bg-black/20 p-3 text-xs leading-5 text-white/55">{euTransparency.rawSectionPreview}</p> : null}
             </CardContent>
           </Card>
         </div>
@@ -267,7 +266,6 @@ function getEuTransparencySummary(creative: CompetitorCreative) {
     targetGender: typeof signals.targetGender === "string" ? signals.targetGender : null,
     euReach: typeof signals.euReach === "number" ? signals.euReach : null,
     reachByLocation,
-    reachBreakdown,
-    rawSectionPreview: typeof signals.rawSectionPreview === "string" ? signals.rawSectionPreview : null
+    reachBreakdown
   };
 }
