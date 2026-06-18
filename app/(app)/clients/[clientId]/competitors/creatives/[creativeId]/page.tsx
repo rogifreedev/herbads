@@ -94,9 +94,9 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
                 <Metric label="Gender" value={euTransparency?.targetGender ?? emptyFallback(creative.genderSignals.join(", "))} />
               </div>
               {euTransparency?.reachByLocation.length ? (
-                <div className="overflow-hidden rounded-xl border border-herb-border">
+                <div className="max-h-56 overflow-auto rounded-xl border border-herb-border">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.14em] text-white/45">
+                    <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.14em] text-white/45">
                       <tr>
                         <th className="px-3 py-2">Delivery Location</th>
                         <th className="px-3 py-2 text-right">Reach</th>
@@ -114,9 +114,9 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
                 </div>
               ) : null}
               {euTransparency?.reachBreakdown.length ? (
-                <div className="overflow-hidden rounded-xl border border-herb-border">
+                <div className="max-h-80 overflow-auto rounded-xl border border-herb-border">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.14em] text-white/45">
+                    <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.14em] text-white/45">
                       <tr>
                         <th className="px-3 py-2">Location</th>
                         <th className="px-3 py-2">Age</th>
