@@ -3,6 +3,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import type { BrowserContext, Page } from "playwright";
 import { CACHE_TAGS, COMPETITOR_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
+import { getCompetitorDeliveryLocations } from "@/lib/competitor-demographics";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -1465,8 +1466,18 @@ async function enrichItemsWithEuTransparency(context: BrowserContext, items: Pub
           item.demographicSignals = signals as unknown as JsonRecord;
           item.ageRanges = uniqueStrings([signals.targetAgeRange, ...signals.reachBreakdown.map((row) => row.ageRange)]);
           item.genderSignals = uniqueStrings([signals.targetGender, ...signals.reachBreakdown.map((row) => row.gender)]).map((value) => value.toLowerCase());
-          item.audienceLocations = uniqueStrings(signals.targetLocations.map((row) => row.location));
-          item.raw = { ...item.raw, euTransparency: { source: signals.source, euReach: signals.euReach, targetAgeRange: signals.targetAgeRange, targetGender: signals.targetGender, targetLocations: signals.targetLocations } };
+          item.audienceLocations = getCompetitorDeliveryLocations(signals as unknown as JsonRecord);
+          item.raw = {
+            ...item.raw,
+            euTransparency: {
+              source: signals.source,
+              euReach: signals.euReach,
+              targetAgeRange: signals.targetAgeRange,
+              targetGender: signals.targetGender,
+              targetLocations: signals.targetLocations,
+              reachBreakdown: signals.reachBreakdown
+            }
+          };
           updated += 1;
         } catch (error) {
           failed += 1;

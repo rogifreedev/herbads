@@ -7,6 +7,7 @@ import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
+import { getCompetitorDeliveryLocations } from "@/lib/competitor-demographics";
 import type { CompetitorCreative } from "@/lib/competitors";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 
@@ -21,15 +22,7 @@ function sourceLabel(creative: CompetitorCreative) {
 
 function targetLocations(creative: CompetitorCreative) {
   const signals = creative.demographicSignals;
-  if (signals.source === "meta_eu_transparency" && Array.isArray(signals.targetLocations)) {
-    return signals.targetLocations
-      .map((item) => {
-        if (!item || typeof item !== "object" || !("location" in item)) return null;
-        return typeof item.location === "string" ? item.location : null;
-      })
-      .filter(Boolean)
-      .join(", ");
-  }
+  if (signals.source === "meta_eu_transparency") return getCompetitorDeliveryLocations(signals, creative.audienceLocations).join(", ");
   return creative.audienceLocations.join(", ");
 }
 

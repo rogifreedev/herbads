@@ -6,6 +6,7 @@ import { CreativeEmotionRadar, hasEmotionScores } from "@/components/creative-em
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCompetitorDeliveryLocations, getCompetitorReachBreakdown, getCompetitorReachByLocation } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
@@ -88,10 +89,30 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <Metric label="Target Locations" value={euTransparency?.locations.join(", ") || creative.audienceLocations.join(", ") || "–"} />
+                <Metric label="Locations" value={euTransparency?.locations.join(", ") || creative.audienceLocations.join(", ") || "–"} />
                 <Metric label="Alter" value={euTransparency?.targetAgeRange ?? creative.analysis?.ageSignal ?? emptyFallback(creative.ageRanges.join(", "))} />
                 <Metric label="Gender" value={euTransparency?.targetGender ?? emptyFallback(creative.genderSignals.join(", "))} />
               </div>
+              {euTransparency?.reachByLocation.length ? (
+                <div className="overflow-hidden rounded-xl border border-herb-border">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.14em] text-white/45">
+                      <tr>
+                        <th className="px-3 py-2">Delivery Location</th>
+                        <th className="px-3 py-2 text-right">Reach</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {euTransparency.reachByLocation.map((row) => (
+                        <tr key={row.location} className="border-t border-herb-border">
+                          <td className="px-3 py-2 text-white">{row.location}</td>
+                          <td className="px-3 py-2 text-right text-white">{formatNumber(row.reach)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
               {euTransparency?.reachBreakdown.length ? (
                 <div className="overflow-hidden rounded-xl border border-herb-border">
                   <table className="w-full text-left text-sm">
@@ -104,7 +125,7 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
                       </tr>
                     </thead>
                     <tbody>
-                      {euTransparency.reachBreakdown.slice(0, 12).map((row, index) => (
+                      {euTransparency.reachBreakdown.map((row, index) => (
                         <tr key={`${row.location}-${row.ageRange}-${row.gender}-${index}`} className="border-t border-herb-border">
                           <td className="px-3 py-2 text-white">{row.location}</td>
                           <td className="px-3 py-2 text-white/65">{row.ageRange}</td>
@@ -217,33 +238,16 @@ function getEuTransparencySummary(creative: CompetitorCreative) {
   const signals = creative.demographicSignals;
   if (signals.source !== "meta_eu_transparency") return null;
 
-  const targetLocations = Array.isArray(signals.targetLocations) ? signals.targetLocations : [];
-  const locations = targetLocations
-    .map((item) => {
-      if (!item || typeof item !== "object" || !("location" in item)) return null;
-      return typeof item.location === "string" ? item.location : null;
-    })
-    .filter((location): location is string => Boolean(location));
-
-  const reachBreakdown = (Array.isArray(signals.reachBreakdown) ? signals.reachBreakdown : [])
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const record = item as Record<string, unknown>;
-      const reach = Number(record.reach);
-      return {
-        location: typeof record.location === "string" ? record.location : "EU",
-        ageRange: typeof record.ageRange === "string" ? record.ageRange : "–",
-        gender: typeof record.gender === "string" ? record.gender : "–",
-        reach: Number.isFinite(reach) ? reach : 0
-      };
-    })
-    .filter((item): item is { location: string; ageRange: string; gender: string; reach: number } => Boolean(item));
+  const locations = getCompetitorDeliveryLocations(signals, creative.audienceLocations);
+  const reachBreakdown = getCompetitorReachBreakdown(signals);
+  const reachByLocation = getCompetitorReachByLocation(signals);
 
   return {
     locations,
     targetAgeRange: typeof signals.targetAgeRange === "string" ? signals.targetAgeRange : null,
     targetGender: typeof signals.targetGender === "string" ? signals.targetGender : null,
     euReach: typeof signals.euReach === "number" ? signals.euReach : null,
+    reachByLocation,
     reachBreakdown,
     rawSectionPreview: typeof signals.rawSectionPreview === "string" ? signals.rawSectionPreview : null
   };
