@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
-import { getCompetitorReachBreakdown, getCompetitorReachByLocation } from "@/lib/competitor-demographics";
+import { getCompetitorReachBreakdown, getCompetitorReachByGender, getCompetitorReachByLocation, normalizeCompetitorGender } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type Competitor, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
@@ -29,6 +29,9 @@ type OverviewMetrics = {
   topAge: { ageRange: string; reach: number } | null;
   countries: Array<{ location: string; reach: number }>;
   ages: Array<{ ageRange: string; reach: number }>;
+  genders: Array<{ gender: string; reach: number }>;
+  femaleReach: number;
+  maleReach: number;
   firstFoundAt: string | null;
   latestFoundAt: string | null;
   latestSeenAt: string | null;
@@ -116,14 +119,16 @@ function OverviewTab({
 }) {
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <SummaryCard label="Reach insgesamt" value={metrics.totalReach > 0 ? formatNumber(metrics.totalReach) : "–"} />
         <SummaryCard label="Spent insgesamt" value={formatCurrency(metrics.totalSpend)} />
         <SummaryCard label="Länder Reach" value={metrics.topCountry ? metrics.topCountry.location : "–"} detail={metrics.topCountry ? formatNumber(metrics.topCountry.reach) : "keine EU Daten"} />
         <SummaryCard label="Alter mit meisten Reach" value={metrics.topAge ? metrics.topAge.ageRange : "–"} detail={metrics.topAge ? formatNumber(metrics.topAge.reach) : "keine EU Daten"} />
+        <SummaryCard label="Female Reach" value={metrics.femaleReach > 0 ? formatNumber(metrics.femaleReach) : "–"} />
+        <SummaryCard label="Male Reach" value={metrics.maleReach > 0 ? formatNumber(metrics.maleReach) : "–"} />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
             <CardTitle>Scope</CardTitle>
@@ -151,6 +156,13 @@ function OverviewTab({
           description="Aggregiert aus EU Ad Delivery nach Age Range."
           emptyLabel="Noch keine Age-Reach-Daten gecrawlt."
           rows={metrics.ages.map((age) => ({ label: age.ageRange, value: age.reach }))}
+        />
+
+        <ReachTable
+          title="Gender Reach"
+          description="Aggregiert aus EU Ad Delivery nach Gender."
+          emptyLabel="Noch keine Gender-Reach-Daten gecrawlt."
+          rows={metrics.genders.map((gender) => ({ label: gender.gender, value: gender.reach }))}
         />
       </section>
     </div>
@@ -409,6 +421,7 @@ function reachValue(creative: CompetitorCreative) {
 function buildOverviewMetrics(creatives: CompetitorCreative[]): OverviewMetrics {
   const countries = new Map<string, number>();
   const ages = new Map<string, number>();
+  const genders = new Map<string, number>();
   const createdDates = creatives.map((creative) => creative.createdAt).filter(Boolean).sort();
   const seenDates = creatives.map((creative) => creative.lastSeenAt).filter(Boolean).sort();
 
@@ -437,6 +450,21 @@ function buildOverviewMetrics(creatives: CompetitorCreative[]): OverviewMetrics 
         ages.set(ageRange, (ages.get(ageRange) ?? 0) + splitReach);
       }
     }
+
+    const genderRows = aggregateGenderRows(creative);
+    if (genderRows.length > 0) {
+      for (const row of genderRows) {
+        genders.set(row.gender, (genders.get(row.gender) ?? 0) + row.reach);
+      }
+    } else if (reach > 0 && creative.genderSignals.length > 0) {
+      const normalizedGenders = Array.from(new Set(creative.genderSignals.map((gender) => normalizeCompetitorGender(gender)))).filter((gender) => gender !== "All");
+      if (normalizedGenders.length > 0) {
+        const splitReach = Math.round(reach / normalizedGenders.length);
+        for (const gender of normalizedGenders) {
+          genders.set(gender, (genders.get(gender) ?? 0) + splitReach);
+        }
+      }
+    }
   }
 
   const countryRows = Array.from(countries.entries())
@@ -447,6 +475,10 @@ function buildOverviewMetrics(creatives: CompetitorCreative[]): OverviewMetrics 
     .map(([ageRange, reach]) => ({ ageRange, reach }))
     .filter((row) => row.reach > 0)
     .sort((a, b) => b.reach - a.reach || a.ageRange.localeCompare(b.ageRange));
+  const genderRows = Array.from(genders.entries())
+    .map(([gender, reach]) => ({ gender, reach }))
+    .filter((row) => row.reach > 0)
+    .sort((a, b) => genderSortValue(a.gender) - genderSortValue(b.gender) || b.reach - a.reach || a.gender.localeCompare(b.gender));
 
   return {
     totalReach: creatives.reduce((sum, creative) => sum + reachValue(creative), 0),
@@ -455,6 +487,9 @@ function buildOverviewMetrics(creatives: CompetitorCreative[]): OverviewMetrics 
     topAge: ageRows[0] ?? null,
     countries: countryRows,
     ages: ageRows,
+    genders: genderRows,
+    femaleReach: genderRows.find((row) => row.gender === "Female")?.reach ?? 0,
+    maleReach: genderRows.find((row) => row.gender === "Male")?.reach ?? 0,
     firstFoundAt: createdDates[0] ?? null,
     latestFoundAt: createdDates.at(-1) ?? null,
     latestSeenAt: seenDates.at(-1) ?? null
@@ -470,6 +505,18 @@ function aggregateAgeRows(creative: CompetitorCreative) {
   }
 
   return Array.from(totals.entries()).map(([ageRange, reach]) => ({ ageRange, reach }));
+}
+
+function aggregateGenderRows(creative: CompetitorCreative) {
+  return getCompetitorReachByGender(creative.demographicSignals);
+}
+
+function genderSortValue(gender: string) {
+  if (gender === "Female") return 0;
+  if (gender === "Male") return 1;
+  if (gender === "Unknown") return 2;
+  if (gender === "All") return 3;
+  return 4;
 }
 
 function normalizeEmotionScores(value: Record<string, unknown>): CreativeEmotionScores {

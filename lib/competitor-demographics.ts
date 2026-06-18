@@ -10,12 +10,28 @@ export type CompetitorLocationReach = {
   reach: number;
 };
 
+export type CompetitorGenderReach = {
+  gender: string;
+  reach: number;
+};
+
 function cleanString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter(Boolean) as string[]));
+}
+
+export function normalizeCompetitorGender(value: string | null | undefined) {
+  const cleaned = cleanString(value);
+  if (!cleaned || cleaned === "-") return "Unknown";
+  const normalized = cleaned.toLowerCase();
+  if (["female", "women", "woman", "weiblich", "frauen", "frau"].includes(normalized)) return "Female";
+  if (["male", "men", "man", "maennlich", "männlich", "maenner", "männer", "mann"].includes(normalized)) return "Male";
+  if (["unknown", "unbekannt"].includes(normalized)) return "Unknown";
+  if (["all", "all genders", "alle", "alle geschlechter"].includes(normalized)) return "All";
+  return cleaned;
 }
 
 export function getCompetitorTargetLocations(signals: Record<string, unknown>) {
@@ -103,4 +119,24 @@ export function getCompetitorReachByLocation(signals: Record<string, unknown>) {
   return Array.from(totals.entries())
     .map(([location, reach]) => ({ location, reach }))
     .sort((a, b) => b.reach - a.reach || a.location.localeCompare(b.location));
+}
+
+export function getCompetitorReachByGender(signals: Record<string, unknown>) {
+  const totals = new Map<string, number>();
+  for (const row of getCompetitorReachBreakdown(signals)) {
+    const gender = normalizeCompetitorGender(row.gender);
+    totals.set(gender, (totals.get(gender) ?? 0) + row.reach);
+  }
+
+  return Array.from(totals.entries())
+    .map(([gender, reach]) => ({ gender, reach }))
+    .sort((a, b) => genderSortValue(a.gender) - genderSortValue(b.gender) || b.reach - a.reach || a.gender.localeCompare(b.gender));
+}
+
+function genderSortValue(gender: string) {
+  if (gender === "Female") return 0;
+  if (gender === "Male") return 1;
+  if (gender === "Unknown") return 2;
+  if (gender === "All") return 3;
+  return 4;
 }

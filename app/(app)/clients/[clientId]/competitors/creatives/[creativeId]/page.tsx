@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
-import { getCompetitorDeliveryLocations, getCompetitorReachBreakdown, getCompetitorReachByLocation } from "@/lib/competitor-demographics";
+import { getCompetitorDeliveryLocations, getCompetitorReachBreakdown, getCompetitorReachByGender, getCompetitorReachByLocation } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
@@ -95,6 +95,11 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
                 <LocationMetric locations={euTransparency?.locations ?? creative.audienceLocations} />
                 <Metric label="Alter" value={euTransparency?.targetAgeRange ?? creative.analysis?.ageSignal ?? emptyFallback(creative.ageRanges.join(", "))} />
                 <Metric label="Gender" value={euTransparency?.targetGender ?? emptyFallback(creative.genderSignals.join(", "))} />
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <Metric label="Female Reach" value={formatGenderReach(euTransparency?.reachByGender, "Female")} />
+                <Metric label="Male Reach" value={formatGenderReach(euTransparency?.reachByGender, "Male")} />
+                {genderReachValue(euTransparency?.reachByGender, "Unknown") > 0 ? <Metric label="Unknown Reach" value={formatGenderReach(euTransparency?.reachByGender, "Unknown")} /> : null}
               </div>
               {euTransparency?.reachByLocation.length ? (
                 <div className="max-h-56 overflow-auto rounded-xl border border-herb-border">
@@ -289,6 +294,15 @@ function emptyFallback(value: string) {
   return value.trim() || "–";
 }
 
+function genderReachValue(rows: Array<{ gender: string; reach: number }> | null | undefined, gender: string) {
+  return rows?.find((row) => row.gender === gender)?.reach ?? 0;
+}
+
+function formatGenderReach(rows: Array<{ gender: string; reach: number }> | null | undefined, gender: string) {
+  const reach = genderReachValue(rows, gender);
+  return reach > 0 ? formatNumber(reach) : "–";
+}
+
 function formatSeconds(value: number) {
   const minutes = Math.floor(value / 60);
   const seconds = Math.round(value % 60).toString().padStart(2, "0");
@@ -318,6 +332,7 @@ function getEuTransparencySummary(creative: CompetitorCreative) {
   const locations = getCompetitorDeliveryLocations(signals, creative.audienceLocations);
   const reachBreakdown = getCompetitorReachBreakdown(signals);
   const reachByLocation = getCompetitorReachByLocation(signals);
+  const reachByGender = getCompetitorReachByGender(signals);
 
   return {
     locations,
@@ -325,6 +340,7 @@ function getEuTransparencySummary(creative: CompetitorCreative) {
     targetGender: typeof signals.targetGender === "string" ? signals.targetGender : null,
     euReach: typeof signals.euReach === "number" ? signals.euReach : null,
     reachByLocation,
+    reachByGender,
     reachBreakdown
   };
 }
