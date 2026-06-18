@@ -98,7 +98,7 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
           </DropdownMenu>
         </div>
       </div>
-      <div className="overflow-hidden rounded-xl border border-herb-border">
+      <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-herb-border">
         <Table className={cn(minWidthClassName)}>
           <TableHeader className="bg-white/[0.03]">
             {table.getHeaderGroups().map((headerGroup) => (
