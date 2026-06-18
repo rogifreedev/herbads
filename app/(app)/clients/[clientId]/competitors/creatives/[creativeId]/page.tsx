@@ -89,7 +89,7 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <Metric label="Locations" value={euTransparency?.locations.join(", ") || creative.audienceLocations.join(", ") || "–"} />
+                <LocationMetric locations={euTransparency?.locations ?? creative.audienceLocations} />
                 <Metric label="Alter" value={euTransparency?.targetAgeRange ?? creative.analysis?.ageSignal ?? emptyFallback(creative.ageRanges.join(", "))} />
                 <Metric label="Gender" value={euTransparency?.targetGender ?? emptyFallback(creative.genderSignals.join(", "))} />
               </div>
@@ -192,6 +192,25 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-herb-border bg-black/20 p-3">
       <p className="text-xs uppercase tracking-[0.16em] text-white/40">{label}</p>
       <p className="mt-1 font-medium text-white">{value}</p>
+    </div>
+  );
+}
+
+function LocationMetric({ locations }: { locations: string[] }) {
+  return (
+    <div className="rounded-xl border border-herb-border bg-black/20 p-3">
+      <p className="text-xs uppercase tracking-[0.16em] text-white/40">Länder</p>
+      {locations.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {locations.map((location) => (
+            <Badge key={location} variant="outline" className="border-white/15 text-white">
+              {location}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 font-medium text-white">–</p>
+      )}
     </div>
   );
 }

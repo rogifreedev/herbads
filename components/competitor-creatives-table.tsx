@@ -26,6 +26,25 @@ function targetLocations(creative: CompetitorCreative) {
   return creative.audienceLocations.join(", ");
 }
 
+function targetLocationList(creative: CompetitorCreative) {
+  const signals = creative.demographicSignals;
+  if (signals.source === "meta_eu_transparency") return getCompetitorDeliveryLocations(signals, creative.audienceLocations);
+  return creative.audienceLocations;
+}
+
+function LocationBadges({ locations }: { locations: string[] }) {
+  if (!locations.length) return <span className="text-white">–</span>;
+  return (
+    <div className="flex max-w-[360px] flex-wrap gap-1.5">
+      {locations.map((location) => (
+        <Badge key={location} variant="outline" className="border-white/15 text-white">
+          {location}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 function targetAge(creative: CompetitorCreative) {
   const value = creative.demographicSignals.targetAgeRange;
   if (typeof value === "string" && value) return value;
@@ -106,9 +125,9 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
     {
       id: "target",
       accessorFn: targetLocations,
-      header: "Target",
-      cell: ({ row }) => <span className="text-white">{targetLocations(row.original) || "–"}</span>,
-      meta: { label: "Target" }
+      header: "Länder",
+      cell: ({ row }) => <LocationBadges locations={targetLocationList(row.original)} />,
+      meta: { label: "Länder" }
     },
     {
       id: "age",
@@ -154,6 +173,7 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
         creative.adLibraryId,
         creative.format,
         creative.status,
+        targetLocations(creative),
         creative.analysis?.angle,
         creative.analysis?.offer
       ].some((value) => value?.toLowerCase().includes(normalizedQuery));
