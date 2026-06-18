@@ -11,6 +11,7 @@ import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/l
 import { getCompetitorReachBreakdown, getCompetitorReachByGender, getCompetitorReachByLocation, normalizeCompetitorGender } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type Competitor, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
+import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -49,6 +50,25 @@ type AngleRow = {
   thesis: string | null;
 };
 
+type LandingpageRow = {
+  url: string;
+  displayUrl: string;
+  adCount: number;
+  activeAds: number;
+  disabledAds: number;
+  reach: number;
+  estimatedSpend: number;
+  estimatedDailySpend: number;
+  avgActiveDays: number | null;
+  firstStartedAt: string | null;
+  latestSeenAt: string | null;
+  topCreative: CompetitorCreative | null;
+  topAngle: string | null;
+  topOffer: string | null;
+  topCta: string | null;
+  competitors: string[];
+};
+
 export default async function CompetitorCreativesPage({
   params,
   searchParams
@@ -65,6 +85,7 @@ export default async function CompetitorCreativesPage({
   const groups = groupCreativesByCompetitor(overview.competitors, filteredCreatives);
   const overviewMetrics = buildOverviewMetrics(filteredCreatives);
   const angleRows = buildAngleRows(filteredCreatives);
+  const landingpageRows = buildLandingpageRows(filteredCreatives);
 
   return (
     <div className="space-y-6">
@@ -102,6 +123,8 @@ export default async function CompetitorCreativesPage({
       {activeTab === "creatives" ? <CreativesTab clientId={clientId} groups={groups} creatives={filteredCreatives} /> : null}
 
       {activeTab === "angles" ? <AnglesTab rows={angleRows} /> : null}
+
+      {activeTab === "landingpages" ? <LandingpagesTab clientId={clientId} rows={landingpageRows} /> : null}
     </div>
   );
 }
@@ -271,6 +294,83 @@ function AnglesTab({ rows }: { rows: AngleRow[] }) {
   );
 }
 
+function LandingpagesTab({ clientId, rows }: { clientId: string; rows: LandingpageRow[] }) {
+  return (
+    <Card className="border-herb-border bg-herb-surface/90">
+      <CardHeader>
+        <CardTitle>Landingpages</CardTitle>
+        <CardDescription>Nach aggregiertem Reach sortiert, aus allen gecrawlten Competitor Ads mit Landingpage-URL.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <EmptyState title="Keine Landingpages gefunden" description="Noch keine gecrawlten Competitor Ads enthalten eine Landingpage-URL." />
+        ) : (
+          <div className="max-h-[680px] overflow-auto rounded-xl border border-herb-border">
+            <table className="min-w-[1360px] w-full text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.16em] text-white/45">
+                <tr>
+                  <th className="px-4 py-3">Landingpage</th>
+                  <th className="px-4 py-3 text-right">Reach</th>
+                  <th className="px-4 py-3 text-right">Spent</th>
+                  <th className="px-4 py-3 text-right">Daily</th>
+                  <th className="px-4 py-3 text-right">Ads</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Top Creative</th>
+                  <th className="px-4 py-3">Angle</th>
+                  <th className="px-4 py-3">Offer</th>
+                  <th className="px-4 py-3">CTA</th>
+                  <th className="px-4 py-3">Competitors</th>
+                  <th className="px-4 py-3 text-right">Ø Tage</th>
+                  <th className="px-4 py-3">Erster Start</th>
+                  <th className="px-4 py-3">Zuletzt gesehen</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-herb-border">
+                {rows.map((row) => (
+                  <tr key={row.url} className="align-top">
+                    <td className="px-4 py-4">
+                      <Link href={row.url} target="_blank" className="block max-w-[260px] truncate font-medium text-primary hover:text-white">
+                        {row.displayUrl}
+                      </Link>
+                      <p className="mt-1 max-w-[260px] truncate text-xs text-white/40">{row.url}</p>
+                    </td>
+                    <td className="px-4 py-4 text-right text-white">{row.reach > 0 ? formatNumber(row.reach) : "–"}</td>
+                    <td className="px-4 py-4 text-right text-white/70">{formatCurrency(row.estimatedSpend)}</td>
+                    <td className="px-4 py-4 text-right text-white/70">{formatCurrency(row.estimatedDailySpend)}</td>
+                    <td className="px-4 py-4 text-right text-white/70">{formatNumber(row.adCount)}</td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.activeAds > 0 ? <Badge variant="success">{formatNumber(row.activeAds)} aktiv</Badge> : null}
+                        {row.disabledAds > 0 ? <Badge variant="destructive">{formatNumber(row.disabledAds)} disabled</Badge> : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      {row.topCreative ? (
+                        <Link href={`/clients/${clientId}/competitors/creatives/${row.topCreative.id}`} className="line-clamp-2 max-w-[260px] font-medium text-white hover:text-primary">
+                          {row.topCreative.analysis?.hook ?? row.topCreative.hook ?? row.topCreative.headline ?? "Creative ansehen"}
+                        </Link>
+                      ) : (
+                        <span className="text-white/55">–</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-white/70">{row.topAngle ?? "–"}</td>
+                    <td className="max-w-[220px] px-4 py-4 text-white/65">{row.topOffer ?? "–"}</td>
+                    <td className="px-4 py-4 text-white/70">{row.topCta ?? "–"}</td>
+                    <td className="max-w-[260px] px-4 py-4 text-white/70">{row.competitors.join(", ")}</td>
+                    <td className="px-4 py-4 text-right text-white/70">{row.avgActiveDays === null ? "–" : formatNumber(row.avgActiveDays)}</td>
+                    <td className="px-4 py-4 text-white/70">{formatDate(row.firstStartedAt)}</td>
+                    <td className="px-4 py-4 text-white/70">{formatDate(row.latestSeenAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SummaryCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <Card className="border-herb-border bg-herb-surface/90">
@@ -379,7 +479,7 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 function resolveTab(value: string | undefined): CompetitorIntelligenceTab {
-  if (value === "creatives" || value === "angles") return value;
+  if (value === "creatives" || value === "angles" || value === "landingpages") return value;
   return "overview";
 }
 
@@ -615,4 +715,76 @@ function buildAngleRows(creatives: CompetitorCreative[]): AngleRow[] {
       };
     })
     .sort((a, b) => b.estimatedSpend - a.estimatedSpend || b.reach - a.reach || b.count - a.count);
+}
+
+function buildLandingpageRows(creatives: CompetitorCreative[]): LandingpageRow[] {
+  const rows = new Map<
+    string,
+    {
+      url: string;
+      creatives: CompetitorCreative[];
+      competitors: Set<string>;
+    }
+  >();
+
+  for (const creative of creatives) {
+    const url = normalizeLandingUrl(creative.landingUrl);
+    if (!url) continue;
+    const row = rows.get(url) ?? { url, creatives: [], competitors: new Set<string>() };
+    row.creatives.push(creative);
+    row.competitors.add(creative.competitorName);
+    rows.set(url, row);
+  }
+
+  return Array.from(rows.values())
+    .map((row) => {
+      const sortedCreatives = [...row.creatives].sort(compareCreativesByImportance);
+      const topCreative = sortedCreatives[0] ?? null;
+      const activeDays = row.creatives
+        .map((creative) => creative.activeDays)
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+      return {
+        url: row.url,
+        displayUrl: displayLandingUrl(row.url),
+        adCount: row.creatives.length,
+        activeAds: row.creatives.filter((creative) => !isCompetitorCreativeDisabled(creative.status)).length,
+        disabledAds: row.creatives.filter((creative) => isCompetitorCreativeDisabled(creative.status)).length,
+        reach: row.creatives.reduce((sum, creative) => sum + reachValue(creative), 0),
+        estimatedSpend: sumSpend(row.creatives),
+        estimatedDailySpend: row.creatives.reduce((sum, creative) => sum + (creative.estimatedDailySpend ?? 0), 0),
+        avgActiveDays: activeDays.length > 0 ? Math.round(activeDays.reduce((sum, value) => sum + value, 0) / activeDays.length) : null,
+        firstStartedAt: earliestDate(row.creatives.map((creative) => creative.startedAt)),
+        latestSeenAt: latestDate(row.creatives.map((creative) => creative.lastSeenAt)),
+        topCreative,
+        topAngle: mostImportantTextValue(row.creatives, (creative) => creative.analysis?.angle),
+        topOffer: topCreative?.analysis?.offer ?? mostImportantTextValue(row.creatives, (creative) => creative.analysis?.offer),
+        topCta: mostImportantTextValue(row.creatives, (creative) => creative.cta),
+        competitors: Array.from(row.competitors).sort((a, b) => a.localeCompare(b))
+      };
+    })
+    .sort((a, b) => b.reach - a.reach || b.estimatedSpend - a.estimatedSpend || b.adCount - a.adCount || a.displayUrl.localeCompare(b.displayUrl));
+}
+
+function compareCreativesByImportance(a: CompetitorCreative, b: CompetitorCreative) {
+  return reachValue(b) - reachValue(a) || (b.estimatedSpend ?? 0) - (a.estimatedSpend ?? 0) || b.rankingScore - a.rankingScore;
+}
+
+function mostImportantTextValue(creatives: CompetitorCreative[], selector: (creative: CompetitorCreative) => string | null | undefined) {
+  const totals = new Map<string, number>();
+  for (const creative of creatives) {
+    const value = selector(creative)?.trim();
+    if (!value) continue;
+    totals.set(value, (totals.get(value) ?? 0) + reachValue(creative));
+  }
+
+  return Array.from(totals.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
+}
+
+function earliestDate(values: Array<string | null>) {
+  return values.filter(Boolean).sort()[0] ?? null;
+}
+
+function latestDate(values: Array<string | null>) {
+  return values.filter(Boolean).sort().at(-1) ?? null;
 }

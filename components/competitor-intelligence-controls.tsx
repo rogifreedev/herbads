@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-export type CompetitorIntelligenceTab = "overview" | "creatives" | "angles";
+export type CompetitorIntelligenceTab = "overview" | "creatives" | "angles" | "landingpages";
 
 type CompetitorOption = {
   id: string;
@@ -21,7 +21,8 @@ type Props = {
 const tabs: Array<{ id: CompetitorIntelligenceTab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "creatives", label: "Creatives" },
-  { id: "angles", label: "Angles" }
+  { id: "angles", label: "Angles" },
+  { id: "landingpages", label: "Landingpages" }
 ];
 
 export function CompetitorIntelligenceControls({ activeTab, competitors, selectedCompetitorId }: Props) {
