@@ -271,6 +271,7 @@ export type CompetitorCreative = {
   videoTranscript: CreativeVideoTranscript | null;
   rankingScore: number;
   analysis: CompetitorCreativeAnalysis | null;
+  lastSeenAt: string;
   createdAt: string;
 };
 
@@ -876,6 +877,7 @@ function mapCreative(row: CreativeRow, competitorsById: Map<string, CompetitorRo
     videoTranscript: mapRawCompetitorVideoTranscript(row.raw),
     rankingScore: scoreCreative(row, analysis),
     analysis: mapAnalysis(analysis),
+    lastSeenAt: nullableString(row.raw?.lastSeenAt) ?? row.created_at,
     createdAt: row.created_at
   };
 }
@@ -1551,6 +1553,7 @@ async function fetchPublicAdLibraryItemsWithBrowser(sourceUrl: string, skippedEu
 
 async function upsertPublicAdLibraryItem(clientId: string, source: SourceRow, item: PublicAdLibraryItem, cpmBase: Awaited<ReturnType<typeof ownCpm>>) {
   const supabase = createSupabaseServiceRoleClient();
+  const lastSeenAt = new Date().toISOString();
   const estimates = estimateCreativeMetrics({
     reachMin: item.reachMin,
     reachMax: item.reachMax,
@@ -1562,11 +1565,15 @@ async function upsertPublicAdLibraryItem(clientId: string, source: SourceRow, it
   const existing = item.id
     ? await supabase
         .from("competitor_creatives")
-        .select("id")
+        .select("id,raw")
         .eq("client_id", clientId)
         .eq("ad_library_id", item.id)
         .maybeSingle()
     : { data: null, error: null };
+  const existingRaw =
+    existing.data?.raw && typeof existing.data.raw === "object" && !Array.isArray(existing.data.raw)
+      ? (existing.data.raw as JsonRecord)
+      : {};
   const payload = {
     client_id: clientId,
     competitor_id: source.competitor_id,
@@ -1599,7 +1606,11 @@ async function upsertPublicAdLibraryItem(clientId: string, source: SourceRow, it
     gender_signals: item.genderSignals,
     audience_locations: item.audienceLocations,
     audience_interests: item.audienceInterests,
-    raw: item.raw
+    raw: {
+      ...existingRaw,
+      ...item.raw,
+      lastSeenAt
+    }
   };
 
   if (existing.data?.id) {

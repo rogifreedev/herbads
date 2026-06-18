@@ -123,6 +123,24 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
       meta: { label: "Start" }
     },
     {
+      accessorKey: "endedAt",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Ende" />,
+      cell: ({ row }) => <span className="text-white">{formatDate(row.original.endedAt)}</span>,
+      meta: { label: "Ende" }
+    },
+    {
+      accessorKey: "createdAt",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Gefunden" />,
+      cell: ({ row }) => <span className="text-white">{formatDate(row.original.createdAt)}</span>,
+      meta: { label: "Gefunden" }
+    },
+    {
+      accessorKey: "lastSeenAt",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Gesehen" />,
+      cell: ({ row }) => <span className="text-white">{formatDate(row.original.lastSeenAt)}</span>,
+      meta: { label: "Gesehen" }
+    },
+    {
       id: "target",
       accessorFn: targetLocations,
       header: "Länder",
@@ -173,6 +191,10 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
         creative.adLibraryId,
         creative.format,
         creative.status,
+        formatDate(creative.startedAt),
+        formatDate(creative.endedAt),
+        formatDate(creative.createdAt),
+        formatDate(creative.lastSeenAt),
         targetLocations(creative),
         creative.analysis?.angle,
         creative.analysis?.offer
@@ -185,7 +207,7 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
       columns={columns(clientId)}
       data={filtered}
       pageSize={10}
-      minWidthClassName="min-w-[1450px]"
+      minWidthClassName="min-w-[1720px]"
       emptyLabel="Keine Competitor Creatives fuer diese Auswahl."
       toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Hook, Copy, Ad Library ID" className="h-9 sm:w-80" />}
       toolbarActions={<span className="text-xs text-white/45">{formatNumber(filtered.length)} von {formatNumber(creatives.length)}</span>}

@@ -28,6 +28,9 @@ type OverviewMetrics = {
   topAge: { ageRange: string; reach: number } | null;
   countries: Array<{ location: string; reach: number }>;
   ages: Array<{ ageRange: string; reach: number }>;
+  firstFoundAt: string | null;
+  latestFoundAt: string | null;
+  latestSeenAt: string | null;
 };
 
 type AngleRow = {
@@ -129,6 +132,9 @@ function OverviewTab({
             <MetricRow label="Competitors" value={formatNumber(competitorCount)} />
             <MetricRow label="Creatives" value={formatNumber(creativeCount)} />
             <MetricRow label="Analysiert" value={formatNumber(analyzedCount)} />
+            <MetricRow label="Erster Fund" value={formatDate(metrics.firstFoundAt)} />
+            <MetricRow label="Neuester Fund" value={formatDate(metrics.latestFoundAt)} />
+            <MetricRow label="Zuletzt gesehen" value={formatDate(metrics.latestSeenAt)} />
           </CardContent>
         </Card>
 
@@ -346,6 +352,8 @@ function GridCreativeCard({ clientId, creative }: { clientId: string; creative: 
           <span>Reach {creative.reachEstimate ? formatNumber(creative.reachEstimate) : "–"}</span>
           <span>Spend {formatCurrency(creative.estimatedSpend ?? 0)}</span>
           <span>Start {formatDate(creative.startedAt)}</span>
+          <span>Gefunden {formatDate(creative.createdAt)}</span>
+          <span>Gesehen {formatDate(creative.lastSeenAt)}</span>
           <span>Score {creative.rankingScore}/100</span>
         </div>
       </div>
@@ -400,6 +408,8 @@ function reachValue(creative: CompetitorCreative) {
 function buildOverviewMetrics(creatives: CompetitorCreative[]): OverviewMetrics {
   const countries = new Map<string, number>();
   const ages = new Map<string, number>();
+  const createdDates = creatives.map((creative) => creative.createdAt).filter(Boolean).sort();
+  const seenDates = creatives.map((creative) => creative.lastSeenAt).filter(Boolean).sort();
 
   for (const creative of creatives) {
     const reach = reachValue(creative);
@@ -443,7 +453,10 @@ function buildOverviewMetrics(creatives: CompetitorCreative[]): OverviewMetrics 
     topCountry: countryRows[0] ?? null,
     topAge: ageRows[0] ?? null,
     countries: countryRows,
-    ages: ageRows
+    ages: ageRows,
+    firstFoundAt: createdDates[0] ?? null,
+    latestFoundAt: createdDates.at(-1) ?? null,
+    latestSeenAt: seenDates.at(-1) ?? null
   };
 }
 

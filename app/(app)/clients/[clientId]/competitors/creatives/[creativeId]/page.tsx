@@ -77,6 +77,8 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
               <Metric label="Aktive Tage" value={creative.activeDays ? formatNumber(creative.activeDays) : "–"} />
               <Metric label="Start" value={formatDate(creative.startedAt)} />
               <Metric label="Ende" value={formatDate(creative.endedAt)} />
+              <Metric label="Gefunden" value={formatDate(creative.createdAt)} />
+              <Metric label="Zuletzt gesehen" value={formatDate(creative.lastSeenAt)} />
               <Metric label="CPM Basis" value={creative.estimatedCpm ? formatCurrency(creative.estimatedCpm, 2) : "–"} />
               <Metric label="Confidence" value={creative.estimateConfidence} />
             </CardContent>
