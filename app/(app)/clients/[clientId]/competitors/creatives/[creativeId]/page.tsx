@@ -177,7 +177,7 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
               <Info label="Primary Text" value={creative.primaryText} />
               <Info label="Headline" value={creative.headline} />
               <Info label="CTA" value={creative.cta} />
-              <Info label="Quelle" value={creative.sourceUrl ?? displayUrl(creative.landingUrl)} />
+              <LinkInfo label="Quelle" href={creative.sourceUrl ?? creative.landingUrl} />
             </CardContent>
           </Card>
         </div>
@@ -223,17 +223,34 @@ function Info({ label, value, className }: { label: string; value: string | null
   );
 }
 
-function emptyFallback(value: string) {
-  return value.trim() || "–";
+function LinkInfo({ label, href }: { label: string; href: string | null | undefined }) {
+  const display = displayLink(href);
+  return (
+    <div className="rounded-xl border border-herb-border bg-black/20 p-3">
+      <p className="text-xs uppercase tracking-[0.16em] text-white/40">{label}</p>
+      {href ? (
+        <Link href={href} target="_blank" rel="noreferrer" className="mt-1 block break-all text-sm leading-6 text-primary hover:text-white">
+          {display}
+        </Link>
+      ) : (
+        <p className="mt-1 text-sm leading-6 text-white/70">–</p>
+      )}
+    </div>
+  );
 }
 
-function displayUrl(value: string | null) {
+function displayLink(value: string | null | undefined) {
   if (!value) return "–";
   try {
-    return new URL(value).hostname.replace(/^www\./, "");
+    const url = new URL(value);
+    return url.hostname.replace(/^www\./, "") + url.pathname + url.search;
   } catch {
     return value;
   }
+}
+
+function emptyFallback(value: string) {
+  return value.trim() || "–";
 }
 
 function normalizeEmotionScores(value: Record<string, unknown>): CreativeEmotionScores {
