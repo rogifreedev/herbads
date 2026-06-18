@@ -85,68 +85,9 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
             </CardContent>
           </Card>
 
-          <Card className="border-herb-border bg-herb-surface/90">
-            <CardHeader>
-              <CardTitle>EU Transparency & Targeting</CardTitle>
-              <CardDescription>{euTransparency ? "Aus der EU Ad Transparency Detailansicht extrahiert." : "Keine EU Transparency Details fuer dieses Creative gespeichert."}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <LocationMetric locations={euTransparency?.locations ?? creative.audienceLocations} />
-                <Metric label="Alter" value={euTransparency?.targetAgeRange ?? creative.analysis?.ageSignal ?? emptyFallback(creative.ageRanges.join(", "))} />
-                <Metric label="Gender" value={euTransparency?.targetGender ?? emptyFallback(creative.genderSignals.join(", "))} />
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <Metric label="Female Reach" value={formatGenderReach(euTransparency?.reachByGender, "Female")} />
-                <Metric label="Male Reach" value={formatGenderReach(euTransparency?.reachByGender, "Male")} />
-                {genderReachValue(euTransparency?.reachByGender, "Unknown") > 0 ? <Metric label="Unknown Reach" value={formatGenderReach(euTransparency?.reachByGender, "Unknown")} /> : null}
-              </div>
-              {euTransparency?.reachByLocation.length ? (
-                <div className="max-h-56 overflow-auto rounded-xl border border-herb-border">
-                  <table className="w-full text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.14em] text-white/45">
-                      <tr>
-                        <th className="px-3 py-2">Delivery Location</th>
-                        <th className="px-3 py-2 text-right">Reach</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {euTransparency.reachByLocation.map((row) => (
-                        <tr key={row.location} className="border-t border-herb-border">
-                          <td className="px-3 py-2 text-white">{row.location}</td>
-                          <td className="px-3 py-2 text-right text-white">{formatNumber(row.reach)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-              {euTransparency?.reachBreakdown.length ? (
-                <div className="max-h-80 overflow-auto rounded-xl border border-herb-border">
-                  <table className="w-full text-left text-sm">
-                    <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.14em] text-white/45">
-                      <tr>
-                        <th className="px-3 py-2">Location</th>
-                        <th className="px-3 py-2">Age</th>
-                        <th className="px-3 py-2">Gender</th>
-                        <th className="px-3 py-2 text-right">Reach</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {euTransparency.reachBreakdown.map((row, index) => (
-                        <tr key={`${row.location}-${row.ageRange}-${row.gender}-${index}`} className="border-t border-herb-border">
-                          <td className="px-3 py-2 text-white">{row.location}</td>
-                          <td className="px-3 py-2 text-white/65">{row.ageRange}</td>
-                          <td className="px-3 py-2 text-white/65">{row.gender}</td>
-                          <td className="px-3 py-2 text-right text-white">{formatNumber(row.reach)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+          {creative.videoTranscript || creative.videoUrl ? <CompetitorTranscriptCard transcript={creative.videoTranscript} hasVideo={Boolean(creative.videoUrl)} /> : null}
+
+          {creative.analysis && hasEmotionScores(emotionScores) ? <CreativeEmotionRadar scores={emotionScores} /> : null}
         </div>
       </section>
 
@@ -175,22 +116,82 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
-          {creative.analysis && hasEmotionScores(emotionScores) ? <CreativeEmotionRadar scores={emotionScores} /> : null}
-          <Card className="border-herb-border bg-herb-surface/90">
-            <CardHeader>
-              <CardTitle>Ad Bestandteile</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Info label="Primary Text" value={creative.primaryText} />
-              <Info label="Headline" value={creative.headline} />
-              <Info label="CTA" value={creative.cta} />
-              <LinkInfo label="Quelle" href={creative.sourceUrl ?? creative.landingUrl} />
-            </CardContent>
-          </Card>
-          {creative.videoTranscript || creative.videoUrl ? <CompetitorTranscriptCard transcript={creative.videoTranscript} hasVideo={Boolean(creative.videoUrl)} /> : null}
-        </div>
+        <Card className="border-herb-border bg-herb-surface/90">
+          <CardHeader>
+            <CardTitle>Ad Bestandteile</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Info label="Primary Text" value={creative.primaryText} />
+            <Info label="Headline" value={creative.headline} />
+            <Info label="CTA" value={creative.cta} />
+            <LinkInfo label="Quelle" href={creative.sourceUrl ?? creative.landingUrl} />
+          </CardContent>
+        </Card>
       </section>
+
+      <Card className="border-herb-border bg-herb-surface/90">
+        <CardHeader>
+          <CardTitle>EU Transparency & Targeting</CardTitle>
+          <CardDescription>{euTransparency ? "Aus der EU Ad Transparency Detailansicht extrahiert." : "Keine EU Transparency Details fuer dieses Creative gespeichert."}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <LocationMetric locations={euTransparency?.locations ?? creative.audienceLocations} />
+            <Metric label="Alter" value={euTransparency?.targetAgeRange ?? creative.analysis?.ageSignal ?? emptyFallback(creative.ageRanges.join(", "))} />
+            <Metric label="Gender" value={euTransparency?.targetGender ?? emptyFallback(creative.genderSignals.join(", "))} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Metric label="Female Reach" value={formatGenderReach(euTransparency?.reachByGender, "Female")} />
+            <Metric label="Male Reach" value={formatGenderReach(euTransparency?.reachByGender, "Male")} />
+            {genderReachValue(euTransparency?.reachByGender, "Unknown") > 0 ? <Metric label="Unknown Reach" value={formatGenderReach(euTransparency?.reachByGender, "Unknown")} /> : null}
+          </div>
+          {euTransparency?.reachByLocation.length ? (
+            <div className="max-h-56 overflow-auto rounded-xl border border-herb-border">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.14em] text-white/45">
+                  <tr>
+                    <th className="px-3 py-2">Delivery Location</th>
+                    <th className="px-3 py-2 text-right">Reach</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {euTransparency.reachByLocation.map((row) => (
+                    <tr key={row.location} className="border-t border-herb-border">
+                      <td className="px-3 py-2 text-white">{row.location}</td>
+                      <td className="px-3 py-2 text-right text-white">{formatNumber(row.reach)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {euTransparency?.reachBreakdown.length ? (
+            <div className="max-h-80 overflow-auto rounded-xl border border-herb-border">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-herb-surface text-xs uppercase tracking-[0.14em] text-white/45">
+                  <tr>
+                    <th className="px-3 py-2">Location</th>
+                    <th className="px-3 py-2">Age</th>
+                    <th className="px-3 py-2">Gender</th>
+                    <th className="px-3 py-2 text-right">Reach</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {euTransparency.reachBreakdown.map((row, index) => (
+                    <tr key={`${row.location}-${row.ageRange}-${row.gender}-${index}`} className="border-t border-herb-border">
+                      <td className="px-3 py-2 text-white">{row.location}</td>
+                      <td className="px-3 py-2 text-white/65">{row.ageRange}</td>
+                      <td className="px-3 py-2 text-white/65">{row.gender}</td>
+                      <td className="px-3 py-2 text-right text-white">{formatNumber(row.reach)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
