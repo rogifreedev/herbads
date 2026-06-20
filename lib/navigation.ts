@@ -19,7 +19,7 @@ export const navItems: NavItem[] = [
     href: "/analysis",
     icon: ChartNoAxesCombined,
     children: [
-      { title: "Performance", href: "/clients/[clientId]" },
+      { title: "Overview", href: "/clients/[clientId]" },
       { title: "Learning", href: "/clients/[clientId]/learning" },
       { title: "Creatives", href: "/clients/[clientId]/creatives" },
       { title: "Angles", href: "/clients/[clientId]/angles" },
