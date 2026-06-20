@@ -31,7 +31,14 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
     () => item.children?.some((child) => pathname === resolveClientHref(child.href, activeClientId)) ?? false,
     [activeClientId, item.children, pathname]
   );
-  const isActive = pathname === resolvedHref || isChildActive;
+  const isExtraActive = useMemo(
+    () => item.activeHrefs?.some((href) => {
+      const resolved = resolveClientHref(href, activeClientId);
+      return pathname === resolved || pathname.startsWith(`${resolved}/`);
+    }) ?? false,
+    [activeClientId, item.activeHrefs, pathname]
+  );
+  const isActive = pathname === resolvedHref || isChildActive || isExtraActive;
   const [open, setOpen] = useState(isActive);
 
   if (hasChildren) {

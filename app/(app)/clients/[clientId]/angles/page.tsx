@@ -1,6 +1,7 @@
 import { AdsetAnglesDataTable, AngleRankingDataTable } from "@/components/angle-ranking-data-table";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { EmptyState } from "@/components/empty-state";
+import { MetaAdsTabs } from "@/components/meta-ads-tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCreativeAnglesOverview } from "@/lib/creative-angles";
@@ -57,6 +58,8 @@ export default async function CreativeAnglesPage({ params, searchParams }: { par
         </div>
         <CreativeDateRangePicker defaultDays={30} />
       </div>
+
+      <MetaAdsTabs clientId={clientId} active="angles" />
 
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
       {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}

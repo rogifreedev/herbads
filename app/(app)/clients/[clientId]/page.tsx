@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { CreativeRankingTable } from "@/components/creative-ranking-table";
+import { MetaAdsTabs } from "@/components/meta-ads-tabs";
+import { MetricCard } from "@/components/metric-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MetricCard } from "@/components/metric-card";
 import { getClientById } from "@/lib/clients";
 import { listClientCreatives } from "@/lib/creatives";
-import { CreativeRankingTable } from "@/components/creative-ranking-table";
 import { formatCurrency, formatDecimal, formatNumber, formatPercent, getClientPerformanceMetrics } from "@/lib/metrics";
 
 export default async function ClientDashboardPage({ params }: { params: Promise<{ clientId: string }> }) {
@@ -59,11 +60,10 @@ export default async function ClientDashboardPage({ params }: { params: Promise<
           <Button asChild variant="outline" className="border-herb-border">
             <Link href={`/clients/${client.id}/knowledge`}>Wissen pflegen</Link>
           </Button>
-          <Button asChild variant="outline" className="border-herb-border">
-            <Link href={`/clients/${client.id}/creatives`}>Creatives ansehen</Link>
-          </Button>
         </div>
       </div>
+
+      <MetaAdsTabs clientId={client.id} active="overview" />
 
       {error ? (
         <Alert variant="warning"><AlertDescription>Supabase-Tabellen sind noch nicht erreichbar. Diese Seite nutzt bis zur Migration Mock-Daten.</AlertDescription></Alert>

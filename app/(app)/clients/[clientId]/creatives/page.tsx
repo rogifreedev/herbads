@@ -5,6 +5,7 @@ import { CreativeTypeBadge } from "@/components/creative-type-badge";
 import { CreativeRankingTable } from "@/components/creative-ranking-table";
 import { EmptyState } from "@/components/empty-state";
 import { FunnelStageBadge } from "@/components/funnel-stage-badge";
+import { MetaAdsTabs } from "@/components/meta-ads-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -90,6 +91,8 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
           </div>
         </div>
       </div>
+
+      <MetaAdsTabs clientId={clientId} active="creatives" />
 
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>

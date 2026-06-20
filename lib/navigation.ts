@@ -5,6 +5,7 @@ export type NavItem = {
   title: string;
   href: string;
   icon?: LucideIcon;
+  activeHrefs?: string[];
   children?: Omit<NavItem, "icon" | "children">[];
 };
 
@@ -18,13 +19,15 @@ export const navItems: NavItem[] = [
     title: "META Ads",
     href: "/analysis",
     icon: ChartNoAxesCombined,
+    activeHrefs: [
+      "/clients/[clientId]/creatives",
+      "/clients/[clientId]/angles",
+      "/clients/[clientId]/creatives/landingpages"
+    ],
     children: [
       { title: "Overview", href: "/clients/[clientId]" },
       { title: "Learning", href: "/clients/[clientId]/learning" },
-      { title: "Creatives", href: "/clients/[clientId]/creatives" },
-      { title: "Angles", href: "/clients/[clientId]/angles" },
       { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
-      { title: "Landingpages", href: "/clients/[clientId]/creatives/landingpages" },
       { title: "Settings", href: "/clients/[clientId]/meta/settings" },
       { title: "Pattern Analyse", href: "/analysis" }
     ]

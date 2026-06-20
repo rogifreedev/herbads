@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FormField } from "@/components/form-field";
 import { LandingpageAnalysisButton } from "@/components/landingpage-analysis-button";
 import { LandingpagesDataTable } from "@/components/landingpages-data-table";
+import { MetaAdsTabs } from "@/components/meta-ads-tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +89,8 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
         </div>
         <LandingpageAnalysisButton clientId={clientId} urls={filtered.map((landingpage) => landingpage.url)} />
       </div>
+
+      <MetaAdsTabs clientId={clientId} active="landingpages" />
 
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
