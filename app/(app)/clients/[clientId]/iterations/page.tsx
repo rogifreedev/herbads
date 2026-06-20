@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { AdIterationStatusSelect } from "@/components/ad-iteration-status-select";
 import { AdIterationsGenerateForm } from "@/components/ad-iterations-generate-form";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
@@ -66,7 +66,7 @@ export default async function IterationsPage({ params, searchParams }: { params:
           <CardDescription>
             {tab === "video"
               ? "Neue Hooks, Scripts und Produktionsideen fuer gut funktionierende Video Ads."
-              : "Neue Static-Ideen mit Angle, Vorlage und Beschreibung der besseren Umsetzung."}
+              : "Neue Static-Ideen mit Angle, Vorlage und Detailansicht fuer die Creative-Anweisungen."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -168,13 +168,12 @@ function SourceLink({ iteration }: { iteration: AdIteration }) {
 function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: AdIteration[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
-      <Table className="min-w-[1180px]">
+      <Table className="min-w-[920px]">
         <TableHeader className="bg-white/[0.03]">
           <TableRow className="hover:bg-transparent">
             <TableHead>Title</TableHead>
             <TableHead>Angle</TableHead>
             <TableHead>Vorlage</TableHead>
-            <TableHead>Beschreibung</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Erstellt am</TableHead>
@@ -182,15 +181,15 @@ function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: AdI
         </TableHeader>
         <TableBody>
           {rows.map((iteration) => (
-            <TableRow key={iteration.id} className="align-top">
-              <TableCell className="max-w-[240px] font-medium text-white">{iteration.title}</TableCell>
+            <TableRow key={iteration.id} className="align-top transition hover:bg-white/[0.025]">
+              <TableCell className="max-w-[280px] font-medium">
+                <Link href={iteration.detailHref} className="group flex items-center gap-2 text-white hover:text-primary">
+                  <span className="line-clamp-2">{iteration.title}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 opacity-45 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+                </Link>
+              </TableCell>
               <TableCell>{iteration.angle ? <Badge variant="outline">{iteration.angle}</Badge> : <span className="text-white/45">-</span>}</TableCell>
               <TableCell><SourceLink iteration={iteration} /></TableCell>
-              <TableCell className="max-w-[360px] text-white/70">
-                <p>{iteration.description ?? "-"}</p>
-                {iteration.productionNotes ? <p className="mt-2 text-xs text-white/45">{iteration.productionNotes}</p> : null}
-                <p className="mt-2 text-xs text-white/40">{iterationPerformanceLine(iteration)}</p>
-              </TableCell>
               <TableCell className="text-white">{iteration.score === null ? "-" : `${formatNumber(iteration.score)}/100`}</TableCell>
               <TableCell><AdIterationStatusSelect clientId={clientId} iterationId={iteration.id} status={iteration.status} /></TableCell>
               <TableCell className="text-white/60">{formatDate(iteration.createdAt)}</TableCell>
@@ -219,17 +218,12 @@ function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: AdIt
         </TableHeader>
         <TableBody>
           {rows.map((iteration) => (
-            <TableRow key={iteration.id} className="align-top">
+            <TableRow key={iteration.id} className="align-top transition hover:bg-white/[0.025]">
               <TableCell className="max-w-[260px]">
-                <details className="group">
-                  <summary className="cursor-pointer list-none font-medium text-white group-open:text-primary">{iteration.title}</summary>
-                  <div className="mt-3 space-y-3 rounded-xl border border-herb-border bg-black/25 p-3 text-xs leading-5 text-white/65">
-                    {iteration.hook ? <Info label="Neue Hook" value={iteration.hook} /> : null}
-                    {iteration.script ? <Info label="Script" value={iteration.script} /> : null}
-                    {iteration.productionNotes ? <Info label="Produktion" value={iteration.productionNotes} /> : null}
-                    {iteration.rationale ? <Info label="Warum" value={iteration.rationale} /> : null}
-                  </div>
-                </details>
+                <Link href={iteration.detailHref} className="group flex items-center gap-2 font-medium text-white hover:text-primary">
+                  <span className="line-clamp-2">{iteration.title}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 opacity-45 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+                </Link>
               </TableCell>
               <TableCell>{iteration.angle ? <Badge variant="outline">{iteration.angle}</Badge> : <span className="text-white/45">-</span>}</TableCell>
               <TableCell><SourceLink iteration={iteration} /></TableCell>
@@ -245,15 +239,6 @@ function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: AdIt
           ))}
         </TableBody>
       </Table>
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] uppercase tracking-[0.16em] text-white/35">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap">{value}</p>
     </div>
   );
 }

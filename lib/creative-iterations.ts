@@ -110,6 +110,8 @@ type GeneratedIteration = {
   title: string;
   angle?: string;
   description?: string;
+  thesis?: string;
+  textOverlay?: string;
   hook?: string;
   script?: string;
   productionNotes?: string;
@@ -129,11 +131,22 @@ export type AdIteration = {
   sourceCreativeName: string;
   sourceCreativeType: string;
   sourceCreativeHref: string;
+  sourceCreativeImageUrl: string | null;
+  sourceCreativeThumbnailUrl: string | null;
+  sourceCreativeVideoUrl: string | null;
+  sourceCreativeVideoEmbedUrl: string | null;
+  sourceCreativeVideoPermalinkUrl: string | null;
+  sourceCreativeLandingUrl: string | null;
+  sourceCreativeTitle: string | null;
+  sourceCreativeBody: string | null;
+  detailHref: string;
   format: IterationFormat;
   status: IterationStatus;
   title: string;
   angle: string | null;
   description: string | null;
+  thesis: string | null;
+  textOverlay: string | null;
   hook: string | null;
   script: string | null;
   productionNotes: string | null;
@@ -228,6 +241,8 @@ function normalizeGeneratedIterations(payload: JsonRecord): GeneratedIteration[]
         title: stringValue(record.title),
         angle: stringValue(record.angle),
         description: stringValue(record.description),
+        thesis: stringValue(record.thesis) || stringValue(record.these),
+        textOverlay: stringValue(record.textOverlay) || stringValue(record.text_overlay) || stringValue(record.overlayText) || stringValue(record.overlay_text),
         hook: stringValue(record.hook),
         script: stringValue(record.script),
         productionNotes: stringValue(record.productionNotes),
@@ -586,7 +601,7 @@ Bereits vorhandene Iterations, nicht wiederholen:
 ${JSON.stringify(input.recentIterations, null, 2)}
 
 Antworte exakt als JSON Objekt mit Key iterations. Jedes Item braucht:
-sourceCreativeId, title, angle, description, hook, script, productionNotes, rationale, score.
+sourceCreativeId, title, angle, description, thesis, textOverlay, hook, script, productionNotes, rationale, score.
 
 Regeln:
 - sourceCreativeId muss exakt eine ID aus den Quellen sein.
@@ -595,17 +610,23 @@ Regeln:
 - title ist kurz und produzierbar.
 - angle ist ein kurzes Canonical Label.
 - description erklaert in 1-3 Saetzen, was verbessert oder variiert wird.
+- thesis ist eine klare Performance-These: Warum sollte diese neue Ausfuehrung funktionieren?
+- textOverlay ist bei Static Iterations der konkrete Text im Bild, maximal 8 Woerter.
 - productionNotes sind konkrete Produktionsanweisungen.
 - rationale erklaert, welches Performance-Learning transformiert wurde.
 - score ist 0-100.
-- Bei Static Iterations duerfen hook und script leer sein.
+- Bei Static Iterations duerfen hook und script leer sein, textOverlay und thesis muessen befuellt sein.
 - Bei Video Iterations muessen hook und script befuellt sein.
 - Wenn bei Video Quellen videoTranscript null ist, nutze Analyse, Hook, Visual Elements, Copy und Performance als Grundlage und erwaehne diese Unsicherheit kurz in rationale.`;
 }
 
 function mapIteration(row: IterationRow, source: CreativeListItem | undefined, clientId: string): AdIteration {
   const format = normalizeFormat(row.format);
+  const raw = row.raw ?? {};
   const sourceCreativeName = source?.name ?? String(row.performance_snapshot?.creative && typeof row.performance_snapshot.creative === "object" && "name" in row.performance_snapshot.creative ? row.performance_snapshot.creative.name : row.source_creative_id);
+  const thesis = stringValue(raw.thesis) || stringValue(raw.these) || (format === "static" ? stringValue(row.script) : "");
+  const textOverlay = stringValue(raw.textOverlay) || stringValue(raw.text_overlay) || stringValue(raw.overlayText) || stringValue(raw.overlay_text) || (format === "static" ? stringValue(row.hook) : "");
+
   return {
     id: row.id,
     generationId: row.generation_id,
@@ -613,21 +634,57 @@ function mapIteration(row: IterationRow, source: CreativeListItem | undefined, c
     sourceCreativeName,
     sourceCreativeType: source?.type ?? String(row.performance_snapshot?.creative && typeof row.performance_snapshot.creative === "object" && "type" in row.performance_snapshot.creative ? row.performance_snapshot.creative.type : "unknown"),
     sourceCreativeHref: `/clients/${clientId}/creatives/${row.source_creative_id}`,
+    sourceCreativeImageUrl: source?.imageUrl ?? null,
+    sourceCreativeThumbnailUrl: source?.thumbnailUrl ?? null,
+    sourceCreativeVideoUrl: source?.videoUrl ?? null,
+    sourceCreativeVideoEmbedUrl: source?.videoEmbedUrl ?? null,
+    sourceCreativeVideoPermalinkUrl: source?.videoPermalinkUrl ?? null,
+    sourceCreativeLandingUrl: source?.landingUrl ?? null,
+    sourceCreativeTitle: source?.title ?? null,
+    sourceCreativeBody: source?.body ?? null,
+    detailHref: `/clients/${clientId}/iterations/${row.id}`,
     format,
     status: normalizeStatus(row.status),
     title: row.title,
     angle: row.angle,
     description: row.description,
+    thesis: thesis || null,
+    textOverlay: textOverlay || null,
     hook: row.hook,
     script: row.script,
     productionNotes: row.production_notes,
     rationale: row.rationale,
     score: numberValue(row.score),
     performanceSnapshot: row.performance_snapshot ?? {},
-    raw: row.raw ?? {},
+    raw,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+export async function getAdIterationDetail(clientId: string, iterationId: string): Promise<{ iteration: AdIteration | null; error: string | null }> {
+  try {
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase
+      .from("ad_iterations")
+      .select("id,generation_id,source_creative_id,format,status,title,angle,description,hook,script,production_notes,rationale,score,performance_snapshot,raw,created_at,updated_at")
+      .eq("client_id", clientId)
+      .eq("id", iterationId)
+      .single();
+
+    if (error) return { iteration: null, error: error.message };
+
+    const row = data as IterationRow;
+    const { creatives } = await listClientCreatives(clientId);
+    const source = creatives.find((creative) => creative.id === row.source_creative_id);
+
+    return { iteration: mapIteration(row, source, clientId), error: null };
+  } catch (error) {
+    return {
+      iteration: null,
+      error: error instanceof Error ? error.message : "Iteration konnte nicht geladen werden."
+    };
+  }
 }
 
 async function getAdIterationsOverviewUncached(clientId: string): Promise<AdIterationsOverview> {
@@ -805,8 +862,8 @@ async function generateFormatBatch(clientId: string, format: IterationFormat, op
         title: iteration.title,
         angle: iteration.angle || null,
         description: iteration.description || null,
-        hook: format === "video" ? iteration.hook || null : iteration.hook || null,
-        script: format === "video" ? iteration.script || null : iteration.script || null,
+        hook: format === "static" ? iteration.textOverlay || iteration.hook || null : iteration.hook || null,
+        script: format === "static" ? iteration.thesis || iteration.script || null : iteration.script || null,
         production_notes: iteration.productionNotes || null,
         rationale: iteration.rationale || null,
         score: iteration.score ?? null,
