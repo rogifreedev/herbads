@@ -336,7 +336,7 @@ function scoreRule(rule: AngleRule, fields: ReturnType<typeof searchFields>, ind
   return { rule, index, score, matches, antiMatches };
 }
 
-function normalizeExplicitAngle(value: string) {
+export function normalizeExplicitAngle(value: string) {
   const normalized = normalizeSearchText(value);
   if (!normalized) return null;
 

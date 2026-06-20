@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
 import { getCompetitorReachBreakdown, getCompetitorReachByGender, getCompetitorReachByLocation, normalizeCompetitorGender } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type Competitor, type CompetitorCreative } from "@/lib/competitors";
+import { normalizeExplicitAngle } from "@/lib/creative-angles";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
 import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
@@ -47,6 +48,7 @@ type AngleRow = {
   averageScore: number | null;
   topEmotion: string;
   competitors: string[];
+  variants: string[];
   thesis: string | null;
 };
 
@@ -255,7 +257,7 @@ function AnglesTab({ rows }: { rows: AngleRow[] }) {
           <EmptyState title="Noch keine Angles analysiert" description="Starte die Bulk Analyse im Creatives Tab, damit Hooks, Thesis und Angles berechnet werden." />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-herb-border">
-            <table className="min-w-[1120px] w-full text-left text-sm">
+            <table className="min-w-[1280px] w-full text-left text-sm">
               <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.16em] text-white/45">
                 <tr>
                   <th className="px-4 py-3">Angle</th>
@@ -266,6 +268,7 @@ function AnglesTab({ rows }: { rows: AngleRow[] }) {
                   <th className="px-4 py-3">Score</th>
                   <th className="px-4 py-3">Emotion</th>
                   <th className="px-4 py-3">Competitors</th>
+                  <th className="px-4 py-3">Varianten</th>
                   <th className="px-4 py-3">Thesis</th>
                 </tr>
               </thead>
@@ -282,6 +285,7 @@ function AnglesTab({ rows }: { rows: AngleRow[] }) {
                       <Badge variant="secondary">{row.topEmotion}</Badge>
                     </td>
                     <td className="px-4 py-4 text-white/70">{row.competitors.join(", ")}</td>
+                    <td className="max-w-[280px] px-4 py-4 text-white/60">{row.variants.length > 0 ? row.variants.join(", ") : "–"}</td>
                     <td className="max-w-[360px] px-4 py-4 text-white/65">{row.thesis ?? "–"}</td>
                   </tr>
                 ))}
@@ -648,6 +652,7 @@ function buildAngleRows(creatives: CompetitorCreative[]): AngleRow[] {
       scoreCount: number;
       thesis: string | null;
       competitors: Set<string>;
+      variants: Set<string>;
       emotionTotals: Record<keyof CreativeEmotionScores, number>;
       emotionCounts: Record<keyof CreativeEmotionScores, number>;
     }
@@ -655,7 +660,8 @@ function buildAngleRows(creatives: CompetitorCreative[]): AngleRow[] {
   const emotionKeys: Array<keyof CreativeEmotionScores> = ["curiosity", "desire", "trust", "urgency", "joy", "fearOfMissingOut"];
 
   for (const creative of creatives) {
-    const angle = creative.analysis?.angle?.trim() || "Unclassified";
+    const rawAngle = creative.analysis?.angle?.trim() || "";
+    const angle = canonicalCompetitorAngle(rawAngle);
     const row = rows.get(angle) ?? {
       angle,
       count: 0,
@@ -666,6 +672,7 @@ function buildAngleRows(creatives: CompetitorCreative[]): AngleRow[] {
       scoreCount: 0,
       thesis: null,
       competitors: new Set<string>(),
+      variants: new Set<string>(),
       emotionTotals: { curiosity: 0, desire: 0, trust: 0, urgency: 0, joy: 0, fearOfMissingOut: 0 },
       emotionCounts: { curiosity: 0, desire: 0, trust: 0, urgency: 0, joy: 0, fearOfMissingOut: 0 }
     };
@@ -676,6 +683,7 @@ function buildAngleRows(creatives: CompetitorCreative[]): AngleRow[] {
     row.estimatedDailySpend += creative.estimatedDailySpend ?? 0;
     row.thesis ??= creative.analysis?.thesis ?? creative.analysis?.hypotheses?.[0] ?? null;
     row.competitors.add(creative.competitorName);
+    if (rawAngle && rawAngle !== angle) row.variants.add(rawAngle);
 
     if (creative.analysis?.rankingScore !== null && creative.analysis?.rankingScore !== undefined) {
       row.scoreTotal += creative.analysis.rankingScore;
@@ -711,6 +719,7 @@ function buildAngleRows(creatives: CompetitorCreative[]): AngleRow[] {
         averageScore: row.scoreCount > 0 ? Math.round(row.scoreTotal / row.scoreCount) : null,
         topEmotion: topEmotion === "fearOfMissingOut" ? "FOMO" : topEmotion,
         competitors: Array.from(row.competitors).sort((a, b) => a.localeCompare(b)),
+        variants: Array.from(row.variants).sort((a, b) => a.localeCompare(b)).slice(0, 6),
         thesis: row.thesis
       };
     })
@@ -757,13 +766,19 @@ function buildLandingpageRows(creatives: CompetitorCreative[]): LandingpageRow[]
         firstStartedAt: earliestDate(row.creatives.map((creative) => creative.startedAt)),
         latestSeenAt: latestDate(row.creatives.map((creative) => creative.lastSeenAt)),
         topCreative,
-        topAngle: mostImportantTextValue(row.creatives, (creative) => creative.analysis?.angle),
+        topAngle: mostImportantTextValue(row.creatives, (creative) => (creative.analysis?.angle ? canonicalCompetitorAngle(creative.analysis.angle) : null)),
         topOffer: topCreative?.analysis?.offer ?? mostImportantTextValue(row.creatives, (creative) => creative.analysis?.offer),
         topCta: mostImportantTextValue(row.creatives, (creative) => creative.cta),
         competitors: Array.from(row.competitors).sort((a, b) => a.localeCompare(b))
       };
     })
     .sort((a, b) => b.reach - a.reach || b.estimatedSpend - a.estimatedSpend || b.adCount - a.adCount || a.displayUrl.localeCompare(b.displayUrl));
+}
+
+function canonicalCompetitorAngle(value: string | null | undefined) {
+  const angle = value?.trim();
+  if (!angle) return "Unclassified";
+  return normalizeExplicitAngle(angle) ?? angle;
 }
 
 function compareCreativesByImportance(a: CompetitorCreative, b: CompetitorCreative) {

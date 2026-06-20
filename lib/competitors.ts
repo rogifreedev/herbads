@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import type { BrowserContext, Page } from "playwright";
 import { CACHE_TAGS, COMPETITOR_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getCompetitorDeliveryLocations } from "@/lib/competitor-demographics";
+import { normalizeExplicitAngle } from "@/lib/creative-angles";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getHookTranscript, mapRawCompetitorVideoTranscript, transcribeCompetitorCreativeVideo, type CreativeVideoTranscript } from "@/lib/video-transcripts";
@@ -1868,6 +1869,9 @@ function normalizeAngle(value: unknown) {
     .replace(/\s+/g, " ")
     .trim();
   if (!normalized) return "";
+
+  const taxonomyAngle = normalizeExplicitAngle(normalized);
+  if (taxonomyAngle) return taxonomyAngle;
 
   const words = normalized.split(" ");
   const short = words.length > 4 ? words.slice(0, 4).join(" ") : normalized;
