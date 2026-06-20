@@ -2020,6 +2020,8 @@ Quellen-Prioritaet fuer Angle:
 - Wenn videoTranscript.status nicht "completed" ist, markiere die Unsicherheit in thesis und leite den angle nur aus sichtbaren Video-/Thumbnail-Signalen ab.
 - Wenn format "static" oder "image" ist oder ein Bild beigefuegt ist: Der angle MUSS aus dem Bild/Visual, On-Screen-Text und Layout abgeleitet werden. Primary Text/headline sind nur Zusatzkontext und duerfen den angle nicht dominieren.
 - angle ist ein kurzes strategisches Label mit 2-4 Woertern, maximal 36 Zeichen. Keine ganzen Saetze, keine Copy-Headline, keine langen Beschreibungen.
+- angle muss konkret genug sein, damit man sofort erkennt, worum es geht. Nutze sprechende Canonicals wie "Supermarkt vs Handwerk", "Founderstory", "Preisanker", "Herkunft/Tradition" oder "Blindtest". Vermeide generische Oberbegriffe wie "Vergleich", "Founder / Story" oder "Benefit / Transformation", wenn ein konkreteres Pattern erkennbar ist.
+- Aehnliche Varianten muessen denselben Canonical Angle bekommen: z.B. "Blindtest Handwerk vs Supermarkt", "Supermarkt vs Profispeck" und "Supermarkt vs Manufaktur" alle als "Supermarkt vs Handwerk".
 
 Creative JSON:
 ${JSON.stringify({
