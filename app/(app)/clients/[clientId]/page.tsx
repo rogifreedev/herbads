@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { MetaBackfillCard } from "@/components/meta-backfill-card";
-import { MetaSyncButton } from "@/components/meta-sync-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,7 +44,6 @@ export default async function ClientDashboardPage({ params }: { params: Promise<
           <Button asChild variant="outline" className="border-herb-border">
             <Link href={`/clients/${client.id}/creatives`}>Creatives ansehen</Link>
           </Button>
-          <MetaSyncButton clientId={client.id} />
         </div>
       </div>
 
@@ -59,8 +56,6 @@ export default async function ClientDashboardPage({ params }: { params: Promise<
           <MetricCard key={metric.label} {...metric} />
         ))}
       </section>
-
-      <MetaBackfillCard clientId={client.id} />
 
       <section className="grid gap-4 lg:grid-cols-2">
         <CreativeRankingTable clientId={client.id} creatives={creatives} title="Top Creatives" />

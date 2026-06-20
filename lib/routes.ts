@@ -38,6 +38,7 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/clients") && pathname.includes("/angles")) return "Creative Angles";
   if (pathname.startsWith("/clients") && pathname.includes("/ideas")) return "Ad Ideas";
   if (pathname.startsWith("/clients") && pathname.includes("/competitors")) return "Competitors";
+  if (pathname.startsWith("/clients") && pathname.includes("/meta/settings")) return "META Ads Settings";
   if (pathname.startsWith("/clients") && pathname.includes("/knowledge")) return "Wissensdatenbank";
   if (pathname.startsWith("/clients") && pathname.includes("/settings")) return "Kundeneinstellungen";
   if (pathname.startsWith("/clients/")) return "Kunden-Dashboard";

@@ -25,6 +25,7 @@ export const navItems: NavItem[] = [
       { title: "Angles", href: "/clients/[clientId]/angles" },
       { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
       { title: "Landingpages", href: "/clients/[clientId]/creatives/landingpages" },
+      { title: "Settings", href: "/clients/[clientId]/meta/settings" },
       { title: "Pattern Analyse", href: "/analysis" }
     ]
   },
