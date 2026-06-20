@@ -34,6 +34,7 @@ export function replaceClientInPath(pathname: string, nextClientId: string) {
 export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/clients") && pathname.includes("/creatives/landingpages")) return "Landingpages";
   if (pathname.startsWith("/clients") && pathname.includes("/learning")) return "Creative Learning";
+  if (pathname.startsWith("/clients") && pathname.includes("/iterations")) return "Iterations";
   if (pathname.startsWith("/clients") && pathname.includes("/creatives")) return "Creatives";
   if (pathname.startsWith("/clients") && pathname.includes("/angles")) return "Creative Angles";
   if (pathname.startsWith("/clients") && pathname.includes("/ideas")) return "Ad Ideas";

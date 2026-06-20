@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/creative-analysis/process",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/iterations/weekly-generate",
+      "schedule": "0 5 * * 1"
     }
   ]
 }

@@ -8,6 +8,7 @@ export const CACHE_TAGS = {
   creatives: "creatives",
   creativeAngles: "creative-angles",
   adIdeas: "ad-ideas",
+  iterations: "iterations",
   competitors: "competitors",
   landingpages: "landingpages",
   knowledge: "knowledge",
@@ -20,6 +21,7 @@ export const META_DATA_CACHE_TAGS = [
   CACHE_TAGS.creatives,
   CACHE_TAGS.creativeAngles,
   CACHE_TAGS.adIdeas,
+  CACHE_TAGS.iterations,
   CACHE_TAGS.competitors,
   CACHE_TAGS.landingpages
 ] as const;

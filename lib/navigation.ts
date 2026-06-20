@@ -21,6 +21,7 @@ export const navItems: NavItem[] = [
     icon: ChartNoAxesCombined,
     activeHrefs: [
       "/clients/[clientId]/creatives",
+      "/clients/[clientId]/iterations",
       "/clients/[clientId]/angles",
       "/clients/[clientId]/creatives/landingpages"
     ],
@@ -28,6 +29,7 @@ export const navItems: NavItem[] = [
       { title: "Creatives", href: "/clients/[clientId]" },
       { title: "Learning", href: "/clients/[clientId]/learning" },
       { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
+      { title: "Iterations", href: "/clients/[clientId]/iterations" },
       { title: "Settings", href: "/clients/[clientId]/meta/settings" },
       { title: "Pattern Analyse", href: "/analysis" }
     ]
