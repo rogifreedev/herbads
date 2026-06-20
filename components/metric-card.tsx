@@ -17,14 +17,14 @@ export function MetricCard({ label, value, change, tone = "neutral", description
     <Card className="border-herb-border bg-herb-surface/90">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm text-white/55">{label}</p>
               <KpiHelp label={label} description={description} />
             </div>
-            <p className="mt-3 font-heading text-4xl leading-none text-white">{value}</p>
+            <p className="mt-3 break-words font-heading text-3xl leading-none text-white 2xl:text-4xl">{value}</p>
           </div>
-          <Badge variant={variant}>{change}</Badge>
+          <Badge variant={variant} className="shrink-0">{change}</Badge>
         </div>
       </CardContent>
     </Card>
