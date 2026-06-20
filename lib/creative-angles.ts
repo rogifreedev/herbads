@@ -276,6 +276,62 @@ function normalizeSearchText(value: string) {
     .trim();
 }
 
+function normalizeAngleLabelText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function specificCanonicalAngle(value: string) {
+  const normalized = normalizeAngleLabelText(value);
+  if (!normalized) return null;
+
+  const hasSupermarketSignal = normalized.includes("supermarkt");
+  const hasCraftSignal = ["handwerk", "manufaktur", "profispeck", "blindtest"].some((signal) => normalized.includes(signal));
+  if (hasSupermarketSignal && hasCraftSignal) return "Supermarkt vs Handwerk";
+
+  const hasFounderSignal = ["founder", "gruender", "grunder", "inhaber", "familienbetrieb"].some((signal) => normalized.includes(signal));
+  const hasStorySignal = ["story", "geschichte", "herkunft", "tradition", "mission"].some((signal) => normalized.includes(signal));
+  if (hasFounderSignal || hasStorySignal) return "Founderstory";
+
+  return null;
+}
+
+function hasComparisonSignal(value: string) {
+  const normalized = normalizeAngleLabelText(value);
+  return /\b(vs\.?|versus)\b/i.test(value) || normalized.includes("gegen") || normalized.includes("statt") || normalized.includes("im vergleich");
+}
+
+function shortenSpecificAngle(value: string) {
+  const normalized = value
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = normalized.split(" ");
+  const short = words.length > 4 ? words.slice(0, 4).join(" ") : normalized;
+  return short.length > 36 ? `${short.slice(0, 33).trim()}...` : short;
+}
+
+function displayAngleLabel(value: string, context = "") {
+  const source = [value, context].filter(Boolean).join(" ");
+  const specific = specificCanonicalAngle(source) ?? specificCanonicalAngle(value);
+  if (specific) return specific;
+
+  const taxonomyAngle = normalizeExplicitAngle(value);
+  if (!taxonomyAngle) return shortenSpecificAngle(value);
+  if (taxonomyAngle === "Founder / Story") return "Founderstory";
+  if (taxonomyAngle === "Vergleich" && hasComparisonSignal(value)) return shortenSpecificAngle(value);
+  return taxonomyAngle;
+}
+
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -297,6 +353,10 @@ function searchFields(input: { creative: CreativeListItem; analysis?: AnalysisRo
     { label: "Ad Names", text: normalizeSearchText((input.adNames ?? []).join(" ")), weight: 0.7 },
     { label: "Creative Name", text: normalizeSearchText(input.creative.name), weight: 0.6 }
   ].filter((field) => field.text);
+}
+
+function angleContext(fields: ReturnType<typeof searchFields>) {
+  return fields.map((field) => field.text).join(" ");
 }
 
 function bestFieldMatch(fields: ReturnType<typeof searchFields>, keyword: string) {
@@ -364,12 +424,14 @@ export function normalizeExplicitAngle(value: string) {
 }
 
 function inferAngle(input: { creative: CreativeListItem; analysis?: AnalysisRow; adsetName?: string | null; adNames?: string[] }) {
-  const aiAngle = normalizeExplicitAngle(explicitAngle(input.analysis));
-  if (aiAngle) {
-    return { angle: aiAngle, confidence: 92, reason: "Aus vorhandener AI Analyse uebernommen und auf die strategische Angle-Taxonomie normalisiert." };
+  const fields = searchFields(input);
+  const context = angleContext(fields);
+  const rawAiAngle = explicitAngle(input.analysis);
+  const specificAiAngle = rawAiAngle ? displayAngleLabel(rawAiAngle, context) : null;
+  if (specificAiAngle) {
+    return { angle: specificAiAngle, confidence: 92, reason: "Aus vorhandener AI Analyse uebernommen und auf kurze Canonical-Angles normalisiert." };
   }
 
-  const fields = searchFields(input);
   if (fields.length === 0) {
     return { angle: "Unklar", confidence: 0, reason: "Kein Hook, Primary Text oder Titel vorhanden." };
   }
@@ -393,13 +455,18 @@ function inferAngle(input: { creative: CreativeListItem; analysis?: AnalysisRow;
   const confidence = Math.min(90, Math.round(35 + best.score * 6));
   const wrapperNote = wrapper && wrapper.rule.label !== best.rule.label ? ` Seasonal/Event wurde als Wrapper erkannt (${wrapper.matches.slice(0, 3).join(", ")}), aber nicht als Haupt-Angle gewertet.` : "";
   return {
-    angle: best.rule.label,
+    angle: displayAngleLabel(best.rule.label, context),
     confidence,
     reason: `Erkannt durch strategische Signale: ${best.matches.slice(0, 5).join(", ")}.${wrapperNote}`
   };
 }
 
 function angleSummary(angle: string) {
+  const summaries: Record<string, string> = {
+    Founderstory: "Erzaehlt Gruendung, Herkunft, Tradition oder Mission als Vertrauensanker.",
+    "Supermarkt vs Handwerk": "Kontrastiert Massenware mit handwerklicher Qualitaet und macht den Unterschied sofort greifbar."
+  };
+  if (summaries[angle]) return summaries[angle];
   return angleRules.find((rule) => rule.label === angle)?.summary ?? "Fasst Anzeigen mit aehnlichem Messaging-Ansatz zusammen.";
 }
 
@@ -686,7 +753,7 @@ async function getCreativeAnglesOverviewUncached(clientId: string, since?: strin
 
 const getCreativeAnglesOverviewCached = unstable_cache(
   getCreativeAnglesOverviewUncached,
-  ["creative-angles-overview-v3"],
+  ["creative-angles-overview-v4"],
   { revalidate: 120, tags: [CACHE_TAGS.creativeAngles] }
 );
 
