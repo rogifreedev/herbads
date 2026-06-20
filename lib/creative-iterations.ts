@@ -188,7 +188,6 @@ type GenerationSummary = {
 };
 
 const ITERATION_STATUSES = new Set<IterationStatus>(["new", "shortlisted", "in_production", "tested", "winner", "rejected"]);
-const STATIC_TYPES = new Set(["image", "post", "catalog", "carousel"]);
 const VIDEO_TYPES = new Set(["video"]);
 
 function textFromContent(content: unknown) {
@@ -344,14 +343,22 @@ function hasVideoMedia(creative: CreativeListItem) {
   return Boolean(creative.videoId || creative.videoUrl || creative.videoEmbedUrl || creative.videoPermalinkUrl);
 }
 
-function hasStaticMedia(creative: CreativeListItem) {
-  return Boolean(creative.imageUrl || creative.thumbnailUrl || creative.title || creative.body);
+function isImageOnlyCreative(creative: CreativeListItem) {
+  return creative.type.toLowerCase() === "image" && Boolean(creative.imageUrl || creative.thumbnailUrl) && !hasVideoMedia(creative);
 }
 
 function sourceTypeMatches(creative: CreativeListItem, format: IterationFormat) {
   const type = creative.type.toLowerCase();
   if (format === "video") return VIDEO_TYPES.has(type) || hasVideoMedia(creative);
-  return STATIC_TYPES.has(type) || (!hasVideoMedia(creative) && hasStaticMedia(creative));
+  return isImageOnlyCreative(creative);
+}
+
+function isImageOnlyIterationSource(iteration: AdIteration) {
+  return (
+    iteration.sourceCreativeType.toLowerCase() === "image" &&
+    Boolean(iteration.sourceCreativeImageUrl || iteration.sourceCreativeThumbnailUrl) &&
+    !Boolean(iteration.sourceCreativeVideoUrl || iteration.sourceCreativeVideoEmbedUrl || iteration.sourceCreativeVideoPermalinkUrl)
+  );
 }
 
 function enoughPerformance(creative: CreativeListItem) {
@@ -585,7 +592,7 @@ async function callOpenRouter(prompt: string) {
 
 function iterationPrompt(input: { format: IterationFormat; count: number; sources: SourceCreative[]; dateRange: ResolvedIterationDateRange; recentIterations: Array<{ title: string | null; angle: string | null; source_creative_id: string | null }> }) {
   const formatInstruction = input.format === "static"
-    ? "Erzeuge Static-Ad-Iterationen. Fokus: neue Bildidee, Layout-/Overlay-Ansatz, Headline/Title und klare Beschreibung, wie die Vorlage besser oder frischer umgesetzt wird."
+    ? "Erzeuge Static-Ad-Iterationen ausschliesslich aus Image-Creatives. Fokus: neue Bildidee, Layout-/Overlay-Ansatz, Headline/Title und klare Beschreibung, wie die Vorlage besser oder frischer umgesetzt wird."
     : "Erzeuge Video-Ad-Iterationen. Fokus: neue Hook, konkretes Script, Produktionshinweise/Shotlist und klare Ableitung aus dem funktionierenden Video.";
 
   return `Erstelle ${input.count} neue ${input.format === "static" ? "Static" : "Video"} Iterationen aus echten Bestperformer Meta Ads.
@@ -712,7 +719,7 @@ async function getAdIterationsOverviewUncached(clientId: string): Promise<AdIter
     const { creatives } = await listClientCreatives(clientId);
     const creativesById = new Map(creatives.filter((creative) => sourceIds.includes(creative.id)).map((creative) => [creative.id, creative]));
     const iterations = rows.map((row) => mapIteration(row, creativesById.get(row.source_creative_id), clientId));
-    const statics = iterations.filter((iteration) => iteration.format === "static");
+    const statics = iterations.filter((iteration) => iteration.format === "static" && isImageOnlyIterationSource(iteration));
     const videos = iterations.filter((iteration) => iteration.format === "video");
 
     return {
@@ -720,7 +727,7 @@ async function getAdIterationsOverviewUncached(clientId: string): Promise<AdIter
       videos,
       latestGenerations: (generationRows ?? []) as GenerationRow[],
       totals: {
-        all: iterations.length,
+        all: statics.length + videos.length,
         statics: statics.length,
         videos: videos.length
       },
