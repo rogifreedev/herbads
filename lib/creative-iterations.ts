@@ -80,6 +80,11 @@ type SourceCreative = {
   transcript: CreativeVideoTranscript | null;
 };
 
+type ResolvedIterationDateRange = {
+  since: string | null;
+  until: string | null;
+};
+
 type SourceSelectionMode = "strict" | "score_fallback" | "performance_fallback";
 
 type SourceSelectionDiagnostics = {
@@ -288,11 +293,21 @@ function daysAgo(days: number) {
   return dateInput(date);
 }
 
-function defaultDateRange(options: GenerateAdIterationsOptions): Required<CreativeInsightDateRange> {
+function defaultDateRange(options: GenerateAdIterationsOptions): ResolvedIterationDateRange {
+  const hasSince = Object.prototype.hasOwnProperty.call(options, "since");
+  const hasUntil = Object.prototype.hasOwnProperty.call(options, "until");
+
   return {
-    since: options.since ?? daysAgo(29),
-    until: options.until ?? today()
+    since: hasSince ? options.since ?? null : daysAgo(29),
+    until: hasUntil ? options.until ?? null : today()
   };
+}
+
+function dateRangeLabel(dateRange: ResolvedIterationDateRange) {
+  if (dateRange.since && dateRange.until) return `${dateRange.since} bis ${dateRange.until}`;
+  if (dateRange.since) return `ab ${dateRange.since}`;
+  if (dateRange.until) return `bis ${dateRange.until}`;
+  return "gesamter Zeitraum";
 }
 
 function isoWeekKey(date = new Date()) {
@@ -450,7 +465,7 @@ function sourcePromptRecord(source: SourceCreative) {
   };
 }
 
-async function loadSources(clientId: string, format: IterationFormat, dateRange: Required<CreativeInsightDateRange>, limit: number): Promise<LoadedSources> {
+async function loadSources(clientId: string, format: IterationFormat, dateRange: ResolvedIterationDateRange, limit: number): Promise<LoadedSources> {
   const supabase = createSupabaseServiceRoleClient();
   const [{ creatives }, { data: analyses }, { data: transcripts }] = await Promise.all([
     listClientCreatives(clientId, dateRange),
@@ -553,14 +568,14 @@ async function callOpenRouter(prompt: string) {
   return { model, payload, text: textFromContent(payload.choices?.[0]?.message?.content) };
 }
 
-function iterationPrompt(input: { format: IterationFormat; count: number; sources: SourceCreative[]; dateRange: Required<CreativeInsightDateRange>; recentIterations: Array<{ title: string | null; angle: string | null; source_creative_id: string | null }> }) {
+function iterationPrompt(input: { format: IterationFormat; count: number; sources: SourceCreative[]; dateRange: ResolvedIterationDateRange; recentIterations: Array<{ title: string | null; angle: string | null; source_creative_id: string | null }> }) {
   const formatInstruction = input.format === "static"
     ? "Erzeuge Static-Ad-Iterationen. Fokus: neue Bildidee, Layout-/Overlay-Ansatz, Headline/Title und klare Beschreibung, wie die Vorlage besser oder frischer umgesetzt wird."
     : "Erzeuge Video-Ad-Iterationen. Fokus: neue Hook, konkretes Script, Produktionshinweise/Shotlist und klare Ableitung aus dem funktionierenden Video.";
 
   return `Erstelle ${input.count} neue ${input.format === "static" ? "Static" : "Video"} Iterationen aus echten Bestperformer Meta Ads.
 
-Zeitraum: ${input.dateRange.since} bis ${input.dateRange.until}
+Zeitraum: ${dateRangeLabel(input.dateRange)}
 
 ${formatInstruction}
 

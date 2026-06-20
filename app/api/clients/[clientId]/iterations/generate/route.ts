@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateAdIterations, type GenerateIterationFormat } from "@/lib/creative-iterations";
+import { generateAdIterations, type GenerateAdIterationsOptions, type GenerateIterationFormat } from "@/lib/creative-iterations";
 
 export const runtime = "nodejs";
 
@@ -15,17 +15,24 @@ function formatParam(value: unknown): GenerateIterationFormat {
   return value === "static" || value === "video" || value === "all" ? value : "all";
 }
 
+function requestBody(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { clientId } = await context.params;
-    const body = await request.json().catch(() => ({}));
-    const result = await generateAdIterations(clientId, {
+    const body = requestBody(await request.json().catch(() => ({})));
+    const options: GenerateAdIterationsOptions = {
       format: formatParam(body.format),
       count: Number(body.count) || 6,
-      since: dateParam(body.since),
-      until: dateParam(body.until),
       mode: "manual"
-    });
+    };
+
+    if (Object.prototype.hasOwnProperty.call(body, "since")) options.since = dateParam(body.since);
+    if (Object.prototype.hasOwnProperty.call(body, "until")) options.until = dateParam(body.until);
+
+    const result = await generateAdIterations(clientId, options);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
