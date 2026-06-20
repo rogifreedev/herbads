@@ -7,10 +7,10 @@ import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { normalizeCompetitorAngle } from "@/lib/competitor-angles";
 import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
 import { getCompetitorReachBreakdown, getCompetitorReachByGender, getCompetitorReachByLocation, normalizeCompetitorGender } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type Competitor, type CompetitorCreative } from "@/lib/competitors";
-import { normalizeExplicitAngle } from "@/lib/creative-angles";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
 import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
@@ -778,7 +778,7 @@ function buildLandingpageRows(creatives: CompetitorCreative[]): LandingpageRow[]
 function canonicalCompetitorAngle(value: string | null | undefined) {
   const angle = value?.trim();
   if (!angle) return "Unclassified";
-  return normalizeExplicitAngle(angle) ?? angle;
+  return normalizeCompetitorAngle(angle) ?? angle;
 }
 
 function compareCreativesByImportance(a: CompetitorCreative, b: CompetitorCreative) {
