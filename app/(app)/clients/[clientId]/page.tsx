@@ -6,19 +6,21 @@ import { MetricCard } from "@/components/metric-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getClientById } from "@/lib/clients";
 import { resolveInsightDateFilters, type DateFilterSearchParams } from "@/lib/date-filters";
 import { listClientCreatives } from "@/lib/creatives";
-import { formatCurrency, formatDecimal, formatNumber, formatPercent, getClientPerformanceMetricsForRange } from "@/lib/metrics";
+import { formatCurrency, formatDecimal, formatNumber, formatPercent, getClientPerformanceBreakdownsForRange, getClientPerformanceMetricsForRange, type PerformanceBreakdownDimension, type PerformanceBreakdownRow } from "@/lib/metrics";
 
 export default async function ClientDashboardPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
-  const [{ client, error }, { metrics, hasData }, { creatives }] = await Promise.all([
+  const [{ client, error }, { metrics, hasData }, { creatives }, breakdowns] = await Promise.all([
     getClientById(clientId),
     getClientPerformanceMetricsForRange(clientId, activeDateRange),
-    listClientCreatives(clientId, activeDateRange)
+    listClientCreatives(clientId, activeDateRange),
+    getClientPerformanceBreakdownsForRange(clientId, activeDateRange)
   ]);
   const metricCards = hasData
     ? [
@@ -73,12 +75,21 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
       {error ? (
         <Alert variant="warning"><AlertDescription>Supabase-Tabellen sind noch nicht erreichbar. Diese Seite nutzt bis zur Migration Mock-Daten.</AlertDescription></Alert>
       ) : null}
+      {breakdowns.error ? (
+        <Alert variant="warning"><AlertDescription>Meta Demografie-Breakdowns konnten noch nicht geladen werden: {breakdowns.error}</AlertDescription></Alert>
+      ) : null}
       {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         {metricCards.map((metric) => (
           <MetricCard key={metric.label} {...metric} />
         ))}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <PerformanceBreakdownCard title="Laender" valueLabel="Land" dimension="country" rows={breakdowns.countries} emptyLabel="Noch keine Laender-Breakdowns. Fuehre einen neuen Meta Sync aus, damit Meta Country-Daten importiert." />
+        <PerformanceBreakdownCard title="Alter" valueLabel="Alter" dimension="age" rows={breakdowns.ages} emptyLabel="Noch keine Alters-Breakdowns. Fuehre einen neuen Meta Sync aus, damit Meta Age-Daten importiert." />
+        <PerformanceBreakdownCard title="Gender" valueLabel="Gender" dimension="gender" rows={breakdowns.genders} emptyLabel="Noch keine Gender-Breakdowns. Fuehre einen neuen Meta Sync aus, damit Meta Gender-Daten importiert." />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -93,5 +104,71 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
         </Card>
       </section>
     </div>
+  );
+}
+
+const COUNTRY_LABELS: Record<string, string> = {
+  AT: "Oesterreich",
+  CH: "Schweiz",
+  DE: "Deutschland",
+  ES: "Spanien",
+  FR: "Frankreich",
+  GB: "Vereinigtes Koenigreich",
+  IT: "Italien",
+  NL: "Niederlande",
+  PL: "Polen",
+  US: "USA"
+};
+
+const GENDER_LABELS: Record<string, string> = {
+  female: "Female",
+  male: "Male",
+  unknown: "Unknown"
+};
+
+function breakdownValueLabel(dimension: PerformanceBreakdownDimension, value: string) {
+  const normalizedValue = value.trim();
+  if (dimension === "country") return COUNTRY_LABELS[normalizedValue.toUpperCase()] ?? normalizedValue.toUpperCase();
+  if (dimension === "gender") return GENDER_LABELS[normalizedValue.toLowerCase()] ?? normalizedValue;
+  return normalizedValue;
+}
+
+function PerformanceBreakdownCard({ title, valueLabel, dimension, rows, emptyLabel }: { title: string; valueLabel: string; dimension: PerformanceBreakdownDimension; rows: PerformanceBreakdownRow[]; emptyLabel: string }) {
+  return (
+    <Card className="border-herb-border bg-herb-surface/90">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <p className="rounded-lg border border-herb-border bg-black/15 p-4 text-sm leading-6 text-white/55">{emptyLabel}</p>
+        ) : (
+          <div className="max-h-[360px] overflow-auto rounded-xl border border-herb-border">
+            <Table className="min-w-[560px]">
+              <TableHeader className="sticky top-0 z-10 bg-herb-surface">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{valueLabel}</TableHead>
+                  <TableHead>Spend</TableHead>
+                  <TableHead>Conv.</TableHead>
+                  <TableHead>Reach</TableHead>
+                  <TableHead>Spend-Anteil</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={`${dimension}-${row.value}`}>
+                    <TableCell className="font-medium text-white">{breakdownValueLabel(dimension, row.value)}</TableCell>
+                    <TableCell className="text-white">{formatCurrency(row.metrics.spend)}</TableCell>
+                    <TableCell className="text-white">{formatNumber(row.metrics.purchases)}</TableCell>
+                    <TableCell className="text-white/70">{formatNumber(row.metrics.reach)}</TableCell>
+                    <TableCell className="text-primary">{formatPercent(row.spendShare)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

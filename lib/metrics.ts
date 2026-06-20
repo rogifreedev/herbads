@@ -28,6 +28,17 @@ export type PerformanceMetrics = {
   outboundCvr: number | null;
 };
 
+export type PerformanceBreakdownDimension = "country" | "age" | "gender";
+
+export type PerformanceBreakdownRow = {
+  dimension: PerformanceBreakdownDimension;
+  value: string;
+  metrics: PerformanceMetrics;
+  spendShare: number | null;
+  conversionShare: number | null;
+  reachShare: number | null;
+};
+
 type InsightRow = {
   spend: number | string | null;
   impressions: number | null;
@@ -40,6 +51,11 @@ type InsightRow = {
   engagement: number | null;
   video_3s_views: number | null;
   thruplays: number | null;
+};
+
+type BreakdownMetricRow = InsightRow & {
+  breakdown_type: string | null;
+  breakdown_value: string | null;
 };
 
 export const emptyMetrics: PerformanceMetrics = {
@@ -139,6 +155,67 @@ export const getClientPerformanceMetrics = unstable_cache(
 
 export function getClientPerformanceMetricsForRange(clientId: string, dateRange?: InsightDateRange) {
   return getClientPerformanceMetrics(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
+}
+
+function isPerformanceBreakdownDimension(value: string | null): value is PerformanceBreakdownDimension {
+  return value === "country" || value === "age" || value === "gender";
+}
+
+function share(value: number, total: number) {
+  return total > 0 ? (value / total) * 100 : null;
+}
+
+function buildBreakdownRows(rows: BreakdownMetricRow[], dimension: PerformanceBreakdownDimension): PerformanceBreakdownRow[] {
+  const scopedRows = rows.filter((row) => row.breakdown_type === dimension && row.breakdown_value);
+  const totals = aggregateInsightRows(scopedRows);
+
+  return scopedRows
+    .map((row) => {
+      const metrics = aggregateInsightRows([row]);
+
+      return {
+        dimension,
+        value: row.breakdown_value as string,
+        metrics,
+        spendShare: share(metrics.spend, totals.spend),
+        conversionShare: share(metrics.purchases, totals.purchases),
+        reachShare: share(metrics.reach, totals.reach)
+      };
+    })
+    .sort((a, b) => b.metrics.spend - a.metrics.spend || b.metrics.purchases - a.metrics.purchases || b.metrics.reach - a.metrics.reach || a.value.localeCompare(b.value));
+}
+
+async function getClientPerformanceBreakdownsUncached(clientId: string, since?: string | null, until?: string | null) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase.rpc("get_client_performance_breakdowns", {
+    p_client_id: clientId,
+    p_since: since ?? null,
+    p_until: until ?? null
+  });
+
+  if (error) {
+    return { countries: [], ages: [], genders: [], hasData: false, error: error.message };
+  }
+
+  const rows = ((data ?? []) as BreakdownMetricRow[]).filter((row) => isPerformanceBreakdownDimension(row.breakdown_type));
+
+  return {
+    countries: buildBreakdownRows(rows, "country"),
+    ages: buildBreakdownRows(rows, "age"),
+    genders: buildBreakdownRows(rows, "gender"),
+    hasData: rows.length > 0,
+    error: null
+  };
+}
+
+export const getClientPerformanceBreakdowns = unstable_cache(
+  getClientPerformanceBreakdownsUncached,
+  ["client-performance-breakdowns-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.metrics] }
+);
+
+export function getClientPerformanceBreakdownsForRange(clientId: string, dateRange?: InsightDateRange) {
+  return getClientPerformanceBreakdowns(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
 }
 
 async function getGlobalPerformanceMetricsUncached() {

@@ -104,6 +104,9 @@ type MetaInsight = JsonRecord & {
   campaign_id?: string;
   adset_id?: string;
   ad_id?: string;
+  country?: string;
+  age?: string;
+  gender?: string;
   impressions?: string;
   reach?: string;
   frequency?: string;
@@ -149,11 +152,27 @@ const ADSET_FIELDS = "id,name,campaign_id,optimization_goal,billing_event,status
 const AD_FIELDS = "id,name,campaign_id,adset_id,creative{id},status,effective_status,created_time,updated_time";
 const CREATIVE_FIELDS = "id,name,title,body,object_story_spec,asset_feed_spec,call_to_action_type,thumbnail_url,image_url,image_hash,video_id,object_url,url_tags,effective_object_story_id";
 const INSIGHTS_FIELDS = "date_start,date_stop,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,reach,frequency,spend,clicks,inline_link_clicks,outbound_clicks,ctr,cpc,cpm,actions,action_values,video_thruplay_watched_actions";
+const BREAKDOWN_INSIGHTS_FIELDS = "date_start,date_stop,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,reach,frequency,spend,clicks,inline_link_clicks,outbound_clicks,ctr,cpc,cpm,actions,action_values";
 const ADIMAGE_FIELDS = "hash,url,permalink_url,width,height";
 const VIDEO_FIELDS = "thumbnails{uri,is_preferred,width,height},picture,source,permalink_url,embed_html";
 const PURCHASE_ACTION_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase"];
 const ENGAGEMENT_ACTION_TYPES = ["post_engagement", "page_engagement", "post_reaction", "comment", "post", "like"];
 const OUTBOUND_CLICK_ACTION_TYPES = ["outbound_click"];
+const DEMOGRAPHIC_BREAKDOWNS = [
+  { type: "country", field: "country" },
+  { type: "age", field: "age" },
+  { type: "gender", field: "gender" }
+] as const;
+
+type StoredAd = {
+  id: string;
+  meta_ad_id: string;
+  campaign_id: string | null;
+  adset_id: string | null;
+  creative_id: string | null;
+};
+
+type StoredAdMap = Map<string, StoredAd>;
 
 function getMetaToken() {
   const token = getOptionalEnv("META_SYSTEM_USER_ACCESS_TOKEN");
@@ -364,6 +383,64 @@ function sumActionValue(actions: MetaAction[] | undefined, actionTypes: string[]
   }, 0);
 }
 
+function mapInsightRow(clientId: string, adAccountId: string, adIdMap: StoredAdMap, insight: MetaInsight) {
+  if (!insight.ad_id) return null;
+  const storedAd = adIdMap.get(insight.ad_id);
+  if (!storedAd?.id) return null;
+
+  const spend = toNumber(insight.spend);
+  const purchases = findActionValue(insight.actions, PURCHASE_ACTION_TYPES);
+  const purchaseValue = findActionValue(insight.action_values, PURCHASE_ACTION_TYPES);
+  const impressions = toInteger(insight.impressions);
+  const clicks = toInteger(insight.clicks);
+
+  return {
+    client_id: clientId,
+    ad_account_id: adAccountId,
+    campaign_id: storedAd.campaign_id ?? null,
+    adset_id: storedAd.adset_id ?? null,
+    ad_id: storedAd.id,
+    creative_id: storedAd.creative_id ?? null,
+    date: insight.date_start,
+    spend,
+    impressions,
+    reach: toInteger(insight.reach),
+    frequency: insight.frequency ? toNumber(insight.frequency) : null,
+    clicks,
+    link_clicks: toInteger(insight.inline_link_clicks),
+    outbound_clicks: toInteger(findActionValue(insight.outbound_clicks, OUTBOUND_CLICK_ACTION_TYPES)),
+    ctr: insight.ctr ? toNumber(insight.ctr) : null,
+    cpc: insight.cpc ? toNumber(insight.cpc) : null,
+    cpm: insight.cpm ? toNumber(insight.cpm) : null,
+    purchases,
+    purchase_value: purchaseValue,
+    cost_per_purchase: purchases > 0 ? spend / purchases : null,
+    roas: spend > 0 ? purchaseValue / spend : null,
+    engagement: toInteger(sumActionValue(insight.actions, ENGAGEMENT_ACTION_TYPES)),
+    video_3s_views: toInteger(findActionValue(insight.actions, ["video_view"])),
+    thruplays: toInteger(findActionValue(insight.video_thruplay_watched_actions, ["video_view"])),
+    raw: insight
+  };
+}
+
+function mapBreakdownInsightRow(
+  clientId: string,
+  adAccountId: string,
+  adIdMap: StoredAdMap,
+  insight: MetaInsight,
+  breakdown: (typeof DEMOGRAPHIC_BREAKDOWNS)[number]
+) {
+  const baseRow = mapInsightRow(clientId, adAccountId, adIdMap, insight);
+  const breakdownValue = insight[breakdown.field];
+  if (!baseRow || !breakdownValue) return null;
+
+  return {
+    ...baseRow,
+    breakdown_type: breakdown.type,
+    breakdown_value: String(breakdownValue)
+  };
+}
+
 function dateDaysAgo(days: number) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - days);
@@ -414,6 +491,44 @@ function resolveInsightDateRange(input?: { since?: string | null; until?: string
   if (since > until) throw new Error("Sync Startdatum darf nicht nach dem Enddatum liegen.");
 
   return { since, until };
+}
+
+async function syncMetaDemographicBreakdowns(clientId: string, adAccountId: string, metaAccountId: string, adIdMap: StoredAdMap, insightRanges: Array<{ since: string; until: string }>) {
+  const supabase = createSupabaseServiceRoleClient();
+  const errors: Array<{ breakdown: string; since: string; until: string; error: string }> = [];
+  let rowCount = 0;
+
+  for (const range of insightRanges) {
+    const timeRange = encodeURIComponent(JSON.stringify(range));
+
+    for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
+      try {
+        const insights = await fetchMetaList<MetaInsight>(
+          `${metaAccountId}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&breakdowns=${breakdown.field}&fields=${BREAKDOWN_INSIGHTS_FIELDS},${breakdown.field}&limit=100`
+        );
+        const breakdownRows = insights
+          .map((insight) => mapBreakdownInsightRow(clientId, adAccountId, adIdMap, insight, breakdown))
+          .filter((row): row is NonNullable<typeof row> => Boolean(row));
+
+        rowCount += breakdownRows.length;
+        if (breakdownRows.length === 0) continue;
+
+        for (const breakdownChunk of chunk(breakdownRows, 500)) {
+          const { error } = await supabase.from("creative_insight_breakdowns_daily").upsert(breakdownChunk, { onConflict: "ad_id,date,breakdown_type,breakdown_value" });
+          if (error) throw new Error(error.message);
+        }
+      } catch (error) {
+        errors.push({
+          breakdown: breakdown.type,
+          since: range.since,
+          until: range.until,
+          error: error instanceof Error ? error.message : "Meta Breakdown Sync fehlgeschlagen."
+        });
+      }
+    }
+  }
+
+  return { rowCount, errorCount: errors.length, errors: errors.slice(0, 10) };
 }
 
 export async function syncMetaForClient(clientId: string, options?: { since?: string | null; until?: string | null }) {
@@ -571,7 +686,7 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
       .from("meta_ads")
       .select("id,meta_ad_id,campaign_id,adset_id,creative_id")
       .eq("ad_account_id", account.id);
-    const adIdMap = new Map((storedAds ?? []).map((ad) => [ad.meta_ad_id, ad]));
+    const adIdMap: StoredAdMap = new Map(((storedAds ?? []) as StoredAd[]).map((ad) => [ad.meta_ad_id, ad]));
 
     let insightRowCount = 0;
     const insightRanges = splitDateRange(insightDateRange);
@@ -580,45 +695,7 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
       const insights = await fetchMetaList<MetaInsight>(
         `${account.meta_account_id}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&fields=${INSIGHTS_FIELDS}&limit=100`
       );
-      const insightRows = insights
-        .map((insight) => {
-          if (!insight.ad_id) return null;
-          const storedAd = adIdMap.get(insight.ad_id);
-          if (!storedAd?.id) return null;
-
-          const spend = toNumber(insight.spend);
-          const purchases = findActionValue(insight.actions, PURCHASE_ACTION_TYPES);
-          const purchaseValue = findActionValue(insight.action_values, PURCHASE_ACTION_TYPES);
-
-          return {
-            client_id: clientId,
-            ad_account_id: account.id,
-            campaign_id: storedAd.campaign_id ?? null,
-            adset_id: storedAd.adset_id ?? null,
-            ad_id: storedAd.id,
-            creative_id: storedAd.creative_id ?? null,
-            date: insight.date_start,
-            spend,
-            impressions: toInteger(insight.impressions),
-            reach: toInteger(insight.reach),
-            frequency: insight.frequency ? toNumber(insight.frequency) : null,
-            clicks: toInteger(insight.clicks),
-            link_clicks: toInteger(insight.inline_link_clicks),
-            outbound_clicks: toInteger(findActionValue(insight.outbound_clicks, OUTBOUND_CLICK_ACTION_TYPES)),
-            ctr: insight.ctr ? toNumber(insight.ctr) : null,
-            cpc: insight.cpc ? toNumber(insight.cpc) : null,
-            cpm: insight.cpm ? toNumber(insight.cpm) : null,
-            purchases,
-            purchase_value: purchaseValue,
-            cost_per_purchase: purchases > 0 ? spend / purchases : null,
-            roas: spend > 0 ? purchaseValue / spend : null,
-            engagement: toInteger(sumActionValue(insight.actions, ENGAGEMENT_ACTION_TYPES)),
-            video_3s_views: toInteger(findActionValue(insight.actions, ["video_view"])),
-            thruplays: toInteger(findActionValue(insight.video_thruplay_watched_actions, ["video_view"])),
-            raw: insight
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row));
+      const insightRows = insights.map((insight) => mapInsightRow(clientId, account.id, adIdMap, insight)).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
       insightRowCount += insightRows.length;
       if (insightRows.length > 0) {
@@ -628,12 +705,17 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
       }
     }
 
+    const breakdownSummary = await syncMetaDemographicBreakdowns(clientId, account.id, account.meta_account_id, adIdMap, insightRanges);
+
     const summary = {
       campaigns: campaigns.length,
       adSets: adSets.length,
       ads: ads.length,
       creatives: creatives.length,
       insights: insightRowCount,
+      breakdownInsights: breakdownSummary.rowCount,
+      breakdownErrorCount: breakdownSummary.errorCount,
+      breakdownErrors: breakdownSummary.errors,
       since: insightDateRange.since,
       until: insightDateRange.until,
       insightRanges: insightRanges.length
@@ -682,7 +764,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
       .from("meta_ads")
       .select("id,meta_ad_id,campaign_id,adset_id,creative_id")
       .eq("ad_account_id", account.id);
-    const adIdMap = new Map((storedAds ?? []).map((ad) => [ad.meta_ad_id, ad]));
+    const adIdMap: StoredAdMap = new Map(((storedAds ?? []) as StoredAd[]).map((ad) => [ad.meta_ad_id, ad]));
 
     if (adIdMap.size === 0) {
       throw new Error("Keine gespeicherten Meta Ads gefunden. Bitte zuerst einen vollstaendigen Meta Sync ausfuehren.");
@@ -695,45 +777,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
       const insights = await fetchMetaList<MetaInsight>(
         `${account.meta_account_id}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&fields=${INSIGHTS_FIELDS}&limit=100`
       );
-      const insightRows = insights
-        .map((insight) => {
-          if (!insight.ad_id) return null;
-          const storedAd = adIdMap.get(insight.ad_id);
-          if (!storedAd?.id) return null;
-
-          const spend = toNumber(insight.spend);
-          const purchases = findActionValue(insight.actions, PURCHASE_ACTION_TYPES);
-          const purchaseValue = findActionValue(insight.action_values, PURCHASE_ACTION_TYPES);
-
-          return {
-            client_id: clientId,
-            ad_account_id: account.id,
-            campaign_id: storedAd.campaign_id ?? null,
-            adset_id: storedAd.adset_id ?? null,
-            ad_id: storedAd.id,
-            creative_id: storedAd.creative_id ?? null,
-            date: insight.date_start,
-            spend,
-            impressions: toInteger(insight.impressions),
-            reach: toInteger(insight.reach),
-            frequency: insight.frequency ? toNumber(insight.frequency) : null,
-            clicks: toInteger(insight.clicks),
-            link_clicks: toInteger(insight.inline_link_clicks),
-            outbound_clicks: toInteger(findActionValue(insight.outbound_clicks, OUTBOUND_CLICK_ACTION_TYPES)),
-            ctr: insight.ctr ? toNumber(insight.ctr) : null,
-            cpc: insight.cpc ? toNumber(insight.cpc) : null,
-            cpm: insight.cpm ? toNumber(insight.cpm) : null,
-            purchases,
-            purchase_value: purchaseValue,
-            cost_per_purchase: purchases > 0 ? spend / purchases : null,
-            roas: spend > 0 ? purchaseValue / spend : null,
-            engagement: toInteger(sumActionValue(insight.actions, ENGAGEMENT_ACTION_TYPES)),
-            video_3s_views: toInteger(findActionValue(insight.actions, ["video_view"])),
-            thruplays: toInteger(findActionValue(insight.video_thruplay_watched_actions, ["video_view"])),
-            raw: insight
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row));
+      const insightRows = insights.map((insight) => mapInsightRow(clientId, account.id, adIdMap, insight)).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
       insightRowCount += insightRows.length;
       if (insightRows.length > 0) {
@@ -743,12 +787,17 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
       }
     }
 
+    const breakdownSummary = await syncMetaDemographicBreakdowns(clientId, account.id, account.meta_account_id, adIdMap, insightRanges);
+
     const summary = {
       campaigns: 0,
       adSets: 0,
       ads: adIdMap.size,
       creatives: 0,
       insights: insightRowCount,
+      breakdownInsights: breakdownSummary.rowCount,
+      breakdownErrorCount: breakdownSummary.errorCount,
+      breakdownErrors: breakdownSummary.errors,
       since: insightDateRange.since,
       until: insightDateRange.until,
       insightRanges: insightRanges.length,
