@@ -89,17 +89,24 @@ export default async function IterationsPage({ params, searchParams }: { params:
             <CardTitle>Letzte Generierungen</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm text-white/60 md:grid-cols-2 xl:grid-cols-4">
-            {overview.latestGenerations.map((generation) => (
-              <div key={generation.id} className="rounded-xl border border-herb-border bg-black/20 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-white">{generation.format}</span>
-                  <Badge variant={generation.status === "completed" ? "success" : generation.status === "failed" ? "destructive" : "secondary"}>{generation.status}</Badge>
+            {overview.latestGenerations.map((generation) => {
+              const sourceCount = generationSourceCount(generation);
+              const note = generationNote(generation);
+
+              return (
+                <div key={generation.id} className="rounded-xl border border-herb-border bg-black/20 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium text-white">{generation.format}</span>
+                    <Badge variant={generation.status === "completed" ? "success" : generation.status === "failed" ? "destructive" : "secondary"}>{generation.status}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-white/45">{generation.generation_key}</p>
+                  <p className="mt-1 text-xs text-white/45">{formatDate(generation.created_at)}</p>
+                  {sourceCount !== null ? <p className="mt-2 text-xs text-white/55">Quellen: {formatNumber(sourceCount)}</p> : null}
+                  {note ? <p className="mt-2 text-xs leading-5 text-white/50">{note}</p> : null}
+                  {generation.error_message ? <p className="mt-2 text-xs text-red-200">{generation.error_message}</p> : null}
                 </div>
-                <p className="mt-2 text-xs text-white/45">{generation.generation_key}</p>
-                <p className="mt-1 text-xs text-white/45">{formatDate(generation.created_at)}</p>
-                {generation.error_message ? <p className="mt-2 text-xs text-red-200">{generation.error_message}</p> : null}
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       ) : null}
@@ -123,6 +130,30 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
       </CardContent>
     </Card>
   );
+}
+
+function recordValue(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function generationSourceCount(generation: { prompt_context?: Record<string, unknown> | null }) {
+  const context = recordValue(generation.prompt_context);
+  const value = context?.sourceCount;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function generationNote(generation: { prompt_context?: Record<string, unknown> | null; raw_response?: Record<string, unknown> | null }) {
+  const raw = recordValue(generation.raw_response);
+  const context = recordValue(generation.prompt_context);
+  const diagnostics = recordValue(context?.sourceDiagnostics);
+  const rawNote = raw?.note;
+  const contextNote = context?.sourceSelectionNote;
+  const diagnosticsNote = diagnostics?.note;
+
+  if (typeof rawNote === "string" && rawNote) return rawNote;
+  if (typeof contextNote === "string" && contextNote) return contextNote;
+  if (typeof diagnosticsNote === "string" && diagnosticsNote) return diagnosticsNote;
+  return null;
 }
 
 function SourceLink({ iteration }: { iteration: AdIteration }) {

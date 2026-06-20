@@ -42,6 +42,8 @@ type GenerationRow = {
   status: string;
   period_start: string | null;
   period_end: string | null;
+  prompt_context: JsonRecord | null;
+  raw_response: JsonRecord | null;
   error_message: string | null;
   created_at: string;
 };
@@ -76,6 +78,26 @@ type SourceCreative = {
   creative: CreativeListItem;
   analysis: AnalysisRow | null;
   transcript: CreativeVideoTranscript | null;
+};
+
+type SourceSelectionMode = "strict" | "score_fallback" | "performance_fallback";
+
+type SourceSelectionDiagnostics = {
+  totalCreatives: number;
+  formatMatches: number;
+  strictMatches: number;
+  scoreFallbackMatches: number;
+  performanceFallbackMatches: number;
+  selected: number;
+  selectionMode: SourceSelectionMode;
+  transcriptMatches?: number;
+  transcriptMode?: "completed_transcript" | "analysis_or_copy_fallback" | "not_required";
+  note: string;
+};
+
+type LoadedSources = {
+  sources: SourceCreative[];
+  diagnostics: SourceSelectionDiagnostics;
 };
 
 type GeneratedIteration = {
@@ -288,13 +310,69 @@ function generationKey(options: GenerateAdIterationsOptions) {
   return `manual:${Date.now()}`;
 }
 
+function hasVideoMedia(creative: CreativeListItem) {
+  return Boolean(creative.videoId || creative.videoUrl || creative.videoEmbedUrl || creative.videoPermalinkUrl);
+}
+
+function hasStaticMedia(creative: CreativeListItem) {
+  return Boolean(creative.imageUrl || creative.thumbnailUrl || creative.title || creative.body);
+}
+
 function sourceTypeMatches(creative: CreativeListItem, format: IterationFormat) {
   const type = creative.type.toLowerCase();
-  return format === "video" ? VIDEO_TYPES.has(type) : STATIC_TYPES.has(type);
+  if (format === "video") return VIDEO_TYPES.has(type) || hasVideoMedia(creative);
+  return STATIC_TYPES.has(type) || (!hasVideoMedia(creative) && hasStaticMedia(creative));
 }
 
 function enoughPerformance(creative: CreativeListItem) {
   return creative.performanceScore.score >= 60 && (creative.metrics.spend >= 50 || creative.metrics.impressions >= 2000);
+}
+
+function hasAnyPerformance(creative: CreativeListItem) {
+  return creative.metrics.spend > 0 || creative.metrics.impressions > 0 || creative.metrics.reach > 0 || creative.metrics.purchases > 0 || creative.metrics.video3sViews > 0;
+}
+
+function fallbackPerformance(creative: CreativeListItem) {
+  if (!hasAnyPerformance(creative)) return false;
+  return creative.performanceScore.score >= 50 || creative.metrics.purchases > 0 || creative.metrics.spend >= 1 || creative.metrics.impressions >= 100;
+}
+
+function hasCompletedTranscript(source: SourceCreative) {
+  return source.transcript?.status === "completed" && Boolean(source.transcript.transcript);
+}
+
+function hasVideoIterationContext(source: SourceCreative) {
+  if (hasCompletedTranscript(source)) return true;
+  return Boolean(
+    source.analysis?.hook ||
+    source.analysis?.summary ||
+    source.analysis?.detected_text ||
+    source.creative.body ||
+    source.creative.title ||
+    source.creative.name
+  );
+}
+
+function sortSourcesByPerformance(a: SourceCreative, b: SourceCreative) {
+  return (
+    b.creative.performanceScore.score - a.creative.performanceScore.score ||
+    b.creative.metrics.purchases - a.creative.metrics.purchases ||
+    b.creative.metrics.spend - a.creative.metrics.spend ||
+    b.creative.metrics.impressions - a.creative.metrics.impressions
+  );
+}
+
+function sourceSelectionNote(diagnostics: Omit<SourceSelectionDiagnostics, "note">) {
+  if (diagnostics.selected === 0) {
+    return `Keine Quellen fuer ${diagnostics.formatMatches} passende Creatives gefunden. Strenge Bestperformer: ${diagnostics.strictMatches}, Fallback-Kandidaten: ${diagnostics.scoreFallbackMatches}.`;
+  }
+  if (diagnostics.selectionMode === "strict") {
+    return `${diagnostics.selected} strenge Bestperformer als Quellen genutzt.`;
+  }
+  if (diagnostics.selectionMode === "score_fallback") {
+    return `${diagnostics.selected} Quellen ueber Score-/Performance-Fallback genutzt, weil der harte Spend/Impression-Filter leer war.`;
+  }
+  return `${diagnostics.selected} Quellen mit vorhandener Performance genutzt, weil keine strengen Bestperformer gefunden wurden.`;
 }
 
 function performanceSnapshot(source: SourceCreative) {
@@ -372,7 +450,7 @@ function sourcePromptRecord(source: SourceCreative) {
   };
 }
 
-async function loadSources(clientId: string, format: IterationFormat, dateRange: Required<CreativeInsightDateRange>, limit: number) {
+async function loadSources(clientId: string, format: IterationFormat, dateRange: Required<CreativeInsightDateRange>, limit: number): Promise<LoadedSources> {
   const supabase = createSupabaseServiceRoleClient();
   const [{ creatives }, { data: analyses }, { data: transcripts }] = await Promise.all([
     listClientCreatives(clientId, dateRange),
@@ -389,18 +467,63 @@ async function loadSources(clientId: string, format: IterationFormat, dateRange:
 
   const analysesByCreative = latestByCreative((analyses ?? []) as AnalysisRow[]);
   const transcriptsByCreative = new Map(((transcripts ?? []) as TranscriptRow[]).map((row) => [row.creative_id, mapTranscript(row)]));
-  const candidates = creatives
+  const formatMatches = creatives
     .filter((creative) => sourceTypeMatches(creative, format))
-    .filter(enoughPerformance)
     .map((creative): SourceCreative => ({
       creative,
       analysis: analysesByCreative.get(creative.id) ?? null,
       transcript: transcriptsByCreative.get(creative.id) ?? null
-    }))
-    .filter((source) => format !== "video" || (source.transcript?.status === "completed" && Boolean(source.transcript.transcript)))
-    .sort((a, b) => b.creative.performanceScore.score - a.creative.performanceScore.score || b.creative.metrics.spend - a.creative.metrics.spend);
+    }));
 
-  return candidates.slice(0, Math.max(limit, 1));
+  const strictMatches = formatMatches.filter((source) => enoughPerformance(source.creative));
+  const scoreFallbackMatches = formatMatches.filter((source) => fallbackPerformance(source.creative));
+  const performanceFallbackMatches = formatMatches.filter((source) => hasAnyPerformance(source.creative));
+  let selectionMode: SourceSelectionMode = "strict";
+  let candidates = strictMatches;
+
+  if (candidates.length === 0) {
+    selectionMode = "score_fallback";
+    candidates = scoreFallbackMatches;
+  }
+
+  if (candidates.length === 0) {
+    selectionMode = "performance_fallback";
+    candidates = performanceFallbackMatches;
+  }
+
+  let transcriptMode: SourceSelectionDiagnostics["transcriptMode"] = "not_required";
+  const transcriptMatches = format === "video" ? candidates.filter(hasCompletedTranscript) : [];
+
+  if (format === "video") {
+    if (transcriptMatches.length > 0) {
+      transcriptMode = "completed_transcript";
+      candidates = transcriptMatches;
+    } else {
+      transcriptMode = "analysis_or_copy_fallback";
+      candidates = candidates.filter(hasVideoIterationContext);
+    }
+  }
+
+  const selected = candidates.sort(sortSourcesByPerformance).slice(0, Math.max(limit, 1));
+  const diagnosticsWithoutNote = {
+    totalCreatives: creatives.length,
+    formatMatches: formatMatches.length,
+    strictMatches: strictMatches.length,
+    scoreFallbackMatches: scoreFallbackMatches.length,
+    performanceFallbackMatches: performanceFallbackMatches.length,
+    selected: selected.length,
+    selectionMode,
+    transcriptMatches: format === "video" ? transcriptMatches.length : undefined,
+    transcriptMode
+  };
+
+  return {
+    sources: selected,
+    diagnostics: {
+      ...diagnosticsWithoutNote,
+      note: sourceSelectionNote(diagnosticsWithoutNote)
+    }
+  };
 }
 
 async function callOpenRouter(prompt: string) {
@@ -461,7 +584,8 @@ Regeln:
 - rationale erklaert, welches Performance-Learning transformiert wurde.
 - score ist 0-100.
 - Bei Static Iterations duerfen hook und script leer sein.
-- Bei Video Iterations muessen hook und script befuellt sein.`;
+- Bei Video Iterations muessen hook und script befuellt sein.
+- Wenn bei Video Quellen videoTranscript null ist, nutze Analyse, Hook, Visual Elements, Copy und Performance als Grundlage und erwaehne diese Unsicherheit kurz in rationale.`;
 }
 
 function mapIteration(row: IterationRow, source: CreativeListItem | undefined, clientId: string): AdIteration {
@@ -502,7 +626,7 @@ async function getAdIterationsOverviewUncached(clientId: string): Promise<AdIter
         .order("created_at", { ascending: false }),
       supabase
         .from("ad_iteration_generations")
-        .select("id,client_id,generation_key,format,status,period_start,period_end,error_message,created_at")
+        .select("id,client_id,generation_key,format,status,period_start,period_end,prompt_context,raw_response,error_message,created_at")
         .eq("client_id", clientId)
         .order("created_at", { ascending: false })
         .limit(8)
@@ -578,27 +702,56 @@ async function generateFormatBatch(clientId: string, format: IterationFormat, op
     .maybeSingle();
 
   if (existing) {
-    return { clientId, format, status: "skipped", created: 0, sourceCount: 0, generationId: existing.id };
+    const { count: existingIterationsCount, error: existingIterationsError } = await supabase
+      .from("ad_iterations")
+      .select("id", { count: "exact", head: true })
+      .eq("generation_id", existing.id);
+
+    if (existingIterationsError) throw new Error(existingIterationsError.message);
+    if (existing.status === "running" || Number(existingIterationsCount ?? 0) > 0) {
+      return { clientId, format, status: "skipped", created: 0, sourceCount: 0, generationId: existing.id };
+    }
   }
 
-  const { data: generation, error: generationError } = await supabase
-    .from("ad_iteration_generations")
-    .insert({
-      client_id: clientId,
-      generation_key: key,
-      format,
-      status: "running",
-      period_start: dateRange.since,
-      period_end: dateRange.until,
-      options: { ...options, format, count, mode: options.mode ?? "manual" }
-    })
-    .select("id")
-    .single();
+  let generation: { id: string } | null = existing ? { id: existing.id } : null;
 
-  if (generationError || !generation) throw new Error(generationError?.message ?? "Iteration Generation konnte nicht erstellt werden.");
+  if (generation) {
+    const { error: resetError } = await supabase
+      .from("ad_iteration_generations")
+      .update({
+        model: null,
+        status: "running",
+        period_start: dateRange.since,
+        period_end: dateRange.until,
+        options: { ...options, format, count, mode: options.mode ?? "manual" },
+        prompt_context: {},
+        raw_response: {},
+        error_message: null
+      })
+      .eq("id", generation.id);
+
+    if (resetError) throw new Error(resetError.message);
+  } else {
+    const { data: createdGeneration, error: generationError } = await supabase
+      .from("ad_iteration_generations")
+      .insert({
+        client_id: clientId,
+        generation_key: key,
+        format,
+        status: "running",
+        period_start: dateRange.since,
+        period_end: dateRange.until,
+        options: { ...options, format, count, mode: options.mode ?? "manual" }
+      })
+      .select("id")
+      .single();
+
+    if (generationError || !createdGeneration) throw new Error(generationError?.message ?? "Iteration Generation konnte nicht erstellt werden.");
+    generation = createdGeneration;
+  }
 
   try {
-    const [sources, existingIterations] = await Promise.all([
+    const [{ sources, diagnostics }, existingIterations] = await Promise.all([
       loadSources(clientId, format, dateRange, count),
       recentIterations(clientId, format)
     ]);
@@ -607,6 +760,8 @@ async function generateFormatBatch(clientId: string, format: IterationFormat, op
       format,
       dateRange,
       sourceCount: sources.length,
+      sourceDiagnostics: diagnostics,
+      sourceSelectionNote: diagnostics.note,
       sources: sources.map((source) => sourcePromptRecord(source)),
       recentIterations: existingIterations
     };
@@ -614,7 +769,7 @@ async function generateFormatBatch(clientId: string, format: IterationFormat, op
     if (sources.length === 0) {
       await supabase
         .from("ad_iteration_generations")
-        .update({ status: "completed", model: null, prompt_context: promptContext, raw_response: { iterations: [], note: "Keine passenden Bestperformer gefunden." } })
+        .update({ status: "completed", model: null, prompt_context: promptContext, raw_response: { iterations: [], note: diagnostics.note } })
         .eq("id", generation.id);
       revalidateCacheTags(CACHE_TAGS.iterations);
       return { clientId, format, status: "completed", created: 0, sourceCount: 0, generationId: generation.id };
@@ -652,7 +807,7 @@ async function generateFormatBatch(clientId: string, format: IterationFormat, op
 
     await supabase
       .from("ad_iteration_generations")
-      .update({ status: "completed", model, prompt_context: promptContext, raw_response: payload as unknown as JsonRecord })
+      .update({ status: "completed", model, prompt_context: promptContext, raw_response: { payload: payload as unknown as JsonRecord, generatedIterations: insertRows.length } })
       .eq("id", generation.id);
 
     revalidateCacheTags(CACHE_TAGS.iterations);
