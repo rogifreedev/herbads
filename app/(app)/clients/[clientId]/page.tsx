@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { CreativeRankingTable } from "@/components/creative-ranking-table";
 import { MetaAdsTabs } from "@/components/meta-ads-tabs";
 import { MetricCard } from "@/components/metric-card";
@@ -6,15 +7,18 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getClientById } from "@/lib/clients";
+import { resolveInsightDateFilters, type DateFilterSearchParams } from "@/lib/date-filters";
 import { listClientCreatives } from "@/lib/creatives";
-import { formatCurrency, formatDecimal, formatNumber, formatPercent, getClientPerformanceMetrics } from "@/lib/metrics";
+import { formatCurrency, formatDecimal, formatNumber, formatPercent, getClientPerformanceMetricsForRange } from "@/lib/metrics";
 
-export default async function ClientDashboardPage({ params }: { params: Promise<{ clientId: string }> }) {
-  const { clientId } = await params;
+export default async function ClientDashboardPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams> }) {
+  const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
+  const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const [{ client, error }, { metrics, hasData }, { creatives }] = await Promise.all([
     getClientById(clientId),
-    getClientPerformanceMetrics(clientId),
-    listClientCreatives(clientId)
+    getClientPerformanceMetricsForRange(clientId, activeDateRange),
+    listClientCreatives(clientId, activeDateRange)
   ]);
   const metricCards = hasData
     ? [
@@ -56,7 +60,8 @@ export default async function ClientDashboardPage({ params }: { params: Promise<
           <h2 className="mt-2 font-heading text-5xl">{client.name}</h2>
           <p className="mt-2 font-mono text-xs text-white/45">{client.adAccountId ?? "Kein Meta Account hinterlegt"}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <CreativeDateRangePicker defaultDays={30} />
           <Button asChild variant="outline" className="border-herb-border">
             <Link href={`/clients/${client.id}/knowledge`}>Wissen pflegen</Link>
           </Button>
@@ -68,6 +73,7 @@ export default async function ClientDashboardPage({ params }: { params: Promise<
       {error ? (
         <Alert variant="warning"><AlertDescription>Supabase-Tabellen sind noch nicht erreichbar. Diese Seite nutzt bis zur Migration Mock-Daten.</AlertDescription></Alert>
       ) : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         {metricCards.map((metric) => (

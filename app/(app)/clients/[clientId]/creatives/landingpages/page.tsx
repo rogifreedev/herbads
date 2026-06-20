@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { FormField } from "@/components/form-field";
 import { LandingpageAnalysisButton } from "@/components/landingpage-analysis-button";
 import { LandingpagesDataTable } from "@/components/landingpages-data-table";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { resolveInsightDateFilters } from "@/lib/date-filters";
 import { listClientLandingpages, type LandingpageListItem } from "@/lib/landingpages";
 import { formatCurrency, formatDecimal, formatNumber } from "@/lib/metrics";
 
@@ -61,7 +63,9 @@ function filterLandingpages(landingpages: LandingpageListItem[], searchParams: S
 
 export default async function ClientLandingpagesPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const { landingpages, error } = await listClientLandingpages(clientId);
+  const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
+  const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
+  const { landingpages, error } = await listClientLandingpages(clientId, activeDateRange);
   const { filtered, filters } = filterLandingpages(landingpages, resolvedSearchParams);
   const signalCounts = landingpages.reduce<Record<string, number>>((counts, landingpage) => {
     counts[landingpage.signal] = (counts[landingpage.signal] ?? 0) + 1;
@@ -87,7 +91,10 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
             Alle Landingpage-URLs aus den Meta Creatives, aggregiert nach Ads, Spend, ROAS und Landingpage/Ad-Match. Nach dem Crawl nutzt Match echte Landingpage-Signale statt nur Creative-AI-Scores.
           </p>
         </div>
-        <LandingpageAnalysisButton clientId={clientId} urls={filtered.map((landingpage) => landingpage.url)} />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <CreativeDateRangePicker defaultDays={30} />
+          <LandingpageAnalysisButton clientId={clientId} urls={filtered.map((landingpage) => landingpage.url)} />
+        </div>
       </div>
 
       <MetaAdsTabs clientId={clientId} active="landingpages" />
@@ -95,6 +102,7 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
 
       <div className="grid gap-3 md:grid-cols-4">
         <Metric label="Landingpages" value={`${formatNumber(filtered.length)} / ${formatNumber(landingpages.length)}`} />

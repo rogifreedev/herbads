@@ -25,7 +25,7 @@ export const navItems: NavItem[] = [
       "/clients/[clientId]/creatives/landingpages"
     ],
     children: [
-      { title: "Overview", href: "/clients/[clientId]" },
+      { title: "Creatives", href: "/clients/[clientId]" },
       { title: "Learning", href: "/clients/[clientId]/learning" },
       { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
       { title: "Settings", href: "/clients/[clientId]/meta/settings" },

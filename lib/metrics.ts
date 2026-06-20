@@ -2,6 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache-tags";
+import type { InsightDateRange } from "@/lib/date-filters";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type PerformanceMetrics = {
@@ -113,12 +114,15 @@ export function aggregateInsightRows(rows: InsightRow[]): PerformanceMetrics {
   };
 }
 
-async function getClientPerformanceMetricsUncached(clientId: string) {
+async function getClientPerformanceMetricsUncached(clientId: string, since?: string | null, until?: string | null) {
   const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("creative_insights_daily")
     .select("spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays")
     .eq("client_id", clientId);
+  if (since) query = query.gte("date", since);
+  if (until) query = query.lte("date", until);
+  const { data, error } = await query;
 
   if (error) {
     return { metrics: emptyMetrics, hasData: false, error: error.message };
@@ -129,9 +133,13 @@ async function getClientPerformanceMetricsUncached(clientId: string) {
 
 export const getClientPerformanceMetrics = unstable_cache(
   getClientPerformanceMetricsUncached,
-  ["client-performance-metrics-v1"],
+  ["client-performance-metrics-v2"],
   { revalidate: 120, tags: [CACHE_TAGS.metrics] }
 );
+
+export function getClientPerformanceMetricsForRange(clientId: string, dateRange?: InsightDateRange) {
+  return getClientPerformanceMetrics(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
+}
 
 async function getGlobalPerformanceMetricsUncached() {
   const supabase = createSupabaseServiceRoleClient();

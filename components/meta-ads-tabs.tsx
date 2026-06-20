@@ -9,8 +9,8 @@ type MetaAdsTabsProps = {
 };
 
 const tabs: Array<{ id: MetaAdsTab; label: string; href: (clientId: string) => string }> = [
-  { id: "overview", label: "Overview", href: (clientId) => `/clients/${clientId}` },
-  { id: "creatives", label: "Creatives", href: (clientId) => `/clients/${clientId}/creatives` },
+  { id: "overview", label: "Creatives", href: (clientId) => `/clients/${clientId}` },
+  { id: "creatives", label: "Library", href: (clientId) => `/clients/${clientId}/creatives` },
   { id: "angles", label: "Angles", href: (clientId) => `/clients/${clientId}/angles` },
   { id: "landingpages", label: "Landingpages", href: (clientId) => `/clients/${clientId}/creatives/landingpages` }
 ];

@@ -2,6 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache-tags";
+import type { InsightDateRange } from "@/lib/date-filters";
 import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { aggregateInsightRows, emptyMetrics, type PerformanceMetrics } from "@/lib/metrics";
@@ -244,9 +245,15 @@ function landingpageSignal(metrics: PerformanceMetrics, matchScore: number | nul
   return "WATCH";
 }
 
-async function listClientLandingpagesUncached(clientId: string): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
+async function listClientLandingpagesUncached(clientId: string, since?: string | null, until?: string | null): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
+    let insightsQuery = supabase
+      .from("creative_insights_daily")
+      .select("creative_id,spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays")
+      .eq("client_id", clientId);
+    if (since) insightsQuery = insightsQuery.gte("date", since);
+    if (until) insightsQuery = insightsQuery.lte("date", until);
     const [
       { data: creatives, error: creativesError },
       { data: ads, error: adsError },
@@ -256,10 +263,7 @@ async function listClientLandingpagesUncached(clientId: string): Promise<{ landi
     ] = await Promise.all([
       supabase.from("creatives").select("id,meta_creative_id,name,title,body,call_to_action_type,landing_url").eq("client_id", clientId),
       supabase.from("meta_ads").select("id,creative_id,name").eq("client_id", clientId),
-      supabase
-        .from("creative_insights_daily")
-        .select("creative_id,spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays")
-        .eq("client_id", clientId),
+      insightsQuery,
       supabase
         .from("creative_ai_analyses")
         .select("creative_id,target_audience_fit_score,brand_fit_score,clarity_score,cta_score,funnel_stage,created_at")
@@ -353,10 +357,10 @@ async function listClientLandingpagesUncached(clientId: string): Promise<{ landi
 
 const listClientLandingpagesCached = unstable_cache(
   listClientLandingpagesUncached,
-  ["client-landingpages-v1"],
+  ["client-landingpages-v2"],
   { revalidate: 120, tags: [CACHE_TAGS.landingpages] }
 );
 
-export async function listClientLandingpages(clientId: string): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
-  return listClientLandingpagesCached(clientId);
+export async function listClientLandingpages(clientId: string, dateRange?: InsightDateRange): Promise<{ landingpages: LandingpageListItem[]; error: string | null }> {
+  return listClientLandingpagesCached(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
 }
