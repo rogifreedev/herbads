@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChartNoAxesCombined, FileText, LayoutDashboard, Swords, Settings } from "lucide-react";
+import { ChartNoAxesCombined, FileText, LayoutDashboard, Sparkles, Swords, Settings } from "lucide-react";
 
 export type NavItem = {
   title: string;
@@ -43,6 +43,11 @@ export const navItems: NavItem[] = [
       { title: "Iterations", href: "/clients/[clientId]/competitors/iterations" },
       { title: "Settings", href: "/clients/[clientId]/competitors/settings" }
     ]
+  },
+  {
+    title: "Prediction Tool",
+    href: "/clients/[clientId]/prediction-tool",
+    icon: Sparkles
   },
   {
     title: "Reports",

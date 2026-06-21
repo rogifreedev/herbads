@@ -461,6 +461,22 @@ async function callOpenAiTranscription(video: Awaited<ReturnType<typeof download
   };
 }
 
+export async function transcribeUploadedVideoFile(file: File) {
+  const maxBytes = maxTranscriptFileBytes();
+  if (file.size > maxBytes) {
+    throw new Error(`Video ist zu gross fuer Transkription (${Math.round(file.size / 1024 / 1024)} MB).`);
+  }
+
+  const buffer = await file.arrayBuffer();
+  const contentType = file.type || "video/mp4";
+  return callOpenAiTranscription({
+    buffer,
+    contentType,
+    bytes: buffer.byteLength,
+    filename: file.name || `prediction-video.${extensionForContentType(contentType)}`
+  });
+}
+
 export function getHookTranscript(transcript: CreativeVideoTranscript | null, seconds = 5) {
   if (!transcript?.transcript) return null;
 
