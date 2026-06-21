@@ -33,12 +33,12 @@ export default async function DashboardPage() {
                 Meta Creatives analysieren, verstehen und skalieren.
               </h2>
               <p className="mt-4 max-w-xl text-sm leading-6 text-white/65">
-                KPI-Dashboard, Creative Scoring, AI Analyse, Knowledge Base und Pattern Engine in einem internen Workflow.
+                KPI-Dashboard, Creative Scoring, AI Analyse, Prediction Tool und Knowledge Base in einem internen Workflow.
               </p>
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild variant="gradient" size="lg"><Link href="/clients">Kunden verbinden</Link></Button>
-              <Button asChild variant="outline" size="lg" className="border-herb-border"><Link href="/analysis">Patterns ansehen</Link></Button>
+              <Button asChild variant="outline" size="lg" className="border-herb-border"><Link href="/clients">Kundenbereich öffnen</Link></Button>
             </div>
           </CardContent>
         </Card>
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
         <CreativeRankingTable />
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>AI Learnings</CardTitle>
+            <CardTitle>Creative Hinweise</CardTitle>
             <CardDescription>Erste Hypothesen aus Creative- und Wissensdaten.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-white/70">

@@ -17,7 +17,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: "META Ads",
-    href: "/analysis",
+    href: "/clients/[clientId]",
     icon: ChartNoAxesCombined,
     activeHrefs: [
       "/clients/[clientId]/creatives",
@@ -27,11 +27,8 @@ export const navItems: NavItem[] = [
     ],
     children: [
       { title: "Creatives", href: "/clients/[clientId]" },
-      { title: "Learning", href: "/clients/[clientId]/learning" },
-      { title: "Ad Ideas", href: "/clients/[clientId]/ideas" },
       { title: "Iterations", href: "/clients/[clientId]/iterations" },
-      { title: "Settings", href: "/clients/[clientId]/meta/settings" },
-      { title: "Pattern Analyse", href: "/analysis" }
+      { title: "Settings", href: "/clients/[clientId]/meta/settings" }
     ]
   },
   {
