@@ -3,12 +3,13 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   clientId: string;
-  active: "creatives" | "settings";
+  active: "creatives" | "iterations" | "settings";
 };
 
 export function CompetitorSectionNav({ clientId, active }: Props) {
   const items = [
     { id: "creatives", label: "Creatives", href: `/clients/${clientId}/competitors/creatives` },
+    { id: "iterations", label: "Iterations", href: `/clients/${clientId}/competitors/iterations` },
     { id: "settings", label: "Settings", href: `/clients/${clientId}/competitors/settings` }
   ] as const;
 

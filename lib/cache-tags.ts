@@ -9,6 +9,7 @@ export const CACHE_TAGS = {
   creativeAngles: "creative-angles",
   adIdeas: "ad-ideas",
   iterations: "iterations",
+  competitorIterations: "competitor-iterations",
   competitors: "competitors",
   landingpages: "landingpages",
   knowledge: "knowledge",
@@ -35,7 +36,7 @@ export const CREATIVE_ANALYSIS_CACHE_TAGS = [
 ] as const;
 
 export const VIDEO_TRANSCRIPT_CACHE_TAGS = [CACHE_TAGS.videoTranscripts, CACHE_TAGS.creatives] as const;
-export const COMPETITOR_CACHE_TAGS = [CACHE_TAGS.competitors, CACHE_TAGS.adIdeas] as const;
+export const COMPETITOR_CACHE_TAGS = [CACHE_TAGS.competitors, CACHE_TAGS.competitorIterations, CACHE_TAGS.adIdeas] as const;
 export const KNOWLEDGE_CACHE_TAGS = [CACHE_TAGS.knowledge, CACHE_TAGS.competitors] as const;
 
 export function revalidateCacheTags(...tags: string[]) {

@@ -40,6 +40,7 @@ export const navItems: NavItem[] = [
     icon: Swords,
     children: [
       { title: "Creatives", href: "/clients/[clientId]/competitors/creatives" },
+      { title: "Iterations", href: "/clients/[clientId]/competitors/iterations" },
       { title: "Settings", href: "/clients/[clientId]/competitors/settings" }
     ]
   },
