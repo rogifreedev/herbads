@@ -36,6 +36,7 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/clients") && pathname.includes("/learning")) return "Creative Learning";
   if (pathname.startsWith("/clients") && pathname.includes("/competitors/iterations")) return "Competitor Iterations";
   if (pathname.startsWith("/clients") && pathname.includes("/iterations")) return "Iterations";
+  if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool/history")) return "Prediction History";
   if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool")) return "Prediction Tool";
   if (pathname.startsWith("/clients") && pathname.includes("/creatives")) return "Creatives";
   if (pathname.startsWith("/clients") && pathname.includes("/angles")) return "Creative Angles";

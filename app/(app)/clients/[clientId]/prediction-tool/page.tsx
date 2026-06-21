@@ -1,4 +1,5 @@
 import { PredictionToolForm } from "@/components/prediction-tool-form";
+import { PredictionToolTabs } from "@/components/prediction-tool-tabs";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function PredictionToolPage({ params }: { params: Promise<{ clientId: string }> }) {
@@ -7,11 +8,13 @@ export default async function PredictionToolPage({ params }: { params: Promise<{
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-4xl">Prediction Tool</h2>
+        <h2 className="font-heading text-4xl">Prediction Analyse</h2>
         <p className="mt-2 max-w-3xl text-sm text-white/60">
           Pre-Launch Quality Score fuer neue Statics und Videos auf Basis von Viktor-Kofler-KPIs, Creative-Angles, Hook-Patterns und Competitor-Signalen.
         </p>
       </div>
+
+      <PredictionToolTabs clientId={clientId} active="analysis" />
 
       <section className="grid gap-4 md:grid-cols-3">
         <DataCard label="Meta KPIs" value="ROAS, CPA, CTR, Hook, Hold" />

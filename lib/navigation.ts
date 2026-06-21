@@ -44,7 +44,14 @@ export const navItems: NavItem[] = [
   {
     title: "Prediction Tool",
     href: "/clients/[clientId]/prediction-tool",
-    icon: Sparkles
+    icon: Sparkles,
+    activeHrefs: [
+      "/clients/[clientId]/prediction-tool"
+    ],
+    children: [
+      { title: "Analyse", href: "/clients/[clientId]/prediction-tool" },
+      { title: "History", href: "/clients/[clientId]/prediction-tool/history" }
+    ]
   },
   {
     title: "Reports",

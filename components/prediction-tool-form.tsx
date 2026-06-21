@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileVideo, ImageIcon, Sparkles, UploadCloud } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, FileVideo, ImageIcon, Sparkles, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
   const [loading, setLoading] = useState(false);
   const [frameLoading, setFrameLoading] = useState(false);
   const [result, setResult] = useState<CreativePredictionResult | null>(null);
+  const [analysisHref, setAnalysisHref] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -41,6 +43,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
 
   async function updateFile(nextFile: File | null) {
     setResult(null);
+    setAnalysisHref(null);
     setFrames([]);
     setFile(nextFile);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -77,6 +80,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
 
     setLoading(true);
     setResult(null);
+    setAnalysisHref(null);
     try {
       const formData = new FormData();
       formData.append("format", format);
@@ -93,6 +97,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Prediction konnte nicht erstellt werden.");
       setResult(payload.result as CreativePredictionResult);
+      setAnalysisHref(typeof payload.analysis?.detailHref === "string" ? payload.analysis.detailHref : null);
       toast.success("Prediction erstellt.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Prediction konnte nicht erstellt werden.");
@@ -117,6 +122,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
                 setFile(null);
                 setFrames([]);
                 setResult(null);
+                setAnalysisHref(null);
                 if (previewUrl) URL.revokeObjectURL(previewUrl);
                 setPreviewUrl(null);
               }}
@@ -182,7 +188,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
       </Card>
 
       <div className="space-y-6">
-        {result ? <PredictionResultView result={result} /> : <PredictionEmptyState format={format} />}
+        {result ? <PredictionResultView result={result} historyHref={analysisHref} /> : <PredictionEmptyState format={format} />}
       </div>
     </div>
   );
@@ -204,7 +210,7 @@ function PredictionEmptyState({ format }: { format: PredictionFormat }) {
   );
 }
 
-function PredictionResultView({ result }: { result: CreativePredictionResult }) {
+function PredictionResultView({ result, historyHref }: { result: CreativePredictionResult; historyHref: string | null }) {
   return (
     <>
       <Card className="border-herb-border bg-herb-surface/90">
@@ -225,6 +231,14 @@ function PredictionResultView({ result }: { result: CreativePredictionResult }) 
             </div>
             <h3 className="font-heading text-3xl text-white">{result.ai.summary || result.fileName}</h3>
             <p className="text-sm leading-6 text-white/60">{result.ai.conversionReason || result.ai.thumbstopReason}</p>
+            {historyHref ? (
+              <Button asChild variant="outline" className="border-herb-border text-white hover:text-white">
+                <Link href={historyHref}>
+                  In History oeffnen
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
