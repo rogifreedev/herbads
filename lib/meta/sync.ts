@@ -504,7 +504,7 @@ async function syncMetaDemographicBreakdowns(clientId: string, adAccountId: stri
     for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
       try {
         const insights = await fetchMetaList<MetaInsight>(
-          `${metaAccountId}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&breakdowns=${breakdown.field}&fields=${BREAKDOWN_INSIGHTS_FIELDS},${breakdown.field}&limit=100`
+          `${metaAccountId}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&breakdowns=${breakdown.field}&fields=${BREAKDOWN_INSIGHTS_FIELDS}&limit=100`
         );
         const breakdownRows = insights
           .map((insight) => mapBreakdownInsightRow(clientId, adAccountId, adIdMap, insight, breakdown))

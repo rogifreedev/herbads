@@ -30,6 +30,7 @@ type StoredMetaSyncJob = {
   done: number;
   failed: number;
   totals: SyncTotals;
+  errors?: string[];
 };
 
 const emptyTotals: SyncTotals = { campaigns: 0, adSets: 0, ads: 0, creatives: 0, insights: 0 };
@@ -45,6 +46,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
   const [until, setUntil] = useState(todayDate);
   const [progress, setProgress] = useState({ done: 0, failed: 0 });
   const [ranges, setRanges] = useState<DateRange[]>([]);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
 
   const saveJob = useCallback((job: StoredMetaSyncJob) => {
     window.localStorage.setItem(storageKey, JSON.stringify(job));
@@ -64,10 +66,17 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
     setUntil(job.until);
     setRanges(job.ranges);
     setProgress({ done: job.done, failed: job.failed });
+    setSyncErrors(job.errors ?? []);
     saveJob(job);
 
     let failed = job.failed;
     const totals = { ...job.totals };
+    let errors = job.errors ?? [];
+
+    const appendError = (message: string) => {
+      errors = [message, ...errors].slice(0, 5);
+      setSyncErrors(errors);
+    };
 
     for (let index = job.done; index < job.ranges.length; index += 1) {
       if (cancelledRef.current) break;
@@ -79,9 +88,13 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ since: range.since, until: range.until, insightsOnly: index > 0 })
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         if (!response.ok) {
           failed += 1;
+          const message = typeof result.error === "string" && result.error.trim().length > 0
+            ? result.error
+            : response.statusText || "Request fehlgeschlagen";
+          appendError(`${range.since} bis ${range.until}: ${message}`);
         } else {
           totals.campaigns = Math.max(totals.campaigns, Number(result.summary?.campaigns ?? 0));
           totals.adSets = Math.max(totals.adSets, Number(result.summary?.adSets ?? 0));
@@ -89,13 +102,14 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
           totals.creatives = Math.max(totals.creatives, Number(result.summary?.creatives ?? 0));
           totals.insights += Number(result.summary?.insights ?? 0);
         }
-      } catch {
+      } catch (error) {
         failed += 1;
+        appendError(`${range.since} bis ${range.until}: ${error instanceof Error ? error.message : "Request fehlgeschlagen"}`);
       }
 
       const done = index + 1;
       setProgress({ done, failed });
-      saveJob({ ...job, done, failed, totals });
+      saveJob({ ...job, done, failed, totals, errors });
     }
 
     setLoading(false);
@@ -147,7 +161,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
     const confirmed = window.confirm(`${nextRanges.length} Zeitraeume von ${since} bis ${until} synchronisieren? Der Sync bleibt nach Reload sichtbar und setzt fort.`);
     if (!confirmed) return;
 
-    await runQueue({ since, until, ranges: nextRanges, done: 0, failed: 0, totals: emptyTotals });
+    await runQueue({ since, until, ranges: nextRanges, done: 0, failed: 0, totals: emptyTotals, errors: [] });
   }
 
   return (
@@ -192,6 +206,13 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
               Abbrechen
             </Button>
           </div>
+          {syncErrors.length > 0 ? (
+            <div className="mt-2 space-y-1 border-t border-primary/20 pt-2 text-red-100">
+              {syncErrors.slice(0, 3).map((error) => (
+                <p key={error}>{error}</p>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

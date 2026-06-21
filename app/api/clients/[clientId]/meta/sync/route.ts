@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { syncMetaForClient, syncMetaInsightsForClient } from "@/lib/meta/sync";
 
+export const maxDuration = 60;
+
 type RouteContext = {
   params: Promise<{ clientId: string }>;
 };
