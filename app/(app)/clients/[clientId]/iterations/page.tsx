@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { InsightDateRange } from "@/lib/date-filters";
 import { resolveInsightDateFilters, firstSearchParam, type DateFilterSearchParams } from "@/lib/date-filters";
 import { getAdIterationsOverview, iterationPerformanceLine, type AdIteration, type IterationFormat } from "@/lib/creative-iterations";
 import { formatDate, formatNumber } from "@/lib/metrics";
@@ -18,8 +19,17 @@ function activeTab(searchParams: DateFilterSearchParams): IterationFormat {
   return firstSearchParam(searchParams.tab) === "videos" ? "video" : "static";
 }
 
-function tabHref(clientId: string, tab: "statics" | "videos") {
-  return `/clients/${clientId}/iterations?tab=${tab}`;
+function tabHref(clientId: string, tab: "statics" | "videos", dateFilters: InsightDateRange) {
+  const params = new URLSearchParams({ tab });
+
+  if (dateFilters.range === "all") {
+    params.set("range", "all");
+  } else {
+    if (dateFilters.since) params.set("since", dateFilters.since);
+    if (dateFilters.until) params.set("until", dateFilters.until);
+  }
+
+  return `/clients/${clientId}/iterations?${params.toString()}`;
 }
 
 export default async function IterationsPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams> }) {
@@ -56,8 +66,8 @@ export default async function IterationsPage({ params, searchParams }: { params:
       </section>
 
       <div className="flex flex-wrap gap-2">
-        <Link className={tabClass(tab === "static")} href={tabHref(clientId, "statics")}>Statics</Link>
-        <Link className={tabClass(tab === "video")} href={tabHref(clientId, "videos")}>Videos</Link>
+        <Link className={tabClass(tab === "static")} href={tabHref(clientId, "statics", dateFilters)}>Statics</Link>
+        <Link className={tabClass(tab === "video")} href={tabHref(clientId, "videos", dateFilters)}>Videos</Link>
       </div>
 
       <Card className="border-herb-border bg-herb-surface/90">

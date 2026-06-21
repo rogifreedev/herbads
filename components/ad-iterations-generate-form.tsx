@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +14,10 @@ export function AdIterationsGenerateForm({ clientId, since, until, defaultFormat
   const [loading, setLoading] = useState(false);
   const [format, setFormat] = useState(defaultFormat);
   const [count, setCount] = useState("6");
+
+  useEffect(() => {
+    setFormat(defaultFormat);
+  }, [defaultFormat]);
 
   async function submit() {
     setLoading(true);
