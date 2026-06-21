@@ -218,6 +218,36 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function wordCount(value: string) {
+  return value.split(/\s+/).filter(Boolean).length;
+}
+
+function extractQuotedPhrases(value: string) {
+  const phrases: string[] = [];
+  const quoteRegex = /["\u201e\u201c\u201d\u00ab\u00bb]([^"\u201e\u201c\u201d\u00ab\u00bb]{2,80})["\u201e\u201c\u201d\u00ab\u00bb]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = quoteRegex.exec(value))) {
+    const phrase = match[1]?.replace(/\s+/g, " ").trim();
+    if (phrase && !phrases.includes(phrase)) phrases.push(phrase);
+  }
+
+  return phrases;
+}
+
+function textOverlayFromProductionNotes(value: string) {
+  const overlayLines = value
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && /overlay|headline|sticker|badge|text/i.test(line) && !/optional/i.test(line));
+  const scopedText = overlayLines.length > 0 ? overlayLines.join("\n") : value;
+  const phrases = extractQuotedPhrases(scopedText);
+  const compactPhrases = phrases.filter((phrase) => wordCount(phrase) <= 8);
+  const selected = (compactPhrases.length > 0 ? compactPhrases : phrases).slice(0, 2);
+
+  return selected.join("\n");
+}
+
 function normalizeStatus(value: string): IterationStatus {
   return ITERATION_STATUSES.has(value as IterationStatus) ? (value as IterationStatus) : "new";
 }
@@ -632,7 +662,12 @@ function mapIteration(row: IterationRow, source: CreativeListItem | undefined, c
   const raw = row.raw ?? {};
   const sourceCreativeName = source?.name ?? String(row.performance_snapshot?.creative && typeof row.performance_snapshot.creative === "object" && "name" in row.performance_snapshot.creative ? row.performance_snapshot.creative.name : row.source_creative_id);
   const thesis = stringValue(raw.thesis) || stringValue(raw.these) || (format === "static" ? stringValue(row.script) : "");
-  const textOverlay = stringValue(raw.textOverlay) || stringValue(raw.text_overlay) || stringValue(raw.overlayText) || stringValue(raw.overlay_text) || (format === "static" ? stringValue(row.hook) : "");
+  const textOverlay =
+    stringValue(raw.textOverlay) ||
+    stringValue(raw.text_overlay) ||
+    stringValue(raw.overlayText) ||
+    stringValue(raw.overlay_text) ||
+    (format === "static" ? stringValue(row.hook) || textOverlayFromProductionNotes(stringValue(row.production_notes)) || stringValue(row.title) : "");
 
   return {
     id: row.id,

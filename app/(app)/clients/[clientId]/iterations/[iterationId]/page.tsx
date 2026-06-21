@@ -128,6 +128,11 @@ function IterationSourcePreview({ iteration }: { iteration: AdIteration }) {
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="aspect-[4/5] w-full object-cover" />
+          {iteration.format === "static" && iteration.textOverlay ? (
+            <div className="absolute inset-x-4 bottom-4 rounded-xl bg-black/70 p-3 text-center shadow-xl backdrop-blur-sm">
+              <p className="whitespace-pre-wrap font-heading text-2xl leading-tight text-white">{iteration.textOverlay}</p>
+            </div>
+          ) : null}
           {iteration.sourceCreativeVideoPermalinkUrl ? (
             <div className="absolute inset-0 flex items-center justify-center bg-black/25">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30">
