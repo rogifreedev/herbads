@@ -80,6 +80,11 @@ type ClientRow = {
   name: string | null;
 };
 
+type CompetitorClientRow = {
+  client_id: string;
+  clients?: { status?: string | null } | null;
+};
+
 type ResolvedIterationDateRange = {
   since: string | null;
   until: string | null;
@@ -966,6 +971,40 @@ export async function updateCompetitorIterationStatus(clientId: string, iteratio
   if (error) throw new Error(error.message);
   revalidateCacheTags(CACHE_TAGS.competitorIterations);
   return getCompetitorIterationsOverview(clientId);
+}
+
+export async function generateWeeklyCompetitorIterationsForAllClients() {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: competitors, error } = await supabase
+    .from("competitors")
+    .select("client_id,clients(status)");
+
+  if (error) throw new Error(error.message);
+
+  const clientIds = Array.from(
+    new Set(
+      ((competitors ?? []) as CompetitorClientRow[])
+        .filter((competitor) => competitor.clients?.status !== "archived")
+        .map((competitor) => competitor.client_id)
+    )
+  );
+  const range = defaultDateRange({ mode: "weekly" });
+  const key = generationKey({ mode: "weekly" });
+  const results = [];
+
+  for (const clientId of clientIds) {
+    const generated = await generateCompetitorIterations(clientId, {
+      mode: "weekly",
+      generationKey: key,
+      format: "all",
+      since: range.since,
+      until: range.until,
+      count: 6
+    });
+    results.push({ clientId, summaries: generated.summaries });
+  }
+
+  return { generationKey: key, range, clients: clientIds.length, results };
 }
 
 export function competitorIterationPerformanceLine(iteration: CompetitorIteration) {
