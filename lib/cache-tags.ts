@@ -11,6 +11,7 @@ export const CACHE_TAGS = {
   iterations: "iterations",
   competitorIterations: "competitor-iterations",
   competitors: "competitors",
+  batches: "batches",
   landingpages: "landingpages",
   knowledge: "knowledge",
   creativeAnalysis: "creative-analysis",
@@ -37,6 +38,7 @@ export const CREATIVE_ANALYSIS_CACHE_TAGS = [
 
 export const VIDEO_TRANSCRIPT_CACHE_TAGS = [CACHE_TAGS.videoTranscripts, CACHE_TAGS.creatives] as const;
 export const COMPETITOR_CACHE_TAGS = [CACHE_TAGS.competitors, CACHE_TAGS.competitorIterations, CACHE_TAGS.adIdeas] as const;
+export const BATCH_CACHE_TAGS = [CACHE_TAGS.batches, CACHE_TAGS.metrics, CACHE_TAGS.creatives] as const;
 export const KNOWLEDGE_CACHE_TAGS = [CACHE_TAGS.knowledge, CACHE_TAGS.competitors] as const;
 
 export function revalidateCacheTags(...tags: string[]) {

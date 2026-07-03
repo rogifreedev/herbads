@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChartNoAxesCombined, FileText, LayoutDashboard, Sparkles, Swords, Settings } from "lucide-react";
+import { ChartNoAxesCombined, FileText, FolderKanban, LayoutDashboard, Sparkles, Swords, Settings } from "lucide-react";
 
 export type NavItem = {
   title: string;
@@ -51,6 +51,15 @@ export const navItems: NavItem[] = [
     children: [
       { title: "Analyse", href: "/clients/[clientId]/prediction-tool" },
       { title: "History", href: "/clients/[clientId]/prediction-tool/history" }
+    ]
+  },
+  {
+    title: "Batches",
+    href: "/clients/[clientId]/batches",
+    icon: FolderKanban,
+    children: [
+      { title: "Batches", href: "/clients/[clientId]/batches" },
+      { title: "Settings", href: "/clients/[clientId]/batches/settings" }
     ]
   },
   {
