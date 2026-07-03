@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ExternalLink, Settings } from "lucide-react";
-import { BatchRefreshButton } from "@/components/batch-refresh-button";
+import { BatchCheckButton } from "@/components/batch-check-button";
 import { BatchesSectionNav } from "@/components/batches-section-nav";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { batchMetaMatchLabel, batchStatusLabel, getBatchOverview, type BatchOverviewItem } from "@/lib/batches";
+import { batchMetaMatchLabel, batchStatusLabel, getBatchOverview, isBatchSnapshotStale, type BatchOverviewItem } from "@/lib/batches";
 import { formatDate, formatNumber } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
@@ -22,16 +22,13 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-heading text-4xl">Batches</h2>
-          <p className="mt-2 text-sm text-white/60">Google Drive Batch-Ordner gegen Meta Ads, Ad Sets und Campaigns pruefen.</p>
+          <p className="mt-2 text-sm text-white/60">Gespeicherter Batch-Snapshot aus Supabase. Drive wird nur taeglich per Cron oder manuell ueberprueft.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <BatchRefreshButton />
+          {overview.settings ? <BatchCheckButton clientId={clientId} disabled={overview.settings.lastCheckStatus === "running"} /> : null}
           <BatchesSectionNav clientId={clientId} active="batches" />
         </div>
       </div>
-
-      {overview.driveError ? <Alert variant="warning"><AlertDescription>{overview.driveError}</AlertDescription></Alert> : null}
-      {overview.metaError ? <Alert variant="warning"><AlertDescription>{overview.metaError}</AlertDescription></Alert> : null}
 
       {!overview.settings ? (
         <Card className="border-herb-border bg-herb-surface/90">
@@ -45,11 +42,30 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
         </Card>
       ) : (
         <>
-          <section className="grid gap-4 md:grid-cols-4">
+          {overview.settings.lastCheckError ? (
+            <Alert variant="warning">
+              <AlertDescription>{overview.settings.lastCheckError}</AlertDescription>
+            </Alert>
+          ) : null}
+          {overview.settings.lastCheckStatus === "running" ? (
+            <Alert>
+              <AlertDescription>Batch Check laeuft gerade. Die Seite zeigt den letzten gespeicherten Snapshot.</AlertDescription>
+            </Alert>
+          ) : null}
+          {overview.settings.lastCheckStatus !== "running" && isBatchSnapshotStale(overview.settings.lastCheckedAt) ? (
+            <Alert variant="warning">
+              <AlertDescription>
+                {overview.settings.lastCheckedAt ? "Der letzte Batch Check ist aelter als 24 Stunden." : "Es gibt noch keinen gespeicherten Batch Check."} Starte den Abgleich ueber Ueberpruefen.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <section className="grid gap-4 md:grid-cols-5">
             <SummaryCard label="Drive Ordner" value={formatNumber(overview.totals.folders)} />
             <SummaryCard label="Geschaltet" value={formatNumber(overview.totals.live)} />
             <SummaryCard label="Gefunden" value={formatNumber(overview.totals.found)} />
             <SummaryCard label="Nicht gefunden" value={formatNumber(overview.totals.missing)} />
+            <SummaryCard label="Letzter Check" value={overview.settings.lastCheckedAt ? formatDateTime(overview.settings.lastCheckedAt) : "-"} />
           </section>
 
           <Card className="border-herb-border bg-herb-surface/90">
@@ -58,20 +74,27 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
                 <div>
                   <CardTitle>Batch Check</CardTitle>
                   <CardDescription>
-                    {formatNumber(overview.totals.metaEntities)} Meta-Namen im Abgleich. Rekursive Drive-Suche ab Root-Folder: {overview.settings.googleDriveFolderId}
+                    {formatNumber(overview.totals.metaEntities)} Meta-Namen im letzten Abgleich. Root-Folder: {overview.settings.googleDriveFolderId}
                   </CardDescription>
                 </div>
-                <Button asChild variant="outline" size="sm" className="border-herb-border">
-                  <Link href={`/clients/${clientId}/batches/settings`}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Link>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <BatchCheckButton clientId={clientId} disabled={overview.settings.lastCheckStatus === "running"} />
+                  <Button asChild variant="outline" size="sm" className="border-herb-border">
+                    <Link href={`/clients/${clientId}/batches/settings`}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Settings
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               {overview.items.length === 0 ? (
-                <EmptyState title="Keine Batch-Unterordner gefunden" description="Der Drive-Ordner enthaelt aktuell keine sichtbaren Batch-Ordner oder der API-Zugriff ist nicht aktiv." />
+                <EmptyState
+                  title="Noch kein Batch Snapshot"
+                  description="Starte einmal Ueberpruefen. Danach laedt diese Seite nur noch die gespeicherten Ergebnisse aus Supabase."
+                  action={<BatchCheckButton clientId={clientId} disabled={overview.settings.lastCheckStatus === "running"} />}
+                />
               ) : (
                 <BatchTable rows={overview.items} />
               )}
@@ -81,6 +104,13 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
       )}
     </div>
   );
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -97,13 +127,14 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
-      <Table className="min-w-[920px]">
+      <Table className="min-w-[1040px]">
         <TableHeader className="bg-white/[0.03]">
           <TableRow className="hover:bg-transparent">
             <TableHead>Batch Ordner</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Meta Match</TableHead>
             <TableHead>Drive geaendert</TableHead>
+            <TableHead>Geprueft</TableHead>
             <TableHead>Drive</TableHead>
           </TableRow>
         </TableHeader>
@@ -137,6 +168,7 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
                 ) : null}
               </TableCell>
               <TableCell className="text-white/60">{formatDate(row.modifiedTime)}</TableCell>
+              <TableCell className="text-white/60">{formatDateTime(row.checkedAt)}</TableCell>
               <TableCell>
                 {row.webViewLink ? (
                   <Button asChild variant="outline" size="sm" className="border-herb-border">
