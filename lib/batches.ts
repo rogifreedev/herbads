@@ -4,14 +4,29 @@ import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
-export type BatchSettings = {
+export type BatchCheckStatus = "idle" | "running" | "completed" | "failed";
+
+export type BatchDriveFolderSetting = {
   id: string;
   clientId: string;
+  label: string;
   googleDriveFolderUrl: string | null;
   googleDriveFolderId: string;
+  enabled: boolean;
   lastCheckedAt: string | null;
   lastCheckStartedAt: string | null;
-  lastCheckStatus: "idle" | "running" | "completed" | "failed";
+  lastCheckStatus: BatchCheckStatus;
+  lastCheckError: string | null;
+  lastDriveFolderCount: number;
+  updatedAt: string | null;
+};
+
+export type BatchSettings = {
+  clientId: string;
+  folders: BatchDriveFolderSetting[];
+  lastCheckedAt: string | null;
+  lastCheckStartedAt: string | null;
+  lastCheckStatus: BatchCheckStatus;
   lastCheckError: string | null;
   lastMetaEntitiesCount: number;
   lastDriveFolderCount: number;
@@ -38,6 +53,8 @@ export type BatchMetaMatch = {
 
 export type BatchOverviewItem = {
   id: string;
+  sourceFolderId: string | null;
+  sourceFolderLabel: string | null;
   name: string;
   path: string;
   depth: number;
@@ -74,9 +91,26 @@ type BatchSettingsRow = {
   updated_at: string | null;
 };
 
+type BatchDriveFolderRow = {
+  id: string;
+  client_id: string;
+  label: string | null;
+  google_drive_folder_url: string | null;
+  google_drive_folder_id: string;
+  enabled: boolean | null;
+  last_checked_at?: string | null;
+  last_check_started_at?: string | null;
+  last_check_status?: string | null;
+  last_check_error?: string | null;
+  last_drive_folder_count?: number | null;
+  updated_at: string | null;
+};
+
 type BatchFolderCheckRow = {
   id: string;
   client_id: string;
+  source_folder_id: string | null;
+  source_folder_label: string | null;
   drive_folder_id: string;
   name: string;
   path: string;
@@ -135,22 +169,55 @@ export function extractGoogleDriveFolderId(value: string) {
   return /^[A-Za-z0-9_-]{10,}$/.test(trimmed) ? trimmed : "";
 }
 
-function mapSettings(row: BatchSettingsRow): BatchSettings {
-  const lastCheckStatus = row.last_check_status;
+function normalizeCheckStatus(value: string | null | undefined): BatchCheckStatus {
+  if (value === "running" || value === "completed" || value === "failed") return value;
+  return "idle";
+}
 
+function mapDriveFolder(row: BatchDriveFolderRow): BatchDriveFolderSetting {
   return {
     id: row.id,
     clientId: row.client_id,
+    label: row.label?.trim() || "Drive Ordner",
     googleDriveFolderUrl: row.google_drive_folder_url,
     googleDriveFolderId: row.google_drive_folder_id,
+    enabled: row.enabled ?? true,
     lastCheckedAt: row.last_checked_at ?? null,
     lastCheckStartedAt: row.last_check_started_at ?? null,
-    lastCheckStatus: lastCheckStatus === "running" || lastCheckStatus === "completed" || lastCheckStatus === "failed" ? lastCheckStatus : "idle",
+    lastCheckStatus: normalizeCheckStatus(row.last_check_status),
     lastCheckError: row.last_check_error ?? null,
-    lastMetaEntitiesCount: Number(row.last_meta_entities_count ?? 0),
     lastDriveFolderCount: Number(row.last_drive_folder_count ?? 0),
     updatedAt: row.updated_at
   };
+}
+
+function buildSettings(clientId: string, row: BatchSettingsRow | null, folders: BatchDriveFolderSetting[], fallbackError: string | null = null): BatchSettings | null {
+  if (!row && folders.length === 0) return null;
+  const newestFolderCheck = newestDate(folders.map((folder) => folder.lastCheckedAt));
+  const runningFolder = folders.find((folder) => folder.lastCheckStatus === "running");
+  const failedFolder = folders.find((folder) => folder.lastCheckStatus === "failed");
+  const folderError = failedFolder?.lastCheckError ?? null;
+
+  return {
+    clientId,
+    folders,
+    lastCheckedAt: row?.last_checked_at ?? newestFolderCheck,
+    lastCheckStartedAt: row?.last_check_started_at ?? runningFolder?.lastCheckStartedAt ?? null,
+    lastCheckStatus: runningFolder ? "running" : normalizeCheckStatus(row?.last_check_status),
+    lastCheckError: fallbackError ?? row?.last_check_error ?? folderError,
+    lastMetaEntitiesCount: Number(row?.last_meta_entities_count ?? 0),
+    lastDriveFolderCount: Number(row?.last_drive_folder_count ?? folders.reduce((sum, folder) => sum + folder.lastDriveFolderCount, 0)),
+    updatedAt: row?.updated_at ?? newestDate(folders.map((folder) => folder.updatedAt))
+  };
+}
+
+function newestDate(values: Array<string | null>) {
+  const timestamps = values
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+  if (timestamps.length === 0) return null;
+  return new Date(Math.max(...timestamps)).toISOString();
 }
 
 function mapStoredItem(row: BatchFolderCheckRow): BatchOverviewItem {
@@ -169,6 +236,8 @@ function mapStoredItem(row: BatchFolderCheckRow): BatchOverviewItem {
 
   return {
     id: row.drive_folder_id,
+    sourceFolderId: row.source_folder_id,
+    sourceFolderLabel: row.source_folder_label,
     name: row.name,
     path: row.path,
     depth: Number(row.depth ?? 0),
@@ -456,11 +525,17 @@ async function listMetaEntities(clientId: string): Promise<{ entities: MetaEntit
 export async function getBatchSettings(clientId: string): Promise<{ settings: BatchSettings | null; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
-    const { data, error } = await supabase.from("batch_settings").select("*").eq("client_id", clientId).maybeSingle();
+    const [settingsResult, foldersResult] = await Promise.all([
+      supabase.from("batch_settings").select("*").eq("client_id", clientId).maybeSingle(),
+      supabase.from("batch_drive_folders").select("*").eq("client_id", clientId).order("created_at", { ascending: true })
+    ]);
 
-    if (error) return { settings: null, error: error.message };
+    if (settingsResult.error) return { settings: null, error: settingsResult.error.message };
+    if (foldersResult.error) return { settings: buildSettings(clientId, settingsResult.data as BatchSettingsRow | null, []), error: foldersResult.error.message };
+
+    const folders = ((foldersResult.data ?? []) as BatchDriveFolderRow[]).map(mapDriveFolder);
     return {
-      settings: data ? mapSettings(data as BatchSettingsRow) : null,
+      settings: buildSettings(clientId, settingsResult.data as BatchSettingsRow | null, folders),
       error: null
     };
   } catch (error) {
@@ -471,46 +546,70 @@ export async function getBatchSettings(clientId: string): Promise<{ settings: Ba
   }
 }
 
-export async function upsertBatchSettings(clientId: string, input: { googleDriveFolderUrl: string }) {
+export async function upsertBatchSettings(clientId: string, input: { googleDriveFolderUrl: string; label?: string }) {
   const googleDriveFolderUrl = input.googleDriveFolderUrl.trim();
   const googleDriveFolderId = extractGoogleDriveFolderId(googleDriveFolderUrl);
+  const label = input.label?.trim() || "Drive Ordner";
 
   if (!googleDriveFolderUrl) throw new Error("Google Drive Ordner fehlt.");
   if (!googleDriveFolderId) throw new Error("Google Drive Ordner-ID konnte nicht erkannt werden.");
 
   const supabase = createSupabaseServiceRoleClient();
-  const { data: existingSettings } = await supabase
+  const { data: existingSettings, error: settingsLoadError } = await supabase
     .from("batch_settings")
-    .select("google_drive_folder_id")
+    .select("id")
     .eq("client_id", clientId)
     .maybeSingle();
-  const folderChanged = existingSettings?.google_drive_folder_id !== googleDriveFolderId;
 
-  const { data, error } = await supabase
-    .from("batch_settings")
-    .upsert({
+  if (settingsLoadError) throw new Error(settingsLoadError.message);
+
+  if (!existingSettings) {
+    const { error: settingsInsertError } = await supabase.from("batch_settings").insert({
       client_id: clientId,
       google_drive_folder_url: googleDriveFolderUrl,
       google_drive_folder_id: googleDriveFolderId,
-      last_checked_at: folderChanged ? null : undefined,
-      last_check_started_at: null,
-      last_check_status: folderChanged ? "idle" : undefined,
+      last_check_status: "idle",
       last_check_error: null,
-      last_meta_entities_count: folderChanged ? 0 : undefined,
-      last_drive_folder_count: folderChanged ? 0 : undefined
-    }, { onConflict: "client_id" })
-    .select("*")
-    .single();
+      last_meta_entities_count: 0,
+      last_drive_folder_count: 0
+    });
+
+    if (settingsInsertError) throw new Error(settingsInsertError.message);
+  }
+
+  const { error } = await supabase
+    .from("batch_drive_folders")
+    .upsert({
+      client_id: clientId,
+      label,
+      google_drive_folder_url: googleDriveFolderUrl,
+      google_drive_folder_id: googleDriveFolderId,
+      enabled: true,
+      last_check_status: "idle",
+      last_check_error: null
+    }, { onConflict: "client_id,google_drive_folder_id" });
 
   if (error) throw new Error(error.message);
 
-  if (folderChanged) {
-    const { error: deleteError } = await supabase.from("batch_folder_checks").delete().eq("client_id", clientId);
-    if (deleteError) throw new Error(deleteError.message);
-  }
-
   revalidateCacheTags(...BATCH_CACHE_TAGS);
-  return mapSettings(data as BatchSettingsRow);
+  return getBatchSettings(clientId);
+}
+
+export async function deleteBatchDriveFolder(clientId: string, folderId: string) {
+  if (!folderId) throw new Error("Drive Ordner fehlt.");
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .from("batch_drive_folders")
+    .delete()
+    .eq("client_id", clientId)
+    .eq("id", folderId);
+
+  if (error) throw new Error(error.message);
+
+  await supabase.from("batch_folder_checks").delete().eq("client_id", clientId).eq("source_folder_id", folderId);
+  revalidateCacheTags(...BATCH_CACHE_TAGS);
+  return getBatchSettings(clientId);
 }
 
 export async function getBatchOverview(clientId: string): Promise<BatchOverview> {
@@ -549,6 +648,7 @@ async function listStoredBatchItems(clientId: string): Promise<{ items: BatchOve
       .from("batch_folder_checks")
       .select("*")
       .eq("client_id", clientId)
+      .order("source_folder_label", { ascending: true })
       .order("path", { ascending: true });
 
     if (error) return { items: [], error: error.message };
@@ -564,7 +664,10 @@ async function listStoredBatchItems(clientId: string): Promise<{ items: BatchOve
 export async function runBatchCheck(clientId: string) {
   const { settings, error: settingsError } = await getBatchSettings(clientId);
   if (settingsError) throw new Error(settingsError);
-  if (!settings) throw new Error("Kein Google Drive Batch-Ordner gespeichert.");
+  if (!settings || settings.folders.length === 0) throw new Error("Kein Google Drive Batch-Ordner gespeichert.");
+
+  const activeFolders = settings.folders.filter((folder) => folder.enabled);
+  if (activeFolders.length === 0) throw new Error("Alle Google Drive Batch-Ordner sind deaktiviert.");
 
   const supabase = createSupabaseServiceRoleClient();
   const startedAt = new Date().toISOString();
@@ -576,47 +679,85 @@ export async function runBatchCheck(clientId: string) {
       last_check_error: null
     })
     .eq("client_id", clientId);
+  await supabase
+    .from("batch_drive_folders")
+    .update({
+      last_check_started_at: startedAt,
+      last_check_status: "running",
+      last_check_error: null
+    })
+    .eq("client_id", clientId)
+    .eq("enabled", true);
 
   try {
-    const [driveResult, metaResult] = await Promise.all([
-      listGoogleDriveBatchFolders(settings.googleDriveFolderId),
-      listMetaEntities(clientId)
-    ]);
-    const error = driveResult.error ?? metaResult.error;
-    if (error) throw new Error(error);
+    const metaResult = await listMetaEntities(clientId);
+    if (metaResult.error) throw new Error(metaResult.error);
 
     const checkedAt = new Date().toISOString();
-    const items = driveResult.folders.map((folder) => {
-      const match = findMetaMatch(folder.name, metaResult.entities);
-      const status: BatchOverviewItem["status"] = match ? (match.live ? "live" : "found") : "missing";
+    const allItems: BatchOverviewItem[] = [];
+    const errors: string[] = [];
+    let driveFolderCount = 0;
 
-      return {
-        ...folder,
+    for (const source of activeFolders) {
+      const driveResult = await listGoogleDriveBatchFolders(source.googleDriveFolderId);
+      if (driveResult.error) {
+        errors.push(`${source.label}: ${driveResult.error}`);
+        await updateSourceCheckStatus(clientId, source.id, {
+          status: "failed",
+          startedAt: null,
+          checkedAt: null,
+          error: driveResult.error,
+          folderCount: source.lastDriveFolderCount
+        });
+        continue;
+      }
+
+      driveFolderCount += driveResult.folders.length;
+      const items = driveResult.folders.map((folder) => {
+        const match = findMetaMatch(folder.name, metaResult.entities);
+        const status: BatchOverviewItem["status"] = match ? (match.live ? "live" : "found") : "missing";
+
+        return {
+          ...folder,
+          sourceFolderId: source.id,
+          sourceFolderLabel: source.label,
+          checkedAt,
+          status,
+          match: match
+            ? {
+                id: match.id,
+                type: match.type,
+                name: match.name,
+                status: match.status,
+                effectiveStatus: match.effectiveStatus,
+                href: match.href
+              }
+            : null
+        } satisfies BatchOverviewItem;
+      });
+
+      await replaceStoredBatchItemsForSource(clientId, source, items);
+      await updateSourceCheckStatus(clientId, source.id, {
+        status: "completed",
+        startedAt: null,
         checkedAt,
-        status,
-        match: match
-          ? {
-              id: match.id,
-              type: match.type,
-              name: match.name,
-              status: match.status,
-              effectiveStatus: match.effectiveStatus,
-              href: match.href
-            }
-          : null
-      } satisfies BatchOverviewItem;
-    });
+        error: null,
+        folderCount: driveResult.folders.length
+      });
+      allItems.push(...items);
+    }
 
-    await replaceStoredBatchItems(clientId, items);
+    const aggregateStatus: BatchCheckStatus = errors.length > 0 ? "failed" : "completed";
+    const aggregateError = errors.length > 0 ? errors.join("\n") : null;
     const { data, error: updateError } = await supabase
       .from("batch_settings")
       .update({
-        last_checked_at: checkedAt,
+        last_checked_at: allItems.length > 0 ? checkedAt : settings.lastCheckedAt,
         last_check_started_at: null,
-        last_check_status: "completed",
-        last_check_error: null,
+        last_check_status: aggregateStatus,
+        last_check_error: aggregateError,
         last_meta_entities_count: metaResult.entities.length,
-        last_drive_folder_count: driveResult.folders.length
+        last_drive_folder_count: driveFolderCount
       })
       .eq("client_id", clientId)
       .select("*")
@@ -625,14 +766,15 @@ export async function runBatchCheck(clientId: string) {
     if (updateError) throw new Error(updateError.message);
 
     revalidateCacheTags(...BATCH_CACHE_TAGS);
+    const refreshedFolders = await listBatchDriveFolders(clientId);
     return {
-      settings: mapSettings(data as BatchSettingsRow),
-      items,
+      settings: buildSettings(clientId, data as BatchSettingsRow, refreshedFolders.folders, refreshedFolders.error),
+      items: allItems,
       totals: {
-        folders: items.length,
-        live: items.filter((item) => item.status === "live").length,
-        found: items.filter((item) => item.status === "found").length,
-        missing: items.filter((item) => item.status === "missing").length,
+        folders: allItems.length,
+        live: allItems.filter((item) => item.status === "live").length,
+        found: allItems.filter((item) => item.status === "found").length,
+        missing: allItems.filter((item) => item.status === "missing").length,
         metaEntities: metaResult.entities.length
       }
     } satisfies BatchOverview;
@@ -646,15 +788,59 @@ export async function runBatchCheck(clientId: string) {
         last_check_error: message
       })
       .eq("client_id", clientId);
+    await supabase
+      .from("batch_drive_folders")
+      .update({
+        last_check_started_at: null,
+        last_check_status: "failed",
+        last_check_error: message
+      })
+      .eq("client_id", clientId)
+      .eq("enabled", true);
     revalidateCacheTags(...BATCH_CACHE_TAGS);
     throw new Error(message);
   }
 }
 
-async function replaceStoredBatchItems(clientId: string, items: BatchOverviewItem[]) {
+async function listBatchDriveFolders(clientId: string): Promise<{ folders: BatchDriveFolderSetting[]; error: string | null }> {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .from("batch_drive_folders")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: true });
+
+  if (error) return { folders: [], error: error.message };
+  return { folders: ((data ?? []) as BatchDriveFolderRow[]).map(mapDriveFolder), error: null };
+}
+
+async function updateSourceCheckStatus(
+  clientId: string,
+  sourceFolderId: string,
+  input: { status: BatchCheckStatus; startedAt: string | null; checkedAt: string | null; error: string | null; folderCount: number }
+) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .from("batch_drive_folders")
+    .update({
+      last_check_started_at: input.startedAt,
+      last_checked_at: input.checkedAt,
+      last_check_status: input.status,
+      last_check_error: input.error,
+      last_drive_folder_count: input.folderCount
+    })
+    .eq("client_id", clientId)
+    .eq("id", sourceFolderId);
+
+  if (error) throw new Error(error.message);
+}
+
+async function replaceStoredBatchItemsForSource(clientId: string, source: BatchDriveFolderSetting, items: BatchOverviewItem[]) {
   const supabase = createSupabaseServiceRoleClient();
   const rows = items.map((item) => ({
     client_id: clientId,
+    source_folder_id: source.id,
+    source_folder_label: source.label,
     drive_folder_id: item.id,
     name: item.name,
     path: item.path,
@@ -674,12 +860,12 @@ async function replaceStoredBatchItems(clientId: string, items: BatchOverviewIte
   if (rows.length > 0) {
     const { error: upsertError } = await supabase
       .from("batch_folder_checks")
-      .upsert(rows, { onConflict: "client_id,drive_folder_id" });
+      .upsert(rows, { onConflict: "client_id,source_folder_id,drive_folder_id" });
     if (upsertError) throw new Error(upsertError.message);
   }
 
   const currentIds = items.map((item) => item.id);
-  let deleteQuery = supabase.from("batch_folder_checks").delete().eq("client_id", clientId);
+  let deleteQuery = supabase.from("batch_folder_checks").delete().eq("client_id", clientId).eq("source_folder_id", source.id);
   if (currentIds.length > 0) deleteQuery = deleteQuery.not("drive_folder_id", "in", `(${currentIds.map((id) => `"${id.replace(/"/g, '\\"')}"`).join(",")})`);
   const { error: deleteError } = await deleteQuery;
   if (deleteError) throw new Error(deleteError.message);
@@ -688,30 +874,30 @@ async function replaceStoredBatchItems(clientId: string, items: BatchOverviewIte
 export async function runDueBatchChecks() {
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
-    .from("batch_settings")
-    .select("client_id,last_checked_at,clients(status)")
-    .not("google_drive_folder_id", "is", null);
+    .from("batch_drive_folders")
+    .select("client_id,last_checked_at,enabled,clients(status)")
+    .eq("enabled", true);
 
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as Array<{ client_id: string; last_checked_at: string | null; clients?: { status?: string | null } | null }>;
-  const dueRows = rows.filter((row) => row.clients?.status !== "archived" && isBatchSnapshotStale(row.last_checked_at));
+  const rows = (data ?? []) as Array<{ client_id: string; last_checked_at: string | null; enabled: boolean | null; clients?: { status?: string | null } | null }>;
+  const dueClientIds = Array.from(new Set(rows.filter((row) => row.clients?.status !== "archived" && isBatchSnapshotStale(row.last_checked_at)).map((row) => row.client_id)));
   const results: Array<{ clientId: string; status: string; folders?: number; error?: string }> = [];
 
-  for (const row of dueRows) {
+  for (const clientId of dueClientIds) {
     try {
-      const overview = await runBatchCheck(row.client_id);
-      results.push({ clientId: row.client_id, status: "completed", folders: overview.totals.folders });
+      const overview = await runBatchCheck(clientId);
+      results.push({ clientId, status: "completed", folders: overview.totals.folders });
     } catch (error) {
       results.push({
-        clientId: row.client_id,
+        clientId,
         status: "failed",
         error: error instanceof Error ? error.message : "Batch Check fehlgeschlagen."
       });
     }
   }
 
-  return { clients: rows.length, due: dueRows.length, results };
+  return { clients: new Set(rows.map((row) => row.client_id)).size, due: dueClientIds.length, results };
 }
 
 export function isBatchSnapshotStale(value: string | null) {

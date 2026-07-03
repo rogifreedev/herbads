@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function BatchesPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
   const overview = await getBatchOverview(clientId);
+  const settings = overview.settings;
 
   return (
     <div className="space-y-6">
@@ -25,47 +26,47 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
           <p className="mt-2 text-sm text-white/60">Gespeicherter Batch-Snapshot aus Supabase. Drive wird nur taeglich per Cron oder manuell ueberprueft.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {overview.settings ? <BatchCheckButton clientId={clientId} disabled={overview.settings.lastCheckStatus === "running"} /> : null}
+          {settings && settings.folders.length > 0 ? <BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} /> : null}
           <BatchesSectionNav clientId={clientId} active="batches" />
         </div>
       </div>
 
-      {!overview.settings ? (
+      {!settings || settings.folders.length === 0 ? (
         <Card className="border-herb-border bg-herb-surface/90">
           <CardContent className="p-6">
             <EmptyState
               title="Kein Batch-Ordner verbunden"
-              description="Speichere zuerst den Google Drive Root-Folder fuer die Batch-Unterordner."
+              description="Speichere zuerst mindestens einen Google Drive Root-Folder fuer die Batch-Unterordner."
               action={<Button asChild variant="gradient"><Link href={`/clients/${clientId}/batches/settings`}>Settings oeffnen</Link></Button>}
             />
           </CardContent>
         </Card>
       ) : (
         <>
-          {overview.settings.lastCheckError ? (
+          {settings.lastCheckError ? (
             <Alert variant="warning">
-              <AlertDescription>{overview.settings.lastCheckError}</AlertDescription>
+              <AlertDescription>{settings.lastCheckError}</AlertDescription>
             </Alert>
           ) : null}
-          {overview.settings.lastCheckStatus === "running" ? (
+          {settings.lastCheckStatus === "running" ? (
             <Alert>
               <AlertDescription>Batch Check laeuft gerade. Die Seite zeigt den letzten gespeicherten Snapshot.</AlertDescription>
             </Alert>
           ) : null}
-          {overview.settings.lastCheckStatus !== "running" && isBatchSnapshotStale(overview.settings.lastCheckedAt) ? (
+          {settings.lastCheckStatus !== "running" && isBatchSnapshotStale(settings.lastCheckedAt) ? (
             <Alert variant="warning">
               <AlertDescription>
-                {overview.settings.lastCheckedAt ? "Der letzte Batch Check ist aelter als 24 Stunden." : "Es gibt noch keinen gespeicherten Batch Check."} Starte den Abgleich ueber Ueberpruefen.
+                {settings.lastCheckedAt ? "Der letzte Batch Check ist aelter als 24 Stunden." : "Es gibt noch keinen gespeicherten Batch Check."} Starte den Abgleich ueber Ueberpruefen.
               </AlertDescription>
             </Alert>
           ) : null}
 
           <section className="grid gap-4 md:grid-cols-5">
-            <SummaryCard label="Drive Ordner" value={formatNumber(overview.totals.folders)} />
+            <SummaryCard label="Root Ordner" value={formatNumber(settings.folders.length)} />
             <SummaryCard label="Geschaltet" value={formatNumber(overview.totals.live)} />
             <SummaryCard label="Gefunden" value={formatNumber(overview.totals.found)} />
             <SummaryCard label="Nicht gefunden" value={formatNumber(overview.totals.missing)} />
-            <SummaryCard label="Letzter Check" value={overview.settings.lastCheckedAt ? formatDateTime(overview.settings.lastCheckedAt) : "-"} />
+            <SummaryCard label="Letzter Check" value={settings.lastCheckedAt ? formatDateTime(settings.lastCheckedAt) : "-"} />
           </section>
 
           <Card className="border-herb-border bg-herb-surface/90">
@@ -74,11 +75,11 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
                 <div>
                   <CardTitle>Batch Check</CardTitle>
                   <CardDescription>
-                    {formatNumber(overview.totals.metaEntities)} Meta-Namen im letzten Abgleich. Root-Folder: {overview.settings.googleDriveFolderId}
+                    {formatNumber(overview.totals.metaEntities)} Meta-Namen im letzten Abgleich. {formatNumber(settings.folders.length)} Root-Ordner verbunden.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <BatchCheckButton clientId={clientId} disabled={overview.settings.lastCheckStatus === "running"} />
+                  <BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} />
                   <Button asChild variant="outline" size="sm" className="border-herb-border">
                     <Link href={`/clients/${clientId}/batches/settings`}>
                       <Settings className="mr-2 h-4 w-4" />
@@ -93,7 +94,7 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
                 <EmptyState
                   title="Noch kein Batch Snapshot"
                   description="Starte einmal Ueberpruefen. Danach laedt diese Seite nur noch die gespeicherten Ergebnisse aus Supabase."
-                  action={<BatchCheckButton clientId={clientId} disabled={overview.settings.lastCheckStatus === "running"} />}
+                  action={<BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} />}
                 />
               ) : (
                 <BatchTable rows={overview.items} />
@@ -127,9 +128,10 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
-      <Table className="min-w-[1040px]">
+      <Table className="min-w-[1120px]">
         <TableHeader className="bg-white/[0.03]">
           <TableRow className="hover:bg-transparent">
+            <TableHead>Root</TableHead>
             <TableHead>Batch Ordner</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Meta Match</TableHead>
@@ -140,7 +142,10 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.id} className="align-top">
+            <TableRow key={`${row.sourceFolderId ?? "root"}-${row.id}`} className="align-top">
+              <TableCell>
+                <Badge variant="outline">{row.sourceFolderLabel ?? "Drive Ordner"}</Badge>
+              </TableCell>
               <TableCell>
                 <p className="line-clamp-2 min-w-[260px] font-medium text-white">{row.name}</p>
                 {row.path !== row.name ? <p className="mt-1 line-clamp-1 text-xs text-white/45">{row.path}</p> : null}

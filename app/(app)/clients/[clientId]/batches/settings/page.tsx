@@ -19,7 +19,7 @@ export default async function BatchSettingsPage({ params }: { params: Promise<{ 
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-heading text-4xl">Batch Settings</h2>
-          <p className="mt-2 text-sm text-white/60">Google Drive Root- oder Kundenordner, unter dem Batch-Ordner gesucht werden.</p>
+          <p className="mt-2 text-sm text-white/60">Mehrere Google Drive Root- oder Kundenordner, unter denen Batch-Ordner gesucht werden.</p>
         </div>
         <BatchesSectionNav clientId={clientId} active="settings" />
       </div>
@@ -34,8 +34,8 @@ export default async function BatchSettingsPage({ params }: { params: Promise<{ 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,560px)_1fr]">
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Google Drive verbinden</CardTitle>
-            <CardDescription>Die App sucht darunter rekursiv nach Batch-Ordnern und gleicht deren Namen mit Meta Ads, Ad Sets und Campaigns ab.</CardDescription>
+            <CardTitle>Google Drive Ordner</CardTitle>
+            <CardDescription>Fuege beliebig viele Root-Ordner hinzu. Der Check sucht darunter rekursiv nach Batch-Ordnern.</CardDescription>
           </CardHeader>
           <CardContent>
             <BatchSettingsForm clientId={clientId} settings={settings} />
