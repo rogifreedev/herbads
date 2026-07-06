@@ -6,19 +6,19 @@ export default function ClientSectionLoading() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div className="space-y-3">
-          <Skeleton className="h-4 w-40 bg-white/10" />
-          <Skeleton className="h-12 w-72 bg-white/10" />
-          <Skeleton className="h-3 w-52 bg-white/10" />
+          <Skeleton className="h-4 w-40 bg-foreground/10" />
+          <Skeleton className="h-12 w-72 bg-foreground/10" />
+          <Skeleton className="h-3 w-52 bg-foreground/10" />
         </div>
         <div className="flex gap-2">
-          <Skeleton className="h-10 w-44 bg-white/10" />
-          <Skeleton className="h-10 w-36 bg-white/10" />
+          <Skeleton className="h-10 w-44 bg-foreground/10" />
+          <Skeleton className="h-10 w-36 bg-foreground/10" />
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: 6 }).map((_, index) => (
-          <Skeleton key={index} className="h-9 w-28 rounded-lg bg-white/10" />
+          <Skeleton key={index} className="h-9 w-28 rounded-lg bg-foreground/10" />
         ))}
       </div>
 
@@ -26,9 +26,9 @@ export default function ClientSectionLoading() {
         {Array.from({ length: 10 }).map((_, index) => (
           <Card key={index} className="border-herb-border bg-herb-surface/90">
             <CardContent className="space-y-3 pt-6">
-              <Skeleton className="h-3 w-16 bg-white/10" />
-              <Skeleton className="h-7 w-24 bg-white/10" />
-              <Skeleton className="h-3 w-20 bg-white/10" />
+              <Skeleton className="h-3 w-16 bg-foreground/10" />
+              <Skeleton className="h-7 w-24 bg-foreground/10" />
+              <Skeleton className="h-3 w-20 bg-foreground/10" />
             </CardContent>
           </Card>
         ))}
@@ -36,11 +36,11 @@ export default function ClientSectionLoading() {
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <Skeleton className="h-5 w-44 bg-white/10" />
+          <Skeleton className="h-5 w-44 bg-foreground/10" />
         </CardHeader>
         <CardContent className="space-y-3">
           {Array.from({ length: 8 }).map((_, index) => (
-            <Skeleton key={index} className="h-12 w-full bg-white/10" />
+            <Skeleton key={index} className="h-12 w-full bg-foreground/10" />
           ))}
         </CardContent>
       </Card>
