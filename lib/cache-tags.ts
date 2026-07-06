@@ -42,5 +42,5 @@ export const BATCH_CACHE_TAGS = [CACHE_TAGS.batches, CACHE_TAGS.metrics, CACHE_T
 export const KNOWLEDGE_CACHE_TAGS = [CACHE_TAGS.knowledge, CACHE_TAGS.competitors] as const;
 
 export function revalidateCacheTags(...tags: string[]) {
-  for (const tag of tags) revalidateTag(tag);
+  for (const tag of tags) revalidateTag(tag, "max");
 }

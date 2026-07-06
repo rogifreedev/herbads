@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -12,8 +13,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": new URL(".", import.meta.url).pathname,
-      "server-only": new URL("./tests/server-only-stub.ts", import.meta.url).pathname
+      "@": fileURLToPath(new URL(".", import.meta.url)),
+      "server-only": fileURLToPath(new URL("./tests/server-only-stub.ts", import.meta.url))
     }
   }
 });
