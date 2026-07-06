@@ -11,6 +11,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import type { AdsetAngleItem, AngleInsight } from "@/lib/creative-angles";
 import { formatCurrency, formatDecimal, formatNumber, formatPercent } from "@/lib/format";
+import type { Translator } from "@/lib/i18n-types";
 
 type AngleRankingDataTableProps = {
   clientId: string;
@@ -21,8 +22,6 @@ type AdsetAnglesDataTableProps = {
   clientId: string;
   adsets: AdsetAngleItem[];
 };
-
-type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 
 function scoreVariant(score: number): "success" | "warning" | "secondary" {
   if (score >= 70) return "success";

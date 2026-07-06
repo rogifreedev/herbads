@@ -14,9 +14,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSepar
 import { Input } from "@/components/ui/input";
 import { formatCurrency, formatDate, formatDecimal, formatNumber, formatPercent } from "@/lib/format";
 import type { BatchPerformanceItem } from "@/lib/batch-performance";
+import type { Translator } from "@/lib/i18n-types";
 
 type SortKey = "score" | "spend" | "roas" | "ctr" | "purchases" | "cpa" | "hookRate" | "outboundCvr";
-type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 
 function numericInput(value: string) {
   const parsed = Number(value.trim().replace(",", "."));

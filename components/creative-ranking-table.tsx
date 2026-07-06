@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { creativeRows } from "@/lib/mock-data";
 import { formatCurrency, formatDate, formatDecimal, formatNumber, formatPercent } from "@/lib/format";
 import type { CreativeListItem } from "@/lib/creatives";
+import type { Translator } from "@/lib/i18n-types";
 
 type CreativeRankingTableProps = {
   clientId?: string;
@@ -36,8 +37,6 @@ type MockCreativeRow = {
   roas: string;
   status: string;
 };
-
-type Translator = ReturnType<typeof useTranslations>;
 
 function formatNullableCurrency(value: number | null) {
   return value === null ? "–" : formatCurrency(value, 2);

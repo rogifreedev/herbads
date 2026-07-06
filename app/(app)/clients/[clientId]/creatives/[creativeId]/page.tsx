@@ -17,12 +17,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getLatestCreativeAnalysis } from "@/lib/creative-ai";
 import { getClientCreativeDetail } from "@/lib/creatives";
 import type { CreativePerformanceScore } from "@/lib/creative-score";
+import type { Translator } from "@/lib/i18n-types";
 import { formatCurrency, formatDate, formatDecimal, formatNumber, formatPercent } from "@/lib/metrics";
 import { getHookTranscript, getLatestCreativeVideoTranscript } from "@/lib/video-transcripts";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;

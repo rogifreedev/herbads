@@ -9,6 +9,7 @@ import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { formatCurrency, formatDate, formatDecimal, formatNumber } from "@/lib/format";
+import type { Translator } from "@/lib/i18n-types";
 import type { LandingpageListItem, LandingpageSignal } from "@/lib/landingpages";
 
 type LandingpagesDataTableProps = {
@@ -16,8 +17,6 @@ type LandingpagesDataTableProps = {
   landingpages: LandingpageListItem[];
   emptyLabel: string;
 };
-
-type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 
 function formatMatch(value: number | null) {
   return value === null ? "–" : `${Math.round(value)}/100`;

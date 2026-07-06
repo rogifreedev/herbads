@@ -8,12 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { Translator } from "@/lib/i18n-types";
 import { formatDate, formatNumber } from "@/lib/metrics";
 import { getMetaAdSetDetail, type MetaAdSetAd, type MetaAdSetAdCreativeRow, type MetaAdSetCreative } from "@/lib/meta-adsets";
 
 export const dynamic = "force-dynamic";
-
-type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 export default async function AdSetDetailPage({ params }: { params: Promise<{ clientId: string; adSetId: string }> }) {
   const { clientId, adSetId } = await params;
