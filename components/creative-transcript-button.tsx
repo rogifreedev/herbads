@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +15,7 @@ type CreativeTranscriptButtonProps = {
 };
 
 export function CreativeTranscriptButton({ clientId, creativeId, hasTranscript = false, canTranscribe = true }: CreativeTranscriptButtonProps) {
+  const t = useTranslations("creatives");
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -24,18 +26,18 @@ export function CreativeTranscriptButton({ clientId, creativeId, hasTranscript =
     setLoading(false);
 
     if (!response.ok) {
-      toast.error(result.error ?? "Video konnte nicht transkribiert werden.");
+      toast.error(result.error ?? t("transcribeError"));
       return;
     }
 
-    toast.success("Video-Transcript gespeichert.");
+    toast.success(t("transcriptSaved"));
     router.refresh();
   }
 
   return (
     <Button type="button" variant={hasTranscript ? "outline" : "gradient"} className={hasTranscript ? "border-herb-border" : undefined} disabled={loading || !canTranscribe} onClick={transcribe}>
       <FileText className="mr-2 h-4 w-4" />
-      {loading ? "Transkribiert..." : hasTranscript ? "Transcript aktualisieren" : "Video transkribieren"}
+      {loading ? t("transcribing") : hasTranscript ? t("updateTranscript") : t("transcribeVideo")}
     </Button>
   );
 }

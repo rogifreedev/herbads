@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -29,6 +30,9 @@ function isActiveStatus(status?: string) {
 }
 
 export function BulkCreativeAnalysisButton({ clientId, creativeIds }: BulkCreativeAnalysisButtonProps) {
+  const t = useTranslations("creatives");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<BulkStatus | null>(null);
@@ -77,18 +81,18 @@ export function BulkCreativeAnalysisButton({ clientId, creativeIds }: BulkCreati
 
     if (previousStatus && isActiveStatus(previousStatus) && !isActiveStatus(status.status)) {
       if (status.failedItems > 0) {
-        toast.warning(`AI Bulk-Analyse fertig mit ${status.failedItems} Fehlern.`);
+        toast.warning(t("bulkFinishedWithErrors", { count: status.failedItems }));
       } else {
-        toast.success("AI Bulk-Analyse abgeschlossen.");
+        toast.success(t("bulkCompleted"));
       }
       startTransition(() => router.refresh());
     }
-  }, [router, status]);
+  }, [router, status, t]);
 
   async function analyzeAll() {
     if (creativeIds.length === 0) return;
 
-    const confirmed = window.confirm(`${creativeIds.length} Creatives im Hintergrund neu analysieren? Das startet ${creativeIds.length} AI-Anfragen und kann Kosten verursachen.`);
+    const confirmed = window.confirm(t("bulkConfirm", { count: creativeIds.length }));
     if (!confirmed) return;
 
     setLoading(true);
@@ -99,32 +103,33 @@ export function BulkCreativeAnalysisButton({ clientId, creativeIds }: BulkCreati
         body: JSON.stringify({ creativeIds })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "AI Bulk-Analyse konnte nicht gestartet werden.");
+      if (!response.ok) throw new Error(result.error ?? t("bulkStartError"));
 
       setStatus(result.status ?? null);
-      toast.success("AI Bulk-Analyse wurde als Hintergrundjob gestartet.");
+      toast.success(t("bulkStarted"));
       kickWorker().catch(() => undefined);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "AI Bulk-Analyse konnte nicht gestartet werden.");
+      toast.error(error instanceof Error ? error.message : t("bulkStartError"));
     } finally {
       setLoading(false);
     }
   }
 
   if (isActiveStatus(status?.status)) {
-    const pausedUntil = status?.pauseUntil ? new Date(status.pauseUntil).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : null;
+    const pausedUntil = status?.pauseUntil ? new Date(status.pauseUntil).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : null;
     return (
       <div className="flex flex-col gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-white md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-medium">AI Bulk-Analyse laeuft im Hintergrund</p>
+          <p className="font-medium">{t("bulkRunning")}</p>
           <p className="mt-1 text-xs text-white/60">
-            {status.processedItems} von {status.totalItems} verarbeitet ({status.percent}%){status.failedItems > 0 ? `, ${status.failedItems} Fehler` : ""}
-            {pausedUntil ? `, pausiert bis ${pausedUntil}` : ""}
+            {t("bulkProgress", { processed: status.processedItems, total: status.totalItems, percent: status.percent })}
+            {status.failedItems > 0 ? `, ${t("errorCount", { count: status.failedItems })}` : ""}
+            {pausedUntil ? `, ${t("bulkPausedUntil", { time: pausedUntil })}` : ""}
           </p>
         </div>
         <Button type="button" variant="outline" className="border-herb-border" disabled={loading || isPending} onClick={() => loadStatus().catch(() => undefined)}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Aktualisieren
+          {tCommon("refresh")}
         </Button>
       </div>
     );
@@ -133,7 +138,7 @@ export function BulkCreativeAnalysisButton({ clientId, creativeIds }: BulkCreati
   return (
     <Button type="button" variant="outline" className="border-herb-border" disabled={creativeIds.length === 0 || loading} onClick={analyzeAll}>
       {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-      Alle sichtbaren im Hintergrund analysieren ({creativeIds.length})
+      {t("analyzeAllVisible", { count: creativeIds.length })}
     </Button>
   );
 }

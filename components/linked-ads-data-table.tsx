@@ -1,6 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { useTranslations } from "next-intl";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { DataTable } from "@/components/ui/data-table";
 import type { CreativeDetail } from "@/lib/creatives";
@@ -14,5 +15,6 @@ const columns: ColumnDef<LinkedAd>[] = [
 ];
 
 export function LinkedAdsDataTable({ ads }: { ads: LinkedAd[] }) {
-  return <DataTable columns={columns} data={ads} pageSize={10} emptyLabel="Keine verknuepften Ads gefunden." />;
+  const t = useTranslations("creatives");
+  return <DataTable columns={columns} data={ads} pageSize={10} emptyLabel={t("noLinkedAds")} />;
 }

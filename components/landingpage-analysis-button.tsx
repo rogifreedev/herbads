@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Globe, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +19,8 @@ type StoredLandingpageJob = {
 };
 
 export function LandingpageAnalysisButton({ clientId, urls }: LandingpageAnalysisButtonProps) {
+  const t = useTranslations("creatives");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const cancelledRef = useRef(false);
   const runningRef = useRef(false);
@@ -70,16 +73,16 @@ export function LandingpageAnalysisButton({ clientId, urls }: LandingpageAnalysi
     runningRef.current = false;
     if (cancelledRef.current) {
       clearJob();
-      toast.message("Landingpage-Analyse abgebrochen.");
+      toast.message(t("lpCancelled"));
     } else if (failed > 0) {
       clearJob();
-      toast.warning(`Landingpage-Analyse fertig mit ${failed} Fehlern.`);
+      toast.warning(t("lpFinishedWithErrors", { count: failed }));
     } else {
       clearJob();
-      toast.success("Landingpages analysiert.");
+      toast.success(t("lpAnalyzed"));
     }
     router.refresh();
-  }, [clearJob, clientId, router, saveJob]);
+  }, [clearJob, clientId, router, saveJob, t]);
 
   useEffect(() => {
     if (resumedRef.current) return;
@@ -95,7 +98,7 @@ export function LandingpageAnalysisButton({ clientId, urls }: LandingpageAnalysi
         return;
       }
 
-      toast.message("Landingpage-Analyse wird nach Reload fortgesetzt.");
+      toast.message(t("lpResumed"));
       runQueue(job.items, job.done, job.failed).catch(() => {
         runningRef.current = false;
         setRunning(false);
@@ -103,11 +106,11 @@ export function LandingpageAnalysisButton({ clientId, urls }: LandingpageAnalysi
     } catch {
       clearJob();
     }
-  }, [clearJob, runQueue, storageKey]);
+  }, [clearJob, runQueue, storageKey, t]);
 
   async function analyzeLandingpages() {
     if (urls.length === 0) return;
-    const confirmed = window.confirm(`${urls.length} sichtbare Landingpages crawlen und analysieren? Das startet ${urls.length} AI-Anfragen und externe Page-Fetches.`);
+    const confirmed = window.confirm(t("lpConfirm", { count: urls.length }));
     if (!confirmed) return;
 
     await runQueue(urls);
@@ -117,14 +120,14 @@ export function LandingpageAnalysisButton({ clientId, urls }: LandingpageAnalysi
     return (
       <div className="flex flex-col gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-white md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-medium">Landingpage-Analyse laeuft</p>
+          <p className="font-medium">{t("lpRunning")}</p>
           <p className="mt-1 text-xs text-white/60">
-            {progress.done} von {jobItems.length} fertig{progress.failed > 0 ? `, ${progress.failed} Fehler` : ""}
+            {t("lpProgress", { done: progress.done, total: jobItems.length })}{progress.failed > 0 ? `, ${t("errorCount", { count: progress.failed })}` : ""}
           </p>
         </div>
         <Button type="button" variant="outline" className="border-herb-border" onClick={() => { cancelledRef.current = true; }}>
           <X className="mr-2 h-4 w-4" />
-          Abbrechen
+          {tCommon("cancel")}
         </Button>
       </div>
     );
@@ -133,7 +136,7 @@ export function LandingpageAnalysisButton({ clientId, urls }: LandingpageAnalysi
   return (
     <Button type="button" variant="outline" className="border-herb-border" disabled={urls.length === 0} onClick={analyzeLandingpages}>
       <Globe className="mr-2 h-4 w-4" />
-      Sichtbare Landingpages analysieren ({urls.length})
+      {t("lpAnalyzeVisible", { count: urls.length })}
     </Button>
   );
 }

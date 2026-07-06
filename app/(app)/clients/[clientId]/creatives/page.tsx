@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { BulkCreativeAnalysisButton } from "@/components/bulk-creative-analysis-button";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { CreativeTypeBadge } from "@/components/creative-type-badge";
@@ -56,7 +57,7 @@ function resolveDateFilters(searchParams: SearchParams) {
   const hasExplicitDateRange = Boolean(firstParam(searchParams.since) || firstParam(searchParams.until));
   const since = isAllRange ? null : dateParam(searchParams.since) ?? (hasExplicitDateRange ? null : dateDaysAgo(30));
   const until = isAllRange ? null : dateParam(searchParams.until) ?? (hasExplicitDateRange ? null : formatDateInput(new Date()));
-  const dateError = since && until && since > until ? "Startdatum darf nicht nach dem Enddatum liegen." : null;
+  const dateError = Boolean(since && until && since > until);
   return { since, until, dateError, range: isAllRange ? "all" : null };
 }
 
@@ -71,6 +72,7 @@ function dateSearchSuffix(filters: ReturnType<typeof resolveDateFilters>) {
 
 export default async function ClientCreativesPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const t = await getTranslations("creatives");
   const dateFilters = resolveDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const { creatives, error } = await listClientCreatives(clientId, activeDateRange);
@@ -82,8 +84,8 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
       <div>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="font-heading text-4xl">Creative Library</h2>
-            <p className="mt-2 text-sm text-white/60">Alle Meta Creatives, Performance KPIs und AI Analysen an einem Ort.</p>
+            <h2 className="font-heading text-4xl">{t("libraryTitle")}</h2>
+            <p className="mt-2 text-sm text-white/60">{t("librarySubtitle")}</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <CreativeDateRangePicker defaultDays={30} />
@@ -98,22 +100,22 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
 
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{t("dateRangeError")}</AlertDescription></Alert> : null}
 
       <CreativeRankingTable
         clientId={clientId}
         creatives={creatives}
-        title="Creative Ranking"
+        title={t("rankingTitle")}
         detailHrefSuffix={detailHrefSuffix}
         currentPage={rankingPage}
       />
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Creative Grid</CardTitle>
+          <CardTitle>{t("gridTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           {creatives.length === 0 ? (
-            <EmptyState className="col-span-full" title="Noch keine Creatives synchronisiert" description="Starte im Kundendashboard den Meta Sync, um Creatives zu laden." />
+            <EmptyState className="col-span-full" title={t("noneSyncedTitle")} description={t("noneSyncedDescription")} />
           ) : null}
           {creatives.slice(0, 48).map((creative) => (
             <Link key={creative.id} href={`/clients/${clientId}/creatives/${creative.id}${detailHrefSuffix}`} className="group rounded-2xl border border-herb-border bg-black/30 p-4 transition hover:border-primary/60">
@@ -134,12 +136,12 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
                     <FunnelStageBadge stage={creative.funnelStage} />
                     <Badge variant={creative.status === "ACTIVE" ? "success" : "secondary"}>{creative.status}</Badge>
                   </div>
-                  <span className="text-xs text-white/45">{creative.adCount} Ads</span>
+                  <span className="text-xs text-white/45">{t("adCount", { count: creative.adCount })}</span>
                 </div>
                 <p className="line-clamp-2 font-medium text-white">{creative.name}</p>
                 <div className="grid grid-cols-3 gap-2 text-xs text-white/60">
                   <span>{formatCurrency(creative.metrics.spend)}</span>
-                  <span>Aktiv {formatDate(creative.firstActiveDate)}</span>
+                  <span>{t("activeSince", { date: formatDate(creative.firstActiveDate) })}</span>
                   <span className="truncate">LP {displayUrl(creative.landingUrl)}</span>
                   <span>Score {creative.performanceScore.score}/100</span>
                   <span>Conv. {formatNumber(creative.metrics.purchases)}</span>

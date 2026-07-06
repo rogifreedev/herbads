@@ -1,14 +1,15 @@
+import { useTranslations } from "next-intl";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
 
 type EmotionKey = keyof CreativeEmotionScores;
 
-const emotions: Array<{ key: EmotionKey; label: string; shortLabel: string }> = [
-  { key: "curiosity", label: "Neugier", shortLabel: "Neugier" },
-  { key: "desire", label: "Verlangen", shortLabel: "Desire" },
-  { key: "trust", label: "Vertrauen", shortLabel: "Trust" },
-  { key: "urgency", label: "Dringlichkeit", shortLabel: "Urgency" },
-  { key: "joy", label: "Freude", shortLabel: "Joy" },
-  { key: "fearOfMissingOut", label: "FOMO", shortLabel: "FOMO" }
+const emotions: Array<{ key: EmotionKey; labelKey: string; shortLabel: string | null }> = [
+  { key: "curiosity", labelKey: "emotionCuriosity", shortLabel: null },
+  { key: "desire", labelKey: "emotionDesire", shortLabel: "Desire" },
+  { key: "trust", labelKey: "emotionTrust", shortLabel: "Trust" },
+  { key: "urgency", labelKey: "emotionUrgency", shortLabel: "Urgency" },
+  { key: "joy", labelKey: "emotionJoy", shortLabel: "Joy" },
+  { key: "fearOfMissingOut", labelKey: "emotionFomo", shortLabel: "FOMO" }
 ];
 
 function scoreValue(scores: CreativeEmotionScores, key: EmotionKey) {
@@ -30,6 +31,7 @@ export function hasEmotionScores(scores: CreativeEmotionScores) {
 }
 
 export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores }) {
+  const t = useTranslations("creatives");
   const size = 320;
   const center = size / 2;
   const radius = 104;
@@ -67,7 +69,7 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
                 <g key={emotion.key}>
                   <line x1={center} y1={center} x2={end.x} y2={end.y} stroke="hsl(var(--muted-foreground) / 0.28)" strokeWidth="1" />
                   <text x={label.x} y={label.y} textAnchor={anchor} dominantBaseline="middle" className="fill-muted-foreground text-[11px] font-medium">
-                    {emotion.shortLabel}
+                    {emotion.shortLabel ?? t(emotion.labelKey)}
                   </text>
                 </g>
               );
@@ -82,7 +84,7 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
         <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
           {emotions.map((emotion) => (
             <div key={emotion.key} className="min-w-0 rounded-lg border border-border bg-secondary/70 px-3 py-2">
-              <p className="text-xs text-muted-foreground">{emotion.label}</p>
+              <p className="text-xs text-muted-foreground">{t(emotion.labelKey)}</p>
               <p className="mt-1 whitespace-nowrap font-heading text-xl text-foreground 2xl:text-2xl">{scoreValue(scores, emotion.key)}/100</p>
             </div>
           ))}

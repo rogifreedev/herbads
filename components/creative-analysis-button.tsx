@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +14,7 @@ type CreativeAnalysisButtonProps = {
 };
 
 export function CreativeAnalysisButton({ clientId, creativeId, hasAnalysis = false }: CreativeAnalysisButtonProps) {
+  const t = useTranslations("creatives");
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -23,18 +25,18 @@ export function CreativeAnalysisButton({ clientId, creativeId, hasAnalysis = fal
     setLoading(false);
 
     if (!response.ok) {
-      toast.error(result.error ?? "Creative konnte nicht analysiert werden.");
+      toast.error(result.error ?? t("analyzeError"));
       return;
     }
 
-    toast.success("Creative Analyse gespeichert.");
+    toast.success(t("analysisSaved"));
     router.refresh();
   }
 
   return (
     <Button type="button" variant={hasAnalysis ? "outline" : "gradient"} className={hasAnalysis ? "border-herb-border" : undefined} disabled={loading} onClick={analyze}>
       <Sparkles className="mr-2 h-4 w-4" />
-      {loading ? "Analysiert..." : hasAnalysis ? "Neu analysieren" : "AI Analyse starten"}
+      {loading ? t("analyzing") : hasAnalysis ? t("reanalyze") : t("startAiAnalysis")}
     </Button>
   );
 }

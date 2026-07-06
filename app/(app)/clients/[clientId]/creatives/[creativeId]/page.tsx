@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ExternalLink, Play } from "lucide-react";
+import { getLocale, getTranslations } from "next-intl/server";
 import { CreativeAnalysisButton } from "@/components/creative-analysis-button";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { CreativeEmotionRadar, hasEmotionScores } from "@/components/creative-emotion-radar";
@@ -20,6 +21,8 @@ import { formatCurrency, formatDate, formatDecimal, formatNumber, formatPercent 
 import { getHookTranscript, getLatestCreativeVideoTranscript } from "@/lib/video-transcripts";
 
 type SearchParams = Record<string, string | string[] | undefined>;
+
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -51,12 +54,13 @@ function resolveDateFilters(searchParams: SearchParams) {
   const isAllRange = firstParam(searchParams.range) === "all";
   const since = isAllRange ? null : dateParam(searchParams.since) ?? (hasExplicitDateRange ? null : dateDaysAgo(30));
   const until = isAllRange ? null : dateParam(searchParams.until) ?? (hasExplicitDateRange ? null : formatDateInput(new Date()));
-  const dateError = since && until && since > until ? "Startdatum darf nicht nach dem Enddatum liegen." : null;
+  const dateError = Boolean(since && until && since > until);
   return { since, until, dateError };
 }
 
 export default async function CreativeDetailPage({ params, searchParams }: { params: Promise<{ clientId: string; creativeId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId, creativeId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const [t, locale] = await Promise.all([getTranslations("creatives"), getLocale()]);
   const dateFilters = resolveDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const [{ creative, error }, { analysis, error: analysisError }, { transcript, error: transcriptError }] = await Promise.all([
@@ -67,7 +71,7 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
 
   if (!creative) {
     return (
-      <Alert variant="warning"><AlertDescription>{error ?? "Creative wurde nicht gefunden."}</AlertDescription></Alert>
+      <Alert variant="warning"><AlertDescription>{error ?? t("notFound")}</AlertDescription></Alert>
     );
   }
 
@@ -75,14 +79,17 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
   const showTranscriptCard = Boolean(creative.videoId || creative.videoUrl || creative.videoEmbedUrl || transcript);
   const periodLabel =
     !dateFilters.dateError && (dateFilters.since || dateFilters.until)
-      ? `KPI-Zeitraum: ${dateFilters.since ? `ab ${formatDate(dateFilters.since)}` : "ab Anfang"} bis ${dateFilters.until ? formatDate(dateFilters.until) : "heute"}`
+      ? t("kpiPeriod", {
+          from: dateFilters.since ? formatDate(dateFilters.since) : t("periodStart"),
+          to: dateFilters.until ? formatDate(dateFilters.until) : t("periodToday")
+        })
       : null;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Creative Preview</CardTitle>
+          <CardTitle>{t("previewTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_top,rgba(229,31,118,0.28),transparent_42%),#1f2937]">
@@ -131,7 +138,7 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
               <Button asChild variant="outline" className="w-full border-herb-border">
                 <Link href={creative.videoPermalinkUrl} target="_blank">
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  Video auf Meta ansehen
+                  {t("watchVideoOnMeta")}
                 </Link>
               </Button>
             ) : null}
@@ -149,7 +156,7 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
+          {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{t("dateRangeError")}</AlertDescription></Alert> : null}
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
             <Metric label="Creative Score" value={`${creative.performanceScore.score}/100`} highlight />
             <Metric label="Spend" value={formatCurrency(creative.metrics.spend)} />
@@ -168,7 +175,7 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
             <Metric label="Holdrate" value={formatPercent(creative.metrics.holdRate)} />
             <Metric label="Outbound Clicks" value={formatNumber(creative.metrics.outboundClicks)} />
           </div>
-          <PerformanceScoreBreakdown score={creative.performanceScore} />
+          <PerformanceScoreBreakdown score={creative.performanceScore} t={t} />
           <div className="grid gap-3 md:grid-cols-2">
             <InfoBox label="Landingpage URL">
               {creative.landingUrl ? (
@@ -176,27 +183,27 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
                   {creative.landingUrl}
                 </Link>
               ) : (
-                <span>Keine Landingpage URL gespeichert.</span>
+                <span>{t("noLandingUrl")}</span>
               )}
             </InfoBox>
-            <InfoBox label="Erstmalig aktiv">
+            <InfoBox label={t("firstActive")}>
               <span>{formatDate(creative.firstActiveDate)}</span>
             </InfoBox>
           </div>
           <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/70">
-            <p className="font-medium text-white">Creative Copy</p>
-            <p className="mt-2">{creative.body || creative.title || "Keine Copy im Creative gespeichert."}</p>
+            <p className="font-medium text-white">{t("creativeCopy")}</p>
+            <p className="mt-2">{creative.body || creative.title || t("noCopyStored")}</p>
           </div>
           {showTranscriptCard ? (
             <Card className="border-herb-border bg-black/20 shadow-none">
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <CardTitle>Video Transcript</CardTitle>
+                    <CardTitle>{t("videoTranscriptTitle")}</CardTitle>
                     <p className="mt-2 text-xs text-white/50">
                       {transcript?.status === "completed"
-                        ? `Zuletzt transkribiert: ${new Date(transcript.updatedAt).toLocaleString("de-DE")}`
-                        : "Noch kein Transcript fuer dieses Video gespeichert."}
+                        ? t("lastTranscribed", { date: new Date(transcript.updatedAt).toLocaleString(locale) })
+                        : t("noTranscriptYet")}
                     </p>
                   </div>
                   <CreativeTranscriptButton clientId={clientId} creativeId={creative.id} hasTranscript={transcript?.status === "completed"} canTranscribe={Boolean(creative.videoUrl || creative.videoId)} />
@@ -204,21 +211,21 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
               </CardHeader>
               <CardContent className="space-y-4 text-sm leading-6 text-white/70">
                 {transcriptError ? <Alert variant="warning"><AlertDescription>{transcriptError}</AlertDescription></Alert> : null}
-                {!creative.videoUrl && creative.videoId ? <p className="rounded-lg border border-herb-border bg-black/25 p-3 text-white/60">Kein direkter Video-Download gespeichert. Beim Transkribieren wird die Video-Quelle ueber die Meta Video-ID nachgeladen.</p> : null}
-                {!creative.videoUrl && !creative.videoId ? <Alert variant="warning"><AlertDescription>Keine Video-Quelle fuer dieses Creative gespeichert.</AlertDescription></Alert> : null}
-                {transcript?.status === "failed" ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-red-100">{transcript.errorMessage ?? "Transkription fehlgeschlagen."}</p> : null}
-                {transcript?.status === "processing" ? <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-white">Transkription laeuft. Aktualisiere die Seite in wenigen Sekunden.</p> : null}
+                {!creative.videoUrl && creative.videoId ? <p className="rounded-lg border border-herb-border bg-black/25 p-3 text-white/60">{t("noDirectVideoDownload")}</p> : null}
+                {!creative.videoUrl && !creative.videoId ? <Alert variant="warning"><AlertDescription>{t("noVideoSource")}</AlertDescription></Alert> : null}
+                {transcript?.status === "failed" ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-red-100">{transcript.errorMessage ?? t("transcriptionFailed")}</p> : null}
+                {transcript?.status === "processing" ? <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-white">{t("transcriptionRunning")}</p> : null}
                 {transcript?.status === "completed" && transcript.transcript ? (
                   <>
                     <div className="flex flex-wrap gap-2 text-xs text-white/50">
                       <span className="rounded-full border border-herb-border bg-black/25 px-3 py-1">Provider {transcript.provider}</span>
                       <span className="rounded-full border border-herb-border bg-black/25 px-3 py-1">Model {transcript.model}</span>
-                      {transcript.language ? <span className="rounded-full border border-herb-border bg-black/25 px-3 py-1">Sprache {transcript.language}</span> : null}
-                      {transcript.durationSeconds !== null ? <span className="rounded-full border border-herb-border bg-black/25 px-3 py-1">Dauer {formatSeconds(transcript.durationSeconds)}</span> : null}
+                      {transcript.language ? <span className="rounded-full border border-herb-border bg-black/25 px-3 py-1">{t("transcriptLanguage", { language: transcript.language })}</span> : null}
+                      {transcript.durationSeconds !== null ? <span className="rounded-full border border-herb-border bg-black/25 px-3 py-1">{t("transcriptDuration", { duration: formatSeconds(transcript.durationSeconds) })}</span> : null}
                     </div>
                     {hookTranscript ? (
                       <div className="rounded-xl border border-primary/25 bg-primary/10 p-4">
-                        <p className="font-medium text-white">Hook-Auszug</p>
+                        <p className="font-medium text-white">{t("hookExcerpt")}</p>
                         <p className="mt-2">{hookTranscript}</p>
                       </div>
                     ) : null}
@@ -234,9 +241,9 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle>AI Creative Analyse</CardTitle>
+                  <CardTitle>{t("aiAnalysisTitle")}</CardTitle>
                   <p className="mt-2 text-xs text-white/50">
-                    {analysis ? `Zuletzt analysiert: ${new Date(analysis.createdAt).toLocaleString("de-DE")}` : "Noch keine AI Analyse fuer dieses Creative."}
+                    {analysis ? t("lastAnalyzed", { date: new Date(analysis.createdAt).toLocaleString(locale) }) : t("noAiAnalysisYet")}
                   </p>
                 </div>
                 <CreativeAnalysisButton clientId={clientId} creativeId={creative.id} hasAnalysis={Boolean(analysis)} />
@@ -255,13 +262,13 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
                   </div>
                   {hasEmotionScores(analysis.emotionScores) ? (
                     <div>
-                      <p className="mb-3 font-medium text-white">Emotionen</p>
+                      <p className="mb-3 font-medium text-white">{t("emotions")}</p>
                       <CreativeEmotionRadar scores={analysis.emotionScores} />
                     </div>
                   ) : (
                     <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/60">
-                      <p className="font-medium text-white">Emotionen</p>
-                      <p className="mt-2">Noch keine Emotion-Scores gespeichert. Klicke auf Neu analysieren, um das Netzdiagramm zu erzeugen.</p>
+                      <p className="font-medium text-white">{t("emotions")}</p>
+                      <p className="mt-2">{t("noEmotionScores")}</p>
                     </div>
                   )}
                   <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/75">
@@ -269,11 +276,11 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
                       <p className="font-medium text-white">Funnel Stage</p>
                       <FunnelStageBadge stage={analysis.funnelStage} />
                     </div>
-                    <p className="mt-2">{analysis.funnelReason || "Keine Funnel-Begruendung gespeichert."}</p>
+                    <p className="mt-2">{analysis.funnelReason || t("noFunnelReason")}</p>
                   </div>
                   <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/75">
-                    <p className="font-medium text-white">Zusammenfassung</p>
-                    <p className="mt-2">{analysis.summary || "Keine Zusammenfassung gespeichert."}</p>
+                    <p className="font-medium text-white">{t("summary")}</p>
+                    <p className="mt-2">{analysis.summary || t("noSummary")}</p>
                   </div>
                   {analysis.hook ? (
                     <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/75">
@@ -284,22 +291,22 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
                   ) : null}
                   {analysis.videoStructure ? (
                     <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/75">
-                      <p className="font-medium text-white">Video Struktur</p>
+                      <p className="font-medium text-white">{t("videoStructure")}</p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        <VideoStructureSection title="Hook" section={analysis.videoStructure.hook} />
-                        <VideoStructureSection title="Body" section={analysis.videoStructure.body} />
-                        <VideoStructureSection title="Ending" section={analysis.videoStructure.ending} />
+                        <VideoStructureSection title="Hook" section={analysis.videoStructure.hook} empty={t("noSegmentDetected")} />
+                        <VideoStructureSection title="Body" section={analysis.videoStructure.body} empty={t("noSegmentDetected")} />
+                        <VideoStructureSection title="Ending" section={analysis.videoStructure.ending} empty={t("noSegmentDetected")} />
                       </div>
                     </div>
                   ) : null}
                   <div className="grid gap-4 md:grid-cols-2">
-                    <AnalysisList title="Risiken" items={analysis.risks} empty="Keine Risiken erkannt." />
-                    <AnalysisList title="Hypothesen" items={analysis.hypotheses} empty="Keine Hypothesen gespeichert." />
+                    <AnalysisList title={t("risks")} items={analysis.risks} empty={t("noRisks")} />
+                    <AnalysisList title={t("hypotheses")} items={analysis.hypotheses} empty={t("noHypotheses")} />
                   </div>
-                  <AnalysisList title="Empfehlungen" items={analysis.recommendations} empty="Keine Empfehlungen gespeichert." />
+                  <AnalysisList title={t("recommendations")} items={analysis.recommendations} empty={t("noRecommendations")} />
                   {Object.keys(analysis.visualElements).length > 0 ? (
                     <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/70">
-                      <p className="font-medium text-white">Visuelle Elemente</p>
+                      <p className="font-medium text-white">{t("visualElements")}</p>
                       <div className="mt-2 grid gap-2 md:grid-cols-2">
                         {Object.entries(analysis.visualElements).map(([key, value]) => (
                           <p key={key} className="rounded-lg bg-white/[0.03] px-3 py-2">
@@ -312,20 +319,20 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
                   ) : null}
                   {analysis.detectedText ? (
                     <div className="rounded-xl border border-herb-border bg-black/20 p-4 text-sm leading-6 text-white/70">
-                      <p className="font-medium text-white">Erkannter Text</p>
+                      <p className="font-medium text-white">{t("detectedText")}</p>
                       <p className="mt-2">{analysis.detectedText}</p>
                     </div>
                   ) : null}
                 </>
               ) : (
                 <p className="text-sm leading-6 text-white/65">
-                  Starte eine Analyse, um Hook, Brand Fit, Zielgruppenfit, Risiken und konkrete Hypothesen anhand Kundenprofil, Wissensdatenbank, Creative-Daten und Performance zu erzeugen.
+                  {t("startAnalysisPrompt")}
                 </p>
               )}
             </CardContent>
           </Card>
           <div>
-            <h3 className="font-heading text-2xl">Verknuepfte Ads</h3>
+            <h3 className="font-heading text-2xl">{t("linkedAds")}</h3>
             <div className="mt-3">
               <LinkedAdsDataTable ads={creative.ads} />
             </div>
@@ -348,7 +355,7 @@ function Metric({ label, value, highlight = false }: { label: string; value: str
   );
 }
 
-function PerformanceScoreBreakdown({ score }: { score: CreativePerformanceScore }) {
+function PerformanceScoreBreakdown({ score, t }: { score: CreativePerformanceScore; t: Translator }) {
   const components = [
     ["ROAS", score.components.roas],
     ["CPA", score.components.cpa],
@@ -357,7 +364,7 @@ function PerformanceScoreBreakdown({ score }: { score: CreativePerformanceScore 
     ["Hookrate", score.components.hookRate],
     ["Holdrate", score.components.holdRate],
     ["Conversion Volume", score.components.conversionVolume],
-    ["Datenqualitaet", score.components.dataQuality]
+    [t("dataQuality"), score.components.dataQuality]
   ] as const;
 
   return (
@@ -383,8 +390,8 @@ function PerformanceScoreBreakdown({ score }: { score: CreativePerformanceScore 
         <div className="p-5">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="font-medium text-white">Score Zusammensetzung</p>
-              <p className="mt-1 text-xs text-white/45">Normalisierte Komponenten fuer den aktuell gewaehlten KPI-Zeitraum.</p>
+              <p className="font-medium text-white">{t("scoreComposition")}</p>
+              <p className="mt-1 text-xs text-white/45">{t("scoreCompositionDescription")}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-x-5 gap-y-3 xl:grid-cols-2">
@@ -462,14 +469,14 @@ function AnalysisList({ title, items, empty }: { title: string; items: string[];
   );
 }
 
-function VideoStructureSection({ title, section }: { title: string; section: { text: string; analysis: string; score: number | null } }) {
+function VideoStructureSection({ title, section, empty }: { title: string; section: { text: string; analysis: string; score: number | null }; empty: string }) {
   return (
     <div className="rounded-xl border border-herb-border bg-black/20 p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="font-medium text-white">{title}</p>
         {section.score !== null ? <Badge variant="secondary">{section.score}/100</Badge> : null}
       </div>
-      <p className="mt-2 text-white/75">{section.text || "Kein Segment erkannt."}</p>
+      <p className="mt-2 text-white/75">{section.text || empty}</p>
       {section.analysis ? <p className="mt-3 text-white/50">{section.analysis}</p> : null}
     </div>
   );

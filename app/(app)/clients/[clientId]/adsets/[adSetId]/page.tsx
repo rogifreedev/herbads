@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, ImageIcon } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { CreativeTypeBadge } from "@/components/creative-type-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,8 +13,11 @@ import { getMetaAdSetDetail, type MetaAdSetAd, type MetaAdSetAdCreativeRow, type
 
 export const dynamic = "force-dynamic";
 
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
+
 export default async function AdSetDetailPage({ params }: { params: Promise<{ clientId: string; adSetId: string }> }) {
   const { clientId, adSetId } = await params;
+  const t = await getTranslations("creatives");
   const { adSet, campaign, rows, error } = await getMetaAdSetDetail(clientId, adSetId);
 
   if (!adSet) {
@@ -22,11 +26,11 @@ export default async function AdSetDetailPage({ params }: { params: Promise<{ cl
         <Button asChild variant="outline" className="border-herb-border">
           <Link href={`/clients/${clientId}/batches`}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Zurueck zu Batches
+            {t("backToBatches")}
           </Link>
         </Button>
         <Alert variant="warning">
-          <AlertDescription>{error ?? "Ad Set wurde nicht gefunden."}</AlertDescription>
+          <AlertDescription>{error ?? t("adSetNotFound")}</AlertDescription>
         </Alert>
       </div>
     );
@@ -57,7 +61,7 @@ export default async function AdSetDetailPage({ params }: { params: Promise<{ cl
         </div>
         <div className="grid min-w-full gap-3 sm:grid-cols-3 xl:min-w-[460px]">
           <SummaryCard label="Ads" value={formatNumber(rows.length)} />
-          <SummaryCard label="Aktiv" value={formatNumber(activeAds)} />
+          <SummaryCard label={t("activeCount")} value={formatNumber(activeAds)} />
           <SummaryCard label="Creatives" value={formatNumber(creativeIds.size)} />
         </div>
       </div>
@@ -69,21 +73,21 @@ export default async function AdSetDetailPage({ params }: { params: Promise<{ cl
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <InfoBox label="Campaign" value={campaign?.name ?? "Keine Campaign verknuepft"} meta={campaign?.metaCampaignId ?? null} />
-        <InfoBox label="Erstellt" value={formatDate(adSet.createdAt)} />
-        <InfoBox label="Zuletzt synchronisiert" value={formatDate(adSet.updatedAt)} />
+        <InfoBox label="Campaign" value={campaign?.name ?? t("noCampaignLinked")} meta={campaign?.metaCampaignId ?? null} />
+        <InfoBox label={t("createdLabel")} value={formatDate(adSet.createdAt)} />
+        <InfoBox label={t("lastSynced")} value={formatDate(adSet.updatedAt)} />
       </section>
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Ads und Creatives</CardTitle>
-          <CardDescription>Alle Ads, die in diesem Meta Ad Set gespeichert sind, inklusive verknuepfter Creatives.</CardDescription>
+          <CardTitle>{t("adsAndCreatives")}</CardTitle>
+          <CardDescription>{t("adsAndCreativesDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <EmptyState title="Keine Ads gefunden" description="Fuer dieses Ad Set sind in Supabase noch keine Ads gespeichert. Starte bei Bedarf einen Meta Sync." />
+            <EmptyState title={t("noAdsFound")} description={t("noAdsFoundDescription")} />
           ) : (
-            <AdSetAdsTable clientId={clientId} rows={rows} />
+            <AdSetAdsTable clientId={clientId} rows={rows} t={t} />
           )}
         </CardContent>
       </Card>
@@ -112,7 +116,7 @@ function InfoBox({ label, value, meta }: { label: string; value: string; meta?: 
   );
 }
 
-function AdSetAdsTable({ clientId, rows }: { clientId: string; rows: MetaAdSetAdCreativeRow[] }) {
+function AdSetAdsTable({ clientId, rows, t }: { clientId: string; rows: MetaAdSetAdCreativeRow[]; t: Translator }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[1040px]">
@@ -137,7 +141,7 @@ function AdSetAdsTable({ clientId, rows }: { clientId: string; rows: MetaAdSetAd
                 <AdStatusBadge ad={row.ad} />
               </TableCell>
               <TableCell>
-                <CreativeCell clientId={clientId} creative={row.creative} />
+                <CreativeCell clientId={clientId} creative={row.creative} t={t} />
               </TableCell>
               <TableCell>{row.creative ? <CreativeTypeBadge type={row.creative.type} /> : <span className="text-white/45">-</span>}</TableCell>
               <TableCell>
@@ -159,14 +163,14 @@ function AdSetAdsTable({ clientId, rows }: { clientId: string; rows: MetaAdSetAd
   );
 }
 
-function CreativeCell({ clientId, creative }: { clientId: string; creative: MetaAdSetCreative | null }) {
+function CreativeCell({ clientId, creative, t }: { clientId: string; creative: MetaAdSetCreative | null; t: Translator }) {
   if (!creative) {
     return (
       <div className="flex min-w-[300px] items-center gap-3">
         <CreativePlaceholder />
         <div>
-          <p className="font-medium text-white/55">Kein Creative verknuepft</p>
-          <p className="mt-1 text-xs text-white/35">creative_id fehlt in meta_ads</p>
+          <p className="font-medium text-white/55">{t("noCreativeLinked")}</p>
+          <p className="mt-1 text-xs text-white/35">{t("creativeIdMissing")}</p>
         </div>
       </div>
     );
