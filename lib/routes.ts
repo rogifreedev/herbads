@@ -31,6 +31,7 @@ export function replaceClientInPath(pathname: string, nextClientId: string) {
   return `/clients/${nextClientId}`;
 }
 
+/** Returns a full message key path (e.g. "nav.dashboard") for use with a root-namespace translator. */
 export function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/clients") && pathname.includes("/creatives/landingpages")) return "nav.landingpages";
   if (pathname.startsWith("/clients") && pathname.includes("/creatives/batches")) return "nav.batchPerformance";

@@ -31,7 +31,8 @@ type MetaAdAccountOption = {
 };
 
 export function CreateClientDialog({ trigger = "button" }: CreateClientDialogProps) {
-  const t = useTranslations("common");
+  const t = useTranslations("clients");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -178,10 +179,10 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" className="border-herb-border" onClick={() => setOpen(false)}>
-              {t("cancel")}
+              {tCommon("cancel")}
             </Button>
             <Button type="submit" variant="gradient" disabled={loading}>
-              {loading ? t("saving") : t("saveClient")}
+              {loading ? tCommon("saving") : t("saveClient")}
             </Button>
           </DialogFooter>
         </form>

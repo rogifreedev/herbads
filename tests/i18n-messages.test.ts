@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import deMessages from "@/messages/de.json";
 import itMessages from "@/messages/it.json";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, isSupportedLocale } from "@/lib/i18n-locales";
+import { navItems } from "@/lib/navigation";
+import { getPageTitle } from "@/lib/routes";
 
 function collectKeys(value: unknown, prefix = ""): string[] {
   if (typeof value !== "object" || value === null) return [prefix];
@@ -34,5 +36,48 @@ describe("message catalogs", () => {
     }
     expect(emptyKeys(deMessages)).toEqual([]);
     expect(emptyKeys(itMessages)).toEqual([]);
+  });
+});
+
+function resolveKey(catalog: Record<string, unknown>, keyPath: string) {
+  return keyPath.split(".").reduce<unknown>((acc, part) => (acc as Record<string, unknown> | undefined)?.[part], catalog);
+}
+
+describe("message key existence", () => {
+  it("every nav item title (including children) resolves in the de catalog", () => {
+    const titles = navItems.flatMap((item) => [item.title, ...(item.children?.map((child) => child.title) ?? [])]);
+    const missing = titles.filter((title) => typeof resolveKey(deMessages, `nav.${title}`) !== "string");
+    expect(missing).toEqual([]);
+  });
+
+  it("getPageTitle returns a resolvable message key for representative pathnames", () => {
+    const pathnames = [
+      "/dashboard",
+      "/clients",
+      "/clients/x",
+      "/clients/x/creatives",
+      "/clients/x/creatives/landingpages",
+      "/clients/x/creatives/batches",
+      "/clients/x/learning",
+      "/clients/x/competitors/iterations",
+      "/clients/x/iterations",
+      "/clients/x/prediction-tool/history",
+      "/clients/x/prediction-tool",
+      "/clients/x/batches/settings",
+      "/clients/x/batches",
+      "/clients/x/adsets/y",
+      "/clients/x/angles",
+      "/clients/x/ideas",
+      "/clients/x/competitors",
+      "/clients/x/meta/settings",
+      "/clients/x/knowledge",
+      "/clients/x/settings",
+      "/analysis",
+      "/reports",
+      "/settings",
+      "/unknown"
+    ];
+    const missing = pathnames.filter((pathname) => typeof resolveKey(deMessages, getPageTitle(pathname)) !== "string");
+    expect(missing).toEqual([]);
   });
 });

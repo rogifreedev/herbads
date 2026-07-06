@@ -22,6 +22,9 @@
     "selectClient": "Kunde wählen",
     "switchClient": "Kunden wechseln",
     "noClientCreated": "Kein Kunde angelegt",
+    "saving": "Speichert…"
+  },
+  "clients": {
     "createClient": "Kunde anlegen",
     "createClientDescription": "Lege einen Kunden und das zugehörige Meta Werbekonto an. Weitere Details kannst du später im Kundenprofil pflegen.",
     "clientName": "Kundenname",
@@ -36,7 +39,6 @@
     "brandNamePlaceholder": "Markenname",
     "targetAudienceOptional": "Zielgruppe optional",
     "targetAudiencePlaceholder": "Kurzbeschreibung der Zielgruppe",
-    "saving": "Speichert…",
     "saveClient": "Kunde speichern",
     "metaAdAccountsLoadError": "Meta Werbekonten konnten nicht geladen werden.",
     "clientCreateError": "Kunde konnte nicht angelegt werden.",

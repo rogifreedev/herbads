@@ -22,6 +22,9 @@
     "selectClient": "Seleziona cliente",
     "switchClient": "Cambia cliente",
     "noClientCreated": "Nessun cliente creato",
+    "saving": "Salvataggio…"
+  },
+  "clients": {
     "createClient": "Crea cliente",
     "createClientDescription": "Crea un cliente e il relativo account pubblicitario Meta. Potrai aggiungere altri dettagli in seguito nel profilo cliente.",
     "clientName": "Nome cliente",
@@ -36,7 +39,6 @@
     "brandNamePlaceholder": "Nome del brand",
     "targetAudienceOptional": "Pubblico di destinazione opzionale",
     "targetAudiencePlaceholder": "Breve descrizione del pubblico di destinazione",
-    "saving": "Salvataggio…",
     "saveClient": "Salva cliente",
     "metaAdAccountsLoadError": "Impossibile caricare gli account pubblicitari Meta.",
     "clientCreateError": "Impossibile creare il cliente.",
