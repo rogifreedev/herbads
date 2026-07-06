@@ -1,6 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { useTranslations } from "next-intl";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { DataTable } from "@/components/ui/data-table";
 import { formatPercent } from "@/lib/format";
@@ -37,5 +38,6 @@ const columns: ColumnDef<PatternInsight>[] = [
 ];
 
 export function PatternInsightsDataTable({ insights }: { insights: PatternInsight[] }) {
-  return <DataTable columns={columns} data={insights} pageSize={10} emptyLabel="Noch keine stabilen Patterns gefunden. Es braucht mehrere Creatives mit Spend und idealerweise gespeicherte AI-Analysen." />;
+  const t = useTranslations("analysis");
+  return <DataTable columns={columns} data={insights} pageSize={10} emptyLabel={t("noStablePatterns")} />;
 }

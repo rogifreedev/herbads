@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { ReportsDataTable, type ReportTableRow } from "@/components/reports-data-table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,6 +6,7 @@ import { listClients } from "@/lib/clients";
 import { listClientCreatives } from "@/lib/creatives";
 
 export default async function ReportsPage() {
+  const t = await getTranslations("reports");
   const { clients, error } = await listClients();
   const realClients = clients.filter((client) => client.source === "supabase");
   const clientReports = await Promise.all(
@@ -32,15 +34,15 @@ export default async function ReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-4xl">Reports</h2>
-        <p className="mt-2 text-sm text-white/60">Exportierbare Creative Learnings und Kundenreports.</p>
+        <h2 className="font-heading text-4xl">{t("title")}</h2>
+        <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
       </div>
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Report Uebersicht</CardTitle>
+          <CardTitle>{t("overviewTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <ReportsDataTable reports={clientReports} />

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useTranslations } from "next-intl";
 import { CreativeTypeBadge } from "@/components/creative-type-badge";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { FunnelStageBadge } from "@/components/funnel-stage-badge";
@@ -35,6 +36,8 @@ type MockCreativeRow = {
   roas: string;
   status: string;
 };
+
+type Translator = ReturnType<typeof useTranslations>;
 
 function formatNullableCurrency(value: number | null) {
   return value === null ? "–" : formatCurrency(value, 2);
@@ -79,7 +82,7 @@ function FilterDropdown({ label, activeLabel, children }: { label: string; activ
   );
 }
 
-function realColumns(clientId?: string, detailHrefSuffix = ""): ColumnDef<CreativeListItem>[] {
+function realColumns(t: Translator, clientId?: string, detailHrefSuffix = ""): ColumnDef<CreativeListItem>[] {
   return [
     {
       accessorKey: "name",
@@ -111,9 +114,9 @@ function realColumns(clientId?: string, detailHrefSuffix = ""): ColumnDef<Creati
     },
     {
       accessorKey: "type",
-      header: "Typ",
+      header: t("type"),
       cell: ({ row }) => <CreativeTypeBadge type={row.original.type} />,
-      meta: { label: "Typ" }
+      meta: { label: t("type") }
     },
     {
       accessorKey: "funnelStage",
@@ -129,9 +132,9 @@ function realColumns(clientId?: string, detailHrefSuffix = ""): ColumnDef<Creati
     },
     {
       accessorKey: "firstActiveDate",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Erstmalig aktiv" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("firstActive")} />,
       cell: ({ row }) => <span className="text-white">{formatDate(row.original.firstActiveDate)}</span>,
-      meta: { label: "Erstmalig aktiv" }
+      meta: { label: t("firstActive") }
     },
     {
       id: "spend",
@@ -233,15 +236,18 @@ function realColumns(clientId?: string, detailHrefSuffix = ""): ColumnDef<Creati
   ];
 }
 
-const mockColumns: ColumnDef<MockCreativeRow>[] = [
-  { accessorKey: "name", header: "Creative", cell: ({ row }) => <span className="text-white">{row.original.name}</span>, meta: { label: "Creative" } },
-  { accessorKey: "type", header: "Typ", cell: ({ row }) => <CreativeTypeBadge type={row.original.type} />, meta: { label: "Typ" } },
-  { accessorKey: "ctr", header: "CTR", cell: ({ row }) => <span className="text-primary">{row.original.ctr}</span>, meta: { label: "CTR" } },
-  { accessorKey: "roas", header: "ROAS", cell: ({ row }) => <span className="text-white">{row.original.roas}</span>, meta: { label: "ROAS" } },
-  { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge variant={row.original.status === "Top Performer" ? "success" : "secondary"}>{row.original.status}</Badge>, meta: { label: "Status" } }
-];
+function mockColumns(t: Translator): ColumnDef<MockCreativeRow>[] {
+  return [
+    { accessorKey: "name", header: "Creative", cell: ({ row }) => <span className="text-white">{row.original.name}</span>, meta: { label: "Creative" } },
+    { accessorKey: "type", header: t("type"), cell: ({ row }) => <CreativeTypeBadge type={row.original.type} />, meta: { label: t("type") } },
+    { accessorKey: "ctr", header: "CTR", cell: ({ row }) => <span className="text-primary">{row.original.ctr}</span>, meta: { label: "CTR" } },
+    { accessorKey: "roas", header: "ROAS", cell: ({ row }) => <span className="text-white">{row.original.roas}</span>, meta: { label: "ROAS" } },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge variant={row.original.status === "Top Performer" ? "success" : "secondary"}>{row.original.status}</Badge>, meta: { label: "Status" } }
+  ];
+}
 
 export function CreativeRankingTable({ clientId, creatives, title = "Top Creatives", detailHrefSuffix = "", currentPage = 1, pageSize = 12 }: CreativeRankingTableProps) {
+  const t = useTranslations("common");
   const hasRealRows = Boolean(creatives);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("all");
@@ -282,9 +288,9 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
     .sort((a, b) => sortValue(b, sort) - sortValue(a, sort)), [funnel, minCtrValue, minRoasValue, minScoreValue, minSpendValue, normalizedQuery, rows, sort, status, type]);
   const hasFilters = query || type !== "all" || status !== "ALL" || funnel !== "ALL" || sort !== "spend" || minScore || minSpend || minRoas || minCtr;
   const hasAdvancedFilters = minScore || minSpend || minRoas || minCtr;
-  const typeLabel = type === "all" ? "Alle" : type[0].toUpperCase() + type.slice(1);
-  const statusLabel = status === "ALL" ? "Alle" : status;
-  const funnelLabel = funnel === "ALL" ? "Alle" : funnel;
+  const typeLabel = type === "all" ? t("all") : type[0].toUpperCase() + type.slice(1);
+  const statusLabel = status === "ALL" ? t("all") : status;
+  const funnelLabel = funnel === "ALL" ? t("all") : funnel;
   const sortLabels: Record<SortKey, string> = {
     spend: "Spend",
     score: "Score",
@@ -317,38 +323,38 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
         {hasRealRows ? (
           <>
             <DataTable
-              columns={realColumns(clientId, detailHrefSuffix)}
+              columns={realColumns(t, clientId, detailHrefSuffix)}
               data={filteredRows}
               pageSize={pageSize}
               initialPageIndex={currentPage - 1}
               minWidthClassName="min-w-[2000px]"
-              emptyLabel="Keine Creatives fuer die aktuelle Auswahl."
+              emptyLabel={t("noCreativesForSelection")}
               toolbarLeft={
-                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Copy, CTA, Meta ID" className="h-9 sm:w-80" />
+                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchCreativesPlaceholder")} className="h-9 sm:w-80" />
               }
               toolbarActions={
                 <>
-                  <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(rows.length)}</span>
-                  <FilterDropdown label="Typ" activeLabel={typeLabel}>
-                    <FilterChip active={type === "all"} onClick={() => setType("all")}>Alle ({formatNumber(rows.length)})</FilterChip>
+                  <span className="text-xs text-white/45">{t("countOfTotal", { filtered: formatNumber(filteredRows.length), total: formatNumber(rows.length) })}</span>
+                  <FilterDropdown label={t("type")} activeLabel={typeLabel}>
+                    <FilterChip active={type === "all"} onClick={() => setType("all")}>{t("allWithCount", { count: formatNumber(rows.length) })}</FilterChip>
                     <FilterChip active={type === "catalog"} onClick={() => setType("catalog")}>Catalog ({formatNumber(typeCounts.catalog ?? 0)})</FilterChip>
                     <FilterChip active={type === "post"} onClick={() => setType("post")}>Post ({formatNumber(typeCounts.post ?? 0)})</FilterChip>
                     <FilterChip active={type === "video"} onClick={() => setType("video")}>Video ({formatNumber(typeCounts.video ?? 0)})</FilterChip>
                     <FilterChip active={type === "image"} onClick={() => setType("image")}>Image ({formatNumber(typeCounts.image ?? 0)})</FilterChip>
                   </FilterDropdown>
                   <FilterDropdown label="Status" activeLabel={statusLabel}>
-                    <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>Alle</FilterChip>
+                    <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>{t("all")}</FilterChip>
                     <FilterChip active={status === "ACTIVE"} onClick={() => setStatus("ACTIVE")}>Active</FilterChip>
                     <FilterChip active={status === "PAUSED"} onClick={() => setStatus("PAUSED")}>Paused</FilterChip>
                     <FilterChip active={status === "UNKNOWN"} onClick={() => setStatus("UNKNOWN")}>Unknown</FilterChip>
                   </FilterDropdown>
                   <FilterDropdown label="Funnel" activeLabel={funnelLabel}>
-                    <FilterChip active={funnel === "ALL"} onClick={() => setFunnel("ALL")}>Alle</FilterChip>
+                    <FilterChip active={funnel === "ALL"} onClick={() => setFunnel("ALL")}>{t("all")}</FilterChip>
                     <FilterChip active={funnel === "TOFU"} onClick={() => setFunnel("TOFU")}>TOFU ({formatNumber(funnelCounts.TOFU ?? 0)})</FilterChip>
                     <FilterChip active={funnel === "MOFU"} onClick={() => setFunnel("MOFU")}>MOFU ({formatNumber(funnelCounts.MOFU ?? 0)})</FilterChip>
                     <FilterChip active={funnel === "BOFU"} onClick={() => setFunnel("BOFU")}>BOFU ({formatNumber(funnelCounts.BOFU ?? 0)})</FilterChip>
                   </FilterDropdown>
-                  <FilterDropdown label="Sortierung" activeLabel={sortLabels[sort]}>
+                  <FilterDropdown label={t("sortBy")} activeLabel={sortLabels[sort]}>
                     <FilterChip active={sort === "spend"} onClick={() => setSort("spend")}>Spend</FilterChip>
                     <FilterChip active={sort === "score"} onClick={() => setSort("score")}>Score</FilterChip>
                     <FilterChip active={sort === "roas"} onClick={() => setSort("roas")}>ROAS</FilterChip>
@@ -361,11 +367,11 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="outline" size="sm" className="border-herb-border">
-                        Werte{hasAdvancedFilters ? " aktiv" : ""}
+                        {hasAdvancedFilters ? t("valuesActive") : t("values")}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-[min(92vw,360px)] border-herb-border bg-herb-surface p-4 text-white">
-                      <DropdownMenuLabel className="p-0">Performance Mindestwerte</DropdownMenuLabel>
+                      <DropdownMenuLabel className="p-0">{t("minimumValues")}</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <div className="grid gap-2">
                         <label className="grid gap-1 text-xs text-white/55">Min. Score<Input value={minScore} onChange={(event) => setMinScore(event.target.value)} inputMode="decimal" placeholder="70" className="h-9" /></label>
@@ -381,7 +387,7 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
             />
           </>
         ) : (
-          <DataTable columns={mockColumns} data={creativeRows} pageSize={pageSize} initialPageIndex={currentPage - 1} emptyLabel="Keine Beispiel-Creatives." />
+          <DataTable columns={mockColumns(t)} data={creativeRows} pageSize={pageSize} initialPageIndex={currentPage - 1} emptyLabel={t("noSampleCreatives")} />
         )}
       </CardContent>
     </Card>

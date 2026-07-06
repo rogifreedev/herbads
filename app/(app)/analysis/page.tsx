@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/empty-state";
 import { PatternInsightsDataTable } from "@/components/pattern-insights-data-table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -7,21 +8,22 @@ import { getGlobalPatternAnalysis, type PatternCreative } from "@/lib/pattern-an
 import { formatCurrency, formatNumber } from "@/lib/metrics";
 
 export default async function AnalysisPage() {
+  const t = await getTranslations("analysis");
   const { topCreatives, lowCreatives, insights, totals, error } = await getGlobalPatternAnalysis();
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-heading text-4xl">META Ads</h2>
-        <p className="mt-2 text-sm text-white/60">Uebergreifende Creative Patterns, Gewinner-Merkmale und AI Hypothesen.</p>
+        <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
       </div>
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
       <section className="grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Clients" value={formatNumber(totals.clients)} />
-        <SummaryCard label="Creatives mit Daten" value={formatNumber(totals.creatives)} />
-        <SummaryCard label="Mit AI Analyse" value={formatNumber(totals.analyzedCreatives)} />
+        <SummaryCard label={t("clients")} value={formatNumber(totals.clients)} />
+        <SummaryCard label={t("creativesWithData")} value={formatNumber(totals.creatives)} />
+        <SummaryCard label={t("withAiAnalysis")} value={formatNumber(totals.analyzedCreatives)} />
       </section>
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
@@ -29,7 +31,7 @@ export default async function AnalysisPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-6 text-white/65">
           <p>
-            Vergleich der Top-Performer nach Creative Score gegen Low-Performer. Die Engine nutzt Creative Typ, Funnel Stage, CTA, Video/Landingpage-Signale und gespeicherte AI-Analysefelder.
+            {t("patternEngineDescription")}
           </p>
           <PatternInsightsDataTable insights={insights} />
         </CardContent>
@@ -53,7 +55,9 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CreativeGroup({ title, creatives }: { title: string; creatives: PatternCreative[] }) {
+async function CreativeGroup({ title, creatives }: { title: string; creatives: PatternCreative[] }) {
+  const t = await getTranslations("analysis");
+
   return (
     <Card className="border-herb-border bg-herb-surface/90">
       <CardHeader>
@@ -61,7 +65,7 @@ function CreativeGroup({ title, creatives }: { title: string; creatives: Pattern
       </CardHeader>
       <CardContent>
         {creatives.length === 0 ? (
-          <EmptyState title="Keine Creatives gefunden" description="Es wurden noch keine Creatives mit Performance-Daten gefunden." className="p-6" />
+          <EmptyState title={t("noCreativesFound")} description={t("noCreativesFoundDescription")} className="p-6" />
         ) : (
           <div className="space-y-3">
             {creatives.map((creative) => (
@@ -69,7 +73,7 @@ function CreativeGroup({ title, creatives }: { title: string; creatives: Pattern
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="line-clamp-1 font-medium text-white">{creative.name}</p>
-                    <p className="mt-1 text-xs text-white/45">{creative.clientName} · {creative.type} · {creative.funnelStage ?? "kein Funnel"}</p>
+                    <p className="mt-1 text-xs text-white/45">{creative.clientName} · {creative.type} · {creative.funnelStage ?? t("noFunnel")}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-heading text-2xl text-primary">{creative.performanceScore.score}</p>

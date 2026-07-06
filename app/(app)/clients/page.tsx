@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { CreateClientDialog } from "@/components/create-client-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -8,24 +9,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listClients } from "@/lib/clients";
 
 export default async function ClientsPage() {
+  const t = await getTranslations("clients");
   const { clients, error } = await listClients();
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="font-heading text-4xl">Kunden</h2>
-          <p className="mt-2 text-sm text-white/60">Verwalte Kunden, Meta Ad Accounts und Creative Intelligence Daten.</p>
+          <h2 className="font-heading text-4xl">{t("title")}</h2>
+          <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
         </div>
         <CreateClientDialog />
       </div>
 
       {error ? (
-        <Alert variant="warning"><AlertDescription>Supabase ist verbunden, aber die Kundentabellen sind noch nicht erreichbar. Aktuell werden Mock-Daten angezeigt. Fuehre die Migration aus `supabase/migrations/202605110001_initial_schema.sql` im Supabase SQL Editor aus.</AlertDescription></Alert>
+        <Alert variant="warning"><AlertDescription>{t("migrationAlert")}</AlertDescription></Alert>
       ) : null}
 
       {clients.length === 0 ? (
-        <EmptyState title="Ersten Kunden anlegen" description="Lege einen Kunden mit Meta Ad Account ID an. Danach kannst du Creatives, Wissen und Performance-Daten pro Kunde verbinden." action={<CreateClientDialog />} />
+        <EmptyState title={t("createFirstClient")} description={t("createFirstClientDescription")} action={<CreateClientDialog />} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
           {clients.map((client) => (
@@ -39,9 +41,9 @@ export default async function ClientsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="font-mono text-xs text-white/55">{client.adAccountId ?? "Kein Meta Account hinterlegt"}</p>
+                <p className="font-mono text-xs text-white/55">{client.adAccountId ?? t("noMetaAccount")}</p>
                 <Button asChild variant="outline" className="w-full border-herb-border">
-                  <Link href={`/clients/${client.id}`}>Dashboard öffnen</Link>
+                  <Link href={`/clients/${client.id}`}>{t("openDashboard")}</Link>
                 </Button>
               </CardContent>
             </Card>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { CreativeRankingTable } from "@/components/creative-ranking-table";
 import { MetaAdsTabs } from "@/components/meta-ads-tabs";
@@ -14,6 +15,12 @@ import { formatCurrency, formatDecimal, formatNumber, formatPercent, getClientPe
 
 export default async function ClientDashboardPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const [t, tCommon, tNav, tClients] = await Promise.all([
+    getTranslations("dashboard"),
+    getTranslations("common"),
+    getTranslations("nav"),
+    getTranslations("clients")
+  ]);
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const [{ client, error }, { metrics, hasData }, { creatives }, breakdowns] = await Promise.all([
@@ -22,6 +29,7 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
     listClientCreatives(clientId, activeDateRange),
     getClientPerformanceBreakdownsForRange(clientId, activeDateRange)
   ]);
+  const countryLabels = Object.fromEntries(COUNTRY_CODES.map((code) => [code, t(`countries.${code}`)]));
   const metricCards = hasData
     ? [
         { label: "Spend", value: formatCurrency(metrics.spend), change: `${formatNumber(metrics.impressions)} Impr.`, tone: "neutral" as const },
@@ -39,33 +47,33 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
         { label: "ROAS", value: formatDecimal(metrics.roas), change: `${formatCurrency(metrics.purchaseValue)} Conv. Value`, tone: "positive" as const }
       ]
     : [
-        { label: "Spend", value: "–", change: "Noch keine Insights", tone: "neutral" as const },
-        { label: "CPC", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "CPM", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Reach", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Impr.", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Conversions", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Conv. Value", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "CPA", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "CTR", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Hook", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Hold", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "Outbound CVR", value: "–", change: "Keine Daten", tone: "neutral" as const },
-        { label: "ROAS", value: "–", change: "Meta Sync starten", tone: "neutral" as const }
+        { label: "Spend", value: "–", change: t("noInsightsYet"), tone: "neutral" as const },
+        { label: "CPC", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "CPM", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Reach", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Impr.", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Conversions", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Conv. Value", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "CPA", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "CTR", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Hook", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Hold", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "Outbound CVR", value: "–", change: tCommon("noData"), tone: "neutral" as const },
+        { label: "ROAS", value: "–", change: t("startMetaSync"), tone: "neutral" as const }
       ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm uppercase tracking-[0.22em] text-primary">Kunden-Dashboard</p>
+          <p className="text-sm uppercase tracking-[0.22em] text-primary">{tNav("clientDashboard")}</p>
           <h2 className="mt-2 font-heading text-5xl">{client.name}</h2>
-          <p className="mt-2 font-mono text-xs text-white/45">{client.adAccountId ?? "Kein Meta Account hinterlegt"}</p>
+          <p className="mt-2 font-mono text-xs text-white/45">{client.adAccountId ?? tClients("noMetaAccount")}</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <CreativeDateRangePicker defaultDays={30} />
           <Button asChild variant="outline" className="border-herb-border">
-            <Link href={`/clients/${client.id}/knowledge`}>Wissen pflegen</Link>
+            <Link href={`/clients/${client.id}/knowledge`}>{t("maintainKnowledge")}</Link>
           </Button>
         </div>
       </div>
@@ -73,10 +81,10 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
       <MetaAdsTabs clientId={client.id} active="overview" />
 
       {error ? (
-        <Alert variant="warning"><AlertDescription>Supabase-Tabellen sind noch nicht erreichbar. Diese Seite nutzt bis zur Migration Mock-Daten.</AlertDescription></Alert>
+        <Alert variant="warning"><AlertDescription>{t("supabaseTablesUnreachable")}</AlertDescription></Alert>
       ) : null}
       {breakdowns.error ? (
-        <Alert variant="warning"><AlertDescription>Meta Demografie-Breakdowns konnten noch nicht geladen werden: {breakdowns.error}</AlertDescription></Alert>
+        <Alert variant="warning"><AlertDescription>{t("breakdownsLoadError", { error: breakdowns.error })}</AlertDescription></Alert>
       ) : null}
       {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
 
@@ -87,19 +95,19 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <PerformanceBreakdownCard title="Laender" valueLabel="Land" dimension="country" rows={breakdowns.countries} emptyLabel="Noch keine Laender-Breakdowns. Fuehre einen neuen Meta Sync aus, damit Meta Country-Daten importiert." />
-        <PerformanceBreakdownCard title="Alter" valueLabel="Alter" dimension="age" rows={breakdowns.ages} emptyLabel="Noch keine Alters-Breakdowns. Fuehre einen neuen Meta Sync aus, damit Meta Age-Daten importiert." />
-        <PerformanceBreakdownCard title="Gender" valueLabel="Gender" dimension="gender" rows={breakdowns.genders} emptyLabel="Noch keine Gender-Breakdowns. Fuehre einen neuen Meta Sync aus, damit Meta Gender-Daten importiert." />
+        <PerformanceBreakdownCard title={t("countriesTitle")} valueLabel={t("countryColumn")} dimension="country" rows={breakdowns.countries} emptyLabel={t("countriesEmpty")} spendShareLabel={t("spendShare")} countryLabels={countryLabels} />
+        <PerformanceBreakdownCard title={t("age")} valueLabel={t("age")} dimension="age" rows={breakdowns.ages} emptyLabel={t("agesEmpty")} spendShareLabel={t("spendShare")} countryLabels={countryLabels} />
+        <PerformanceBreakdownCard title={t("gender")} valueLabel={t("gender")} dimension="gender" rows={breakdowns.genders} emptyLabel={t("gendersEmpty")} spendShareLabel={t("spendShare")} countryLabels={countryLabels} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <CreativeRankingTable clientId={client.id} creatives={creatives} title="Top Creatives" />
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Knowledge Status</CardTitle>
+            <CardTitle>{t("knowledgeStatus")}</CardTitle>
           </CardHeader>
           <CardContent className="text-sm leading-6 text-white/65">
-            Kundenspezifische Zielgruppen-, Branding- und Claim-Dokumente werden spaeter per Supabase Vector in AI-Analysen einbezogen.
+            {t("knowledgeStatusDescription")}
           </CardContent>
         </Card>
       </section>
@@ -107,18 +115,7 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
   );
 }
 
-const COUNTRY_LABELS: Record<string, string> = {
-  AT: "Oesterreich",
-  CH: "Schweiz",
-  DE: "Deutschland",
-  ES: "Spanien",
-  FR: "Frankreich",
-  GB: "Vereinigtes Koenigreich",
-  IT: "Italien",
-  NL: "Niederlande",
-  PL: "Polen",
-  US: "USA"
-};
+const COUNTRY_CODES = ["AT", "CH", "DE", "ES", "FR", "GB", "IT", "NL", "PL", "US"] as const;
 
 const GENDER_LABELS: Record<string, string> = {
   female: "Female",
@@ -126,14 +123,14 @@ const GENDER_LABELS: Record<string, string> = {
   unknown: "Unknown"
 };
 
-function breakdownValueLabel(dimension: PerformanceBreakdownDimension, value: string) {
+function breakdownValueLabel(dimension: PerformanceBreakdownDimension, value: string, countryLabels: Record<string, string>) {
   const normalizedValue = value.trim();
-  if (dimension === "country") return COUNTRY_LABELS[normalizedValue.toUpperCase()] ?? normalizedValue.toUpperCase();
+  if (dimension === "country") return countryLabels[normalizedValue.toUpperCase()] ?? normalizedValue.toUpperCase();
   if (dimension === "gender") return GENDER_LABELS[normalizedValue.toLowerCase()] ?? normalizedValue;
   return normalizedValue;
 }
 
-function PerformanceBreakdownCard({ title, valueLabel, dimension, rows, emptyLabel }: { title: string; valueLabel: string; dimension: PerformanceBreakdownDimension; rows: PerformanceBreakdownRow[]; emptyLabel: string }) {
+function PerformanceBreakdownCard({ title, valueLabel, dimension, rows, emptyLabel, spendShareLabel, countryLabels }: { title: string; valueLabel: string; dimension: PerformanceBreakdownDimension; rows: PerformanceBreakdownRow[]; emptyLabel: string; spendShareLabel: string; countryLabels: Record<string, string> }) {
   return (
     <Card className="border-herb-border bg-herb-surface/90">
       <CardHeader>
@@ -151,13 +148,13 @@ function PerformanceBreakdownCard({ title, valueLabel, dimension, rows, emptyLab
                   <TableHead>Spend</TableHead>
                   <TableHead>Conv.</TableHead>
                   <TableHead>Reach</TableHead>
-                  <TableHead>Spend-Anteil</TableHead>
+                  <TableHead>{spendShareLabel}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={`${dimension}-${row.value}`}>
-                    <TableCell className="font-medium text-white">{breakdownValueLabel(dimension, row.value)}</TableCell>
+                    <TableCell className="font-medium text-white">{breakdownValueLabel(dimension, row.value, countryLabels)}</TableCell>
                     <TableCell className="text-white">{formatCurrency(row.metrics.spend)}</TableCell>
                     <TableCell className="text-white">{formatNumber(row.metrics.purchases)}</TableCell>
                     <TableCell className="text-white/70">{formatNumber(row.metrics.reach)}</TableCell>
