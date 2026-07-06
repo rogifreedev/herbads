@@ -2,6 +2,7 @@
 
 import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,8 @@ type ClientProfileFormProps = {
 };
 
 export function ClientProfileForm({ clientId, profile }: ClientProfileFormProps) {
+  const t = useTranslations("clientSettings");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false);
@@ -50,11 +53,11 @@ export function ClientProfileForm({ clientId, profile }: ClientProfileFormProps)
     setSaving(false);
 
     if (!response.ok) {
-      toast.error(result.error ?? "Kundenprofil konnte nicht gespeichert werden.");
+      toast.error(result.error ?? t("saveError"));
       return;
     }
 
-    toast.success("Kundenprofil gespeichert.");
+    toast.success(t("saved"));
     router.refresh();
   }
 
@@ -65,12 +68,12 @@ export function ClientProfileForm({ clientId, profile }: ClientProfileFormProps)
     setGenerating(false);
 
     if (!response.ok) {
-      toast.error(result.error ?? "Kundenprofil konnte nicht generiert werden.");
+      toast.error(result.error ?? t("generateError"));
       return;
     }
 
     applyProfileToForm(result.profile);
-    toast.success("Kundenprofil aus Wissensdatenbank erstellt.");
+    toast.success(t("generatedFromKnowledge"));
     router.refresh();
   }
 
@@ -79,28 +82,28 @@ export function ClientProfileForm({ clientId, profile }: ClientProfileFormProps)
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Profil und Markenwissen</CardTitle>
+            <CardTitle>{t("profileTitle")}</CardTitle>
             <Button type="button" variant="outline" className="border-herb-border" disabled={generating || saving} onClick={generateFromKnowledge}>
-              {generating ? "Analysiert Wissen..." : "Aus Wissensdatenbank ausfuellen"}
+              {generating ? t("analyzingKnowledge") : t("fillFromKnowledge")}
             </Button>
           </div>
         </CardHeader>
         <CardContent className="grid gap-5 lg:grid-cols-2">
           <Field label="Brand Name" name="brandName" defaultValue={profile.brandName} />
           <Field label="Tone of Voice" name="toneOfVoice" defaultValue={profile.toneOfVoice} />
-          <TextAreaField label="Positionierung" name="positioning" defaultValue={profile.positioning} />
-          <TextAreaField label="Zielgruppe" name="targetAudience" defaultValue={profile.targetAudience} />
+          <TextAreaField label={t("positioning")} name="positioning" defaultValue={profile.positioning} />
+          <TextAreaField label={t("targetAudience")} name="targetAudience" defaultValue={profile.targetAudience} />
           <TextAreaField label="Pain Points" name="painPoints" defaultValue={profile.painPoints} />
           <TextAreaField label="Buying Triggers" name="buyingTriggers" defaultValue={profile.buyingTriggers} />
           <TextAreaField label="USPs" name="usps" defaultValue={profile.usps} />
-          <TextAreaField label="Angebote" name="offers" defaultValue={profile.offers} />
-          <TextAreaField label="Verbotene Claims" name="forbiddenClaims" defaultValue={profile.forbiddenClaims} />
+          <TextAreaField label={t("offers")} name="offers" defaultValue={profile.offers} />
+          <TextAreaField label={t("forbiddenClaims")} name="forbiddenClaims" defaultValue={profile.forbiddenClaims} />
           <TextAreaField label="Brand No-Gos" name="brandNoGos" defaultValue={profile.brandNoGos} />
-          <TextAreaField label="Wettbewerber" name="competitors" defaultValue={profile.competitors} />
-          <TextAreaField label="CTA Praeferenzen" name="ctaPreferences" defaultValue={profile.ctaPreferences} />
+          <TextAreaField label={t("competitorsLabel")} name="competitors" defaultValue={profile.competitors} />
+          <TextAreaField label={t("ctaPreferences")} name="ctaPreferences" defaultValue={profile.ctaPreferences} />
           <div className="lg:col-span-2">
             <Button type="submit" variant="gradient" disabled={saving || generating}>
-              {saving ? "Speichert..." : "Kundenprofil speichern"}
+              {saving ? tCommon("saving") : t("saveProfile")}
             </Button>
           </div>
         </CardContent>

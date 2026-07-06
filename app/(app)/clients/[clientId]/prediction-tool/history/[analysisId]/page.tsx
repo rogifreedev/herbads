@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, ImageIcon, Video } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { CreativeEmotionRadar, hasEmotionScores } from "@/components/creative-emotion-radar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +12,11 @@ import { cn } from "@/lib/utils";
 
 export default async function PredictionHistoryDetailPage({ params }: { params: Promise<{ clientId: string; analysisId: string }> }) {
   const { clientId, analysisId } = await params;
+  const t = await getTranslations("predictionTool");
   const { analysis, error } = await getCreativePredictionAnalysis(clientId, analysisId);
 
   if (!analysis) {
-    return <Alert variant="warning"><AlertDescription>{error ?? "Prediction Analyse wurde nicht gefunden."}</AlertDescription></Alert>;
+    return <Alert variant="warning"><AlertDescription>{error ?? t("notFound")}</AlertDescription></Alert>;
   }
 
   const hasEmotions = hasEmotionScores(analysis.ai.emotionScores);
@@ -26,7 +28,7 @@ export default async function PredictionHistoryDetailPage({ params }: { params: 
           <Button asChild variant="ghost" className="-ml-3 text-white/60 hover:text-white">
             <Link href={`/clients/${clientId}/prediction-tool/history`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Zurueck zur History
+              {t("backToHistory")}
             </Link>
           </Button>
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -36,12 +38,12 @@ export default async function PredictionHistoryDetailPage({ params }: { params: 
           </div>
           <h2 className="mt-3 font-heading text-4xl text-white">{analysis.ai.summary || analysis.fileName}</h2>
           <p className="mt-2 text-sm text-white/50">
-            Erstellt am {formatDate(analysis.createdAt)} · {analysis.fileName}
+            {t("createdAtLine", { date: formatDate(analysis.createdAt) })} · {analysis.fileName}
           </p>
         </div>
         <Button asChild variant="gradient">
           <Link href={`/clients/${clientId}/prediction-tool`}>
-            Neue Analyse
+            {t("newAnalysis")}
           </Link>
         </Button>
       </div>
@@ -69,11 +71,11 @@ export default async function PredictionHistoryDetailPage({ params }: { params: 
 
           <Card className="border-herb-border bg-herb-surface/90">
             <CardHeader>
-              <CardTitle>Upload Kontext</CardTitle>
+              <CardTitle>{t("uploadContextTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <ContextLine label="Format" value={analysis.format === "video" ? "Video" : "Static"} />
-              <ContextLine label="Datei" value={`${analysis.fileName} · ${formatBytes(analysis.fileSize)}`} />
+              <ContextLine label={t("fileLabel")} value={`${analysis.fileName} · ${formatBytes(analysis.fileSize)}`} />
               <ContextLine label="Headline / Overlay" value={analysis.headline} />
               <ContextLine label="Primary Text" value={analysis.primaryText} />
               {analysis.landingUrl ? (
@@ -121,19 +123,19 @@ export default async function PredictionHistoryDetailPage({ params }: { params: 
             </Card>
 
             <Card className="border-herb-border bg-herb-surface/90">
-              <CardHeader><CardTitle>Warum</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t("whyTitle")}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <ListBlock title="Rationale" items={analysis.rationale} />
-                <ListBlock title="Staerken" items={analysis.ai.strengths} />
-                <ListBlock title="Risiken" items={analysis.ai.risks} />
-                <ListBlock title="Verbesserungen" items={analysis.ai.recommendations} />
+                <ListBlock title={t("strengthsTitle")} items={analysis.ai.strengths} />
+                <ListBlock title={t("risksTitle")} items={analysis.ai.risks} />
+                <ListBlock title={t("improvementsTitle")} items={analysis.ai.recommendations} />
               </CardContent>
             </Card>
           </div>
 
           {hasEmotions ? (
             <Card className="border-herb-border bg-herb-surface/90">
-              <CardHeader><CardTitle>Emotionen</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t("emotionsTitle")}</CardTitle></CardHeader>
               <CardContent>
                 <CreativeEmotionRadar scores={analysis.ai.emotionScores} />
               </CardContent>
@@ -152,9 +154,9 @@ export default async function PredictionHistoryDetailPage({ params }: { params: 
                 analysis.benchmarks.matchedAngle.angle,
                 `Score ${formatNumber(analysis.benchmarks.matchedAngle.score)}/100`,
                 `${formatNumber(Math.round(analysis.benchmarks.matchedAngle.spend))} EUR Spend`
-              ] : ["Kein klarer historischer Match"]} />
+              ] : [t("noHistoricalMatch")]} />
               <BenchmarkBlock title="Competitor Signal" lines={[
-                analysis.benchmarks.competitor.matchedAngle ?? "Kein Angle Match",
+                analysis.benchmarks.competitor.matchedAngle ?? t("noAngleMatch"),
                 `${formatNumber(analysis.benchmarks.competitor.creativeCount)} Creatives`,
                 `${formatNumber(Math.round(analysis.benchmarks.competitor.reach))} Reach`
               ]} />

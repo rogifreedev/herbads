@@ -2,6 +2,7 @@
 
 import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ type KnowledgeUploadFormProps = {
 };
 
 export function KnowledgeUploadForm({ clientId }: KnowledgeUploadFormProps) {
+  const t = useTranslations("knowledge");
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
@@ -29,11 +31,11 @@ export function KnowledgeUploadForm({ clientId }: KnowledgeUploadFormProps) {
     setLoading(false);
 
     if (!response.ok) {
-      toast.error(result.error ?? "Wissensdokument konnte nicht hochgeladen werden.");
+      toast.error(result.error ?? t("uploadError"));
       return;
     }
 
-    toast.success("Wissensdokument gespeichert und indexiert.");
+    toast.success(t("uploadSuccess"));
     formRef.current?.reset();
     router.refresh();
   }
@@ -42,31 +44,31 @@ export function KnowledgeUploadForm({ clientId }: KnowledgeUploadFormProps) {
     <form ref={formRef} onSubmit={onSubmit}>
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Dokument hochladen</CardTitle>
+          <CardTitle>{t("uploadTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-[1fr_220px] xl:grid-cols-[1fr_220px_260px_auto]">
           <div className="space-y-2">
-            <Label htmlFor="knowledge-title">Titel</Label>
-            <Input id="knowledge-title" name="title" placeholder="Optional, sonst Dateiname" />
+            <Label htmlFor="knowledge-title">{t("titleLabel")}</Label>
+            <Input id="knowledge-title" name="title" placeholder={t("titlePlaceholder")} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="knowledge-type">Dokumenttyp</Label>
+            <Label htmlFor="knowledge-type">{t("documentTypeLabel")}</Label>
             <select
               id="knowledge-type"
               name="documentType"
               defaultValue="general"
               className="h-10 w-full rounded-md border border-input bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-primary"
             >
-              <option value="general">Allgemein</option>
-              <option value="brand">Brand</option>
-              <option value="audience">Zielgruppe</option>
-              <option value="offer">Angebot</option>
-              <option value="claims">Claims / No-Gos</option>
-              <option value="competitors">Wettbewerber</option>
+              <option value="general">{t("typeGeneral")}</option>
+              <option value="brand">{t("typeBrand")}</option>
+              <option value="audience">{t("typeAudience")}</option>
+              <option value="offer">{t("typeOffer")}</option>
+              <option value="claims">{t("typeClaims")}</option>
+              <option value="competitors">{t("typeCompetitors")}</option>
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="knowledge-file">Datei</Label>
+            <Label htmlFor="knowledge-file">{t("fileLabel")}</Label>
             <Input
               id="knowledge-file"
               name="file"
@@ -77,11 +79,11 @@ export function KnowledgeUploadForm({ clientId }: KnowledgeUploadFormProps) {
           </div>
           <div className="flex items-end">
             <Button type="submit" variant="gradient" disabled={loading} className="w-full">
-              {loading ? "Indexiert..." : "Hochladen"}
+              {loading ? t("uploading") : t("uploadButton")}
             </Button>
           </div>
           <p className="text-xs leading-5 text-white/45 md:col-span-2 xl:col-span-4">
-            Unterstuetzt TXT, Markdown, JSON, PDF und DOCX bis 10 MB. Wenn `OPENROUTER_API_KEY` oder `OPENAI_API_KEY` gesetzt ist, werden Chunks fuer Vector Search eingebettet.
+            {t("supportNote")}
           </p>
         </CardContent>
       </Card>

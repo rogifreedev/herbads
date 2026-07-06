@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, FileVideo, ImageIcon, Sparkles, UploadCloud } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,12 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { CreativePredictionResult } from "@/lib/creative-predictions";
+import type { Translator } from "@/lib/i18n-types";
 import { cn } from "@/lib/utils";
 
 type PredictionFormat = "static" | "video";
 type ExtractedFrame = { label: string; dataUrl: string; timeSeconds: number | null };
 
 export function PredictionToolForm({ clientId }: { clientId: string }) {
+  const t = useTranslations("predictionTool");
   const [format, setFormat] = useState<PredictionFormat>("static");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -37,9 +40,9 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
   }, [previewUrl]);
 
   const fileTypeLabel = useMemo(() => {
-    if (!file) return "Kein Creative ausgewaehlt";
+    if (!file) return t("noFileSelected");
     return `${file.name} · ${Math.round(file.size / 1024)} KB`;
-  }, [file]);
+  }, [file, t]);
 
   async function updateFile(nextFile: File | null) {
     setResult(null);
@@ -57,12 +60,12 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
     setFrameLoading(true);
     try {
       if (format === "video") {
-        setFrames(await extractVideoFrames(nextPreviewUrl));
+        setFrames(await extractVideoFrames(nextPreviewUrl, t));
       } else {
-        setFrames([{ label: "Creative", dataUrl: await readImageDataUrl(nextFile), timeSeconds: null }]);
+        setFrames([{ label: "Creative", dataUrl: await readImageDataUrl(nextFile, t), timeSeconds: null }]);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Frames konnten nicht extrahiert werden.");
+      toast.error(error instanceof Error ? error.message : t("frameExtractError"));
     } finally {
       setFrameLoading(false);
     }
@@ -70,11 +73,11 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
 
   async function submit() {
     if (!file) {
-      toast.error("Bitte zuerst ein Creative hochladen.");
+      toast.error(t("uploadFirstError"));
       return;
     }
     if (frames.length === 0) {
-      toast.error("Es konnte kein Frame fuer die Analyse extrahiert werden.");
+      toast.error(t("noFrameError"));
       return;
     }
 
@@ -95,12 +98,12 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
         body: formData
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Prediction konnte nicht erstellt werden.");
+      if (!response.ok) throw new Error(payload.error ?? t("createError"));
       setResult(payload.result as CreativePredictionResult);
       setAnalysisHref(typeof payload.analysis?.detailHref === "string" ? payload.analysis.detailHref : null);
-      toast.success("Prediction erstellt.");
+      toast.success(t("created"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Prediction konnte nicht erstellt werden.");
+      toast.error(error instanceof Error ? error.message : t("createError"));
     } finally {
       setLoading(false);
     }
@@ -138,7 +141,7 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
           <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-herb-border bg-black/20 p-6 text-center transition hover:border-primary/60">
             <UploadCloud className="h-8 w-8 text-primary" />
             <span className="text-sm font-medium text-white">{fileTypeLabel}</span>
-            <span className="text-xs text-white/45">{format === "video" ? "MP4, MOV oder WebM" : "PNG, JPG oder WebP"}</span>
+            <span className="text-xs text-white/45">{format === "video" ? t("videoFormats") : t("imageFormats")}</span>
             <input
               type="file"
               accept={format === "video" ? "video/*" : "image/*"}
@@ -168,21 +171,21 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
               ))}
             </div>
           ) : frameLoading ? (
-            <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-white/75">Frames werden extrahiert...</p>
+            <p className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-white/75">{t("extractingFrames")}</p>
           ) : null}
 
           <div className="grid gap-3">
             <Label>Headline / Overlay</Label>
-            <Input value={headline} onChange={(event) => setHeadline(event.target.value)} placeholder="Optional" />
+            <Input value={headline} onChange={(event) => setHeadline(event.target.value)} placeholder={t("optionalPlaceholder")} />
             <Label>Primary Text / Caption</Label>
-            <Textarea value={primaryText} onChange={(event) => setPrimaryText(event.target.value)} placeholder="Optional" />
+            <Textarea value={primaryText} onChange={(event) => setPrimaryText(event.target.value)} placeholder={t("optionalPlaceholder")} />
             <Label>Landingpage</Label>
             <Input value={landingUrl} onChange={(event) => setLandingUrl(event.target.value)} placeholder="https://..." />
           </div>
 
           <Button type="button" variant="gradient" className="w-full" disabled={loading || frameLoading || !file} onClick={submit}>
             <Sparkles className="mr-2 h-4 w-4" />
-            {loading ? (format === "video" ? "Transkribiert & bewertet..." : "Bewertet...") : "Quality Score berechnen"}
+            {loading ? (format === "video" ? t("transcribingScoring") : t("scoring")) : t("computeScore")}
           </Button>
         </CardContent>
       </Card>
@@ -195,15 +198,17 @@ export function PredictionToolForm({ clientId }: { clientId: string }) {
 }
 
 function PredictionEmptyState({ format }: { format: PredictionFormat }) {
+  const t = useTranslations("predictionTool");
+
   return (
     <Card className="border-herb-border bg-herb-surface/90">
       <CardContent className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-herb-border bg-black/20 text-primary">
           {format === "video" ? <FileVideo className="h-7 w-7" /> : <ImageIcon className="h-7 w-7" />}
         </div>
-        <h3 className="mt-5 font-heading text-2xl text-white">Prediction bereit</h3>
+        <h3 className="mt-5 font-heading text-2xl text-white">{t("readyTitle")}</h3>
         <p className="mt-2 max-w-md text-sm leading-6 text-white/55">
-          {format === "video" ? "Video wird mit Frames, Transcript, Hook und Script gegen Viktor-Kofler-Performance bewertet." : "Static wird mit Visual, Overlay, Copy und historischen Winner-Patterns bewertet."}
+          {format === "video" ? t("readyVideoDescription") : t("readyStaticDescription")}
         </p>
       </CardContent>
     </Card>
@@ -211,6 +216,8 @@ function PredictionEmptyState({ format }: { format: PredictionFormat }) {
 }
 
 function PredictionResultView({ result, historyHref }: { result: CreativePredictionResult; historyHref: string | null }) {
+  const t = useTranslations("predictionTool");
+
   return (
     <>
       <Card className="border-herb-border bg-herb-surface/90">
@@ -234,7 +241,7 @@ function PredictionResultView({ result, historyHref }: { result: CreativePredict
             {historyHref ? (
               <Button asChild variant="outline" className="border-herb-border text-white hover:text-white">
                 <Link href={historyHref}>
-                  In History oeffnen
+                  {t("openInHistory")}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -262,12 +269,12 @@ function PredictionResultView({ result, historyHref }: { result: CreativePredict
         </Card>
 
         <Card className="border-herb-border bg-herb-surface/90">
-          <CardHeader><CardTitle>Warum</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("whyTitle")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <ListBlock title="Rationale" items={result.rationale} />
-            <ListBlock title="Staerken" items={result.ai.strengths} />
-            <ListBlock title="Risiken" items={result.ai.risks} />
-            <ListBlock title="Verbesserungen" items={result.ai.recommendations} />
+            <ListBlock title={t("strengthsTitle")} items={result.ai.strengths} />
+            <ListBlock title={t("risksTitle")} items={result.ai.risks} />
+            <ListBlock title={t("improvementsTitle")} items={result.ai.recommendations} />
           </CardContent>
         </Card>
       </div>
@@ -284,9 +291,9 @@ function PredictionResultView({ result, historyHref }: { result: CreativePredict
             result.benchmarks.matchedAngle.angle,
             `Score ${result.benchmarks.matchedAngle.score}/100`,
             `${Math.round(result.benchmarks.matchedAngle.spend)} EUR Spend`
-          ] : ["Kein klarer historischer Match"]} />
+          ] : [t("noHistoricalMatch")]} />
           <BenchmarkBlock title="Competitor Signal" lines={[
-            result.benchmarks.competitor.matchedAngle ?? "Kein Angle Match",
+            result.benchmarks.competitor.matchedAngle ?? t("noAngleMatch"),
             `${result.benchmarks.competitor.creativeCount} Creatives`,
             `${Math.round(result.benchmarks.competitor.reach)} Reach`
           ]} />
@@ -338,20 +345,20 @@ function BenchmarkBlock({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-function readImageDataUrl(file: File) {
+function readImageDataUrl(file: File, t: Translator) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
+    reader.onerror = () => reject(new Error(t("imageReadError")));
     reader.readAsDataURL(file);
   });
 }
 
-function waitForEvent(target: EventTarget, eventName: string) {
+function waitForEvent(target: EventTarget, eventName: string, t: Translator) {
   return new Promise<void>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       cleanup();
-      reject(new Error(`Video Event ${eventName} Timeout.`));
+      reject(new Error(t("videoEventTimeout", { event: eventName })));
     }, 10000);
     const done = () => {
       cleanup();
@@ -364,20 +371,20 @@ function waitForEvent(target: EventTarget, eventName: string) {
     };
     const fail = () => {
       cleanup();
-      reject(new Error("Video konnte nicht geladen werden."));
+      reject(new Error(t("videoLoadError")));
     };
     target.addEventListener(eventName, done, { once: true });
     target.addEventListener("error", fail, { once: true });
   });
 }
 
-async function extractVideoFrames(videoUrl: string): Promise<ExtractedFrame[]> {
+async function extractVideoFrames(videoUrl: string, t: Translator): Promise<ExtractedFrame[]> {
   const video = document.createElement("video");
   video.src = videoUrl;
   video.muted = true;
   video.playsInline = true;
   video.preload = "metadata";
-  await waitForEvent(video, "loadedmetadata");
+  await waitForEvent(video, "loadedmetadata", t);
 
   const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
   const times = Array.from(new Set([
@@ -390,7 +397,7 @@ async function extractVideoFrames(videoUrl: string): Promise<ExtractedFrame[]> {
   const frames: ExtractedFrame[] = [];
   for (const time of times) {
     video.currentTime = time;
-    await waitForEvent(video, "seeked");
+    await waitForEvent(video, "seeked", t);
     const canvas = document.createElement("canvas");
     const width = video.videoWidth || 720;
     const height = video.videoHeight || 1280;

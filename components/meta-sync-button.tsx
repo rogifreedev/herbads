@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -36,6 +37,8 @@ type StoredMetaSyncJob = {
 const emptyTotals: SyncTotals = { campaigns: 0, adSets: 0, ads: 0, creatives: 0, insights: 0 };
 
 export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
+  const t = useTranslations("metaSettings");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const cancelledRef = useRef(false);
   const runningRef = useRef(false);
@@ -93,8 +96,8 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
           failed += 1;
           const message = typeof result.error === "string" && result.error.trim().length > 0
             ? result.error
-            : response.statusText || "Request fehlgeschlagen";
-          appendError(`${range.since} bis ${range.until}: ${message}`);
+            : response.statusText || t("requestFailed");
+          appendError(t("rangeError", { since: range.since, until: range.until, message }));
         } else {
           totals.campaigns = Math.max(totals.campaigns, Number(result.summary?.campaigns ?? 0));
           totals.adSets = Math.max(totals.adSets, Number(result.summary?.adSets ?? 0));
@@ -104,7 +107,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
         }
       } catch (error) {
         failed += 1;
-        appendError(`${range.since} bis ${range.until}: ${error instanceof Error ? error.message : "Request fehlgeschlagen"}`);
+        appendError(t("rangeError", { since: range.since, until: range.until, message: error instanceof Error ? error.message : t("requestFailed") }));
       }
 
       const done = index + 1;
@@ -116,16 +119,16 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
     runningRef.current = false;
     if (cancelledRef.current) {
       clearJob();
-      toast.message("Meta Sync abgebrochen.");
+      toast.message(t("syncCancelled"));
     } else if (failed > 0) {
       clearJob();
-      toast.warning(`Meta Sync fertig mit ${failed} fehlerhaften Zeitraeumen. ${totals.insights} Insights gespeichert.`);
+      toast.warning(t("syncDoneWithErrors", { failed, insights: totals.insights }));
     } else {
       clearJob();
-      toast.success(`Meta Sync abgeschlossen: ${totals.ads} Ads, ${totals.creatives} Creatives, ${totals.insights} Insights.`);
+      toast.success(t("syncComplete", { ads: totals.ads, creatives: totals.creatives, insights: totals.insights }));
     }
     router.refresh();
-  }, [clearJob, clientId, router, saveJob]);
+  }, [clearJob, clientId, router, saveJob, t]);
 
   useEffect(() => {
     if (resumedRef.current) return;
@@ -140,7 +143,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
         return;
       }
 
-      toast.message("Meta Sync wird nach Reload fortgesetzt.");
+      toast.message(t("syncResumed"));
       runQueue(job).catch(() => {
         runningRef.current = false;
         setLoading(false);
@@ -148,17 +151,17 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
     } catch {
       clearJob();
     }
-  }, [clearJob, runQueue, storageKey]);
+  }, [clearJob, runQueue, storageKey, t]);
 
   async function sync() {
     if (!since || !until) return;
     if (since > until) {
-      toast.error("Startdatum darf nicht nach dem Enddatum liegen.");
+      toast.error(t("dateRangeError"));
       return;
     }
 
     const nextRanges = splitDateRange({ since, until });
-    const confirmed = window.confirm(`${nextRanges.length} Zeitraeume von ${since} bis ${until} synchronisieren? Der Sync bleibt nach Reload sichtbar und setzt fort.`);
+    const confirmed = window.confirm(t("syncConfirm", { count: nextRanges.length, since, until }));
     if (!confirmed) return;
 
     await runQueue({ since, until, ranges: nextRanges, done: 0, failed: 0, totals: emptyTotals, errors: [] });
@@ -168,7 +171,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
     <div className="flex flex-col gap-2 rounded-xl border border-herb-border bg-black/20 p-3">
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="text-xs text-white/55">
-          Von
+          {t("fromLabel")}
           <input
             type="date"
             value={since}
@@ -179,7 +182,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
           />
         </label>
         <label className="text-xs text-white/55">
-          Bis
+          {t("toLabel")}
           <input
             type="date"
             value={until}
@@ -193,17 +196,17 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
       </div>
       <Button type="button" variant="gradient" onClick={sync} disabled={loading || !since || !until}>
         <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        {loading ? "Synchronisiert..." : "Meta synchronisieren"}
+        {loading ? t("syncing") : t("syncTitle")}
       </Button>
       {loading ? (
         <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 text-xs text-white/70">
           <div className="flex items-center justify-between gap-3">
             <span>
-              Zeitraum {progress.done} von {ranges.length} fertig{progress.failed > 0 ? `, ${progress.failed} Fehler` : ""}
+              {t("syncProgress", { done: progress.done, total: ranges.length })}{progress.failed > 0 ? t("syncFailedSuffix", { count: progress.failed }) : ""}
             </span>
             <Button type="button" variant="outline" className="h-8 border-herb-border px-2" onClick={() => { cancelledRef.current = true; }}>
               <X className="mr-1 h-3.5 w-3.5" />
-              Abbrechen
+              {tCommon("cancel")}
             </Button>
           </div>
           {syncErrors.length > 0 ? (

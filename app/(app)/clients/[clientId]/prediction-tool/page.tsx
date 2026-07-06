@@ -1,16 +1,18 @@
+import { getTranslations } from "next-intl/server";
 import { PredictionToolForm } from "@/components/prediction-tool-form";
 import { PredictionToolTabs } from "@/components/prediction-tool-tabs";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function PredictionToolPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const t = await getTranslations("predictionTool");
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-4xl">Prediction Analyse</h2>
+        <h2 className="font-heading text-4xl">{t("title")}</h2>
         <p className="mt-2 max-w-3xl text-sm text-white/60">
-          Pre-Launch Quality Score fuer neue Statics und Videos auf Basis von Viktor-Kofler-KPIs, Creative-Angles, Hook-Patterns und Competitor-Signalen.
+          {t("subtitle")}
         </p>
       </div>
 

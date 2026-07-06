@@ -1,14 +1,18 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { AdIdeasGenerateForm } from "@/components/ad-ideas-generate-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { getCreativeLearningOverview, type HookOpportunity, type IdeaPrediction, type LearningPattern } from "@/lib/creative-learning";
+import type { Translator } from "@/lib/i18n-types";
 import { formatNumber } from "@/lib/metrics";
 
 export default async function CreativeLearningPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const t = await getTranslations("learning");
   const overview = await getCreativeLearningOverview(clientId);
 
   return (
@@ -17,7 +21,7 @@ export default async function CreativeLearningPage({ params }: { params: Promise
         <p className="text-xs uppercase tracking-[0.22em] text-primary">Self Learning System</p>
         <h2 className="mt-2 font-heading text-4xl">Creative Learning</h2>
         <p className="mt-2 text-sm text-white/60">
-          Datenbasierte Gewinner-Muster, Fatigue-Signale, neue Hook-/Angle-Chancen und Prediction Scores fuer Ad Ideas.
+          {t("subtitle")}
         </p>
       </div>
 
@@ -25,7 +29,7 @@ export default async function CreativeLearningPage({ params }: { params: Promise
 
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <SummaryCard label="Creatives" value={formatNumber(overview.totals.creatives)} />
-        <SummaryCard label="AI analysiert" value={formatNumber(overview.totals.analyzedCreatives)} />
+        <SummaryCard label={t("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
         <SummaryCard label="Angles" value={formatNumber(overview.totals.angles)} />
         <SummaryCard label="Ad Ideas" value={formatNumber(overview.totals.ideas)} />
         <SummaryCard label="Avg Score" value={formatNumber(overview.totals.avgCreativeScore)} />
@@ -34,30 +38,30 @@ export default async function CreativeLearningPage({ params }: { params: Promise
 
       <Card className="border-primary/30 bg-gradient-to-br from-primary/15 via-herb-surface to-herb-surface">
         <CardHeader>
-          <CardTitle>Neue AI-Ideen aus Learnings generieren</CardTitle>
+          <CardTitle>{t("generateTitle")}</CardTitle>
           <CardDescription>
-            Nutzt OpenRouter mit aktuellen Winner-/Loser-Patterns, Fatigue-Signalen, Opportunities, Hook Insights und Meta-Kontext. Die Ideen werden gespeichert und danach unten im Prediction Board bewertet.
+            {t("generateDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AdIdeasGenerateForm clientId={clientId} defaultCount="8" defaultFocus={learningFocus(overview)} buttonLabel="Learning-Ideen generieren" hideFocus />
+          <AdIdeasGenerateForm clientId={clientId} defaultCount="8" defaultFocus={learningFocus(overview, t)} buttonLabel={t("generateButton")} hideFocus />
         </CardContent>
       </Card>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <PatternSection
           title="Winner Patterns"
-          description="Angles mit starken Performance-Signalen, die neue Varianten verdienen."
-          emptyTitle="Noch keine Gewinner-Muster"
-          emptyDescription="Sobald genug Spend, Impressions und AI-Analysen vorhanden sind, erscheinen hier belastbare Winner."
+          description={t("winnerDescription")}
+          emptyTitle={t("winnerEmptyTitle")}
+          emptyDescription={t("winnerEmptyDescription")}
           patterns={overview.winnerPatterns}
           clientId={clientId}
         />
         <PatternSection
           title="Loser Patterns"
-          description="Angles mit schwacher Performance oder strukturellem Risiko."
-          emptyTitle="Keine klaren Verlierer"
-          emptyDescription="Aktuell gibt es keine ausreichend belegten schwachen Pattern."
+          description={t("loserDescription")}
+          emptyTitle={t("loserEmptyTitle")}
+          emptyDescription={t("loserEmptyDescription")}
           patterns={overview.loserPatterns}
           clientId={clientId}
         />
@@ -66,17 +70,17 @@ export default async function CreativeLearningPage({ params }: { params: Promise
       <section className="grid gap-4 xl:grid-cols-2">
         <PatternSection
           title="Emerging Opportunities"
-          description="Historisch positive Angles, die aktuell zu wenig getestet werden."
-          emptyTitle="Keine ungenutzten Chancen erkannt"
-          emptyDescription="Alle starken Angles scheinen aktuell genutzt zu werden oder brauchen mehr Daten."
+          description={t("opportunitiesDescription")}
+          emptyTitle={t("opportunitiesEmptyTitle")}
+          emptyDescription={t("opportunitiesEmptyDescription")}
           patterns={overview.opportunities}
           clientId={clientId}
         />
         <PatternSection
           title="Fatigue Warnings"
-          description="Historisch starke Angles, deren 30-Tage-Score aktuell abfaellt."
-          emptyTitle="Keine Fatigue Warnungen"
-          emptyDescription="Aktuell gibt es keinen klaren Score-Abfall bei Gewinner-Angles."
+          description={t("fatigueDescription")}
+          emptyTitle={t("fatigueEmptyTitle")}
+          emptyDescription={t("fatigueEmptyDescription")}
           patterns={overview.fatigueWarnings}
           clientId={clientId}
         />
@@ -84,12 +88,12 @@ export default async function CreativeLearningPage({ params }: { params: Promise
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Neue Hook & Angle Tests</CardTitle>
-          <CardDescription>Aus Gewinner-Patterns abgeleitete naechste Testzellen. Keine KI-Kopie, sondern datenbasierte Varianten.</CardDescription>
+          <CardTitle>{t("hookTestsTitle")}</CardTitle>
+          <CardDescription>{t("hookTestsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {overview.hookOpportunities.length === 0 ? (
-            <EmptyState title="Noch keine Hook-Chancen" description="Dafuer braucht das System mindestens ein paar Winner-Patterns oder Hook-Analysen." />
+            <EmptyState title={t("noHookOpportunitiesTitle")} description={t("noHookOpportunitiesDescription")} />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {overview.hookOpportunities.map((item) => <HookOpportunityCard key={item.id} item={item} />)}
@@ -101,11 +105,11 @@ export default async function CreativeLearningPage({ params }: { params: Promise
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
           <CardTitle>Prediction Board</CardTitle>
-          <CardDescription>Bestehende Ad Ideas mit prognostischem Score aus Angle-Historie, Hook-Aehnlichkeit und Ideen-Score.</CardDescription>
+          <CardDescription>{t("predictionBoardDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {overview.predictions.length === 0 ? (
-            <EmptyState title="Noch keine Predictions" description="Generiere zuerst Ad Ideas. Danach bewertet das Learning System die Launch-Wahrscheinlichkeit." />
+            <EmptyState title={t("noPredictionsTitle")} description={t("noPredictionsDescription")} />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {overview.predictions.map((prediction) => <PredictionCard key={prediction.idea.id} prediction={prediction} />)}
@@ -128,13 +132,13 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function learningFocus(overview: Awaited<ReturnType<typeof getCreativeLearningOverview>>) {
-  const winners = overview.winnerPatterns.map((pattern) => pattern.title).slice(0, 4).join(", ") || "keine klaren Winner";
-  const losers = overview.loserPatterns.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine klaren Loser";
-  const opportunities = overview.opportunities.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine klaren Opportunities";
-  const fatigue = overview.fatigueWarnings.map((pattern) => pattern.title).slice(0, 3).join(", ") || "keine Fatigue-Warnungen";
+function learningFocus(overview: Awaited<ReturnType<typeof getCreativeLearningOverview>>, t: Translator) {
+  const winners = overview.winnerPatterns.map((pattern) => pattern.title).slice(0, 4).join(", ") || t("focusFallbackWinners");
+  const losers = overview.loserPatterns.map((pattern) => pattern.title).slice(0, 3).join(", ") || t("focusFallbackLosers");
+  const opportunities = overview.opportunities.map((pattern) => pattern.title).slice(0, 3).join(", ") || t("focusFallbackOpportunities");
+  const fatigue = overview.fatigueWarnings.map((pattern) => pattern.title).slice(0, 3).join(", ") || t("focusFallbackFatigue");
 
-  return `LEARNING_GENERATION_MODE. Generiere neue datenbasierte Ad Ideas aus Creative Learning, ohne bestehende Hook-Texte oder Ad-Bausteine zu kopieren. Gewinner-Angles als strategische Richtung nutzen: ${winners}. Schwache Patterns nicht wiederholen, sondern bewusst anders framen: ${losers}. Opportunities als neue Testfelder reaktivieren: ${opportunities}. Fatigue beachten und frische Openings/Visuals entwickeln: ${fatigue}. Jede Idee braucht ein neues Konzept, einen neu formulierten Hook, eine klare Produktionsidee und eine Begruendung, welches Learning transformiert wurde.`;
+  return t("generateFocus", { winners, losers, opportunities, fatigue });
 }
 
 function PatternSection({ title, description, emptyTitle, emptyDescription, patterns, clientId }: {
@@ -193,6 +197,8 @@ function PatternCard({ pattern, clientId }: { pattern: LearningPattern; clientId
 }
 
 function HookOpportunityCard({ item }: { item: HookOpportunity }) {
+  const t = useTranslations("learning");
+
   return (
     <article className="rounded-2xl border border-herb-border bg-black/20 p-4">
       <div className="flex flex-wrap gap-2">
@@ -203,12 +209,14 @@ function HookOpportunityCard({ item }: { item: HookOpportunity }) {
       </div>
       <h3 className="mt-3 font-heading text-2xl text-white">{item.hook}</h3>
       <p className="mt-3 text-sm text-white/70">{item.why}</p>
-      <p className="mt-3 text-xs text-white/40">Quelle: {item.sourcePattern}</p>
+      <p className="mt-3 text-xs text-white/40">{t("sourceLabel", { source: item.sourcePattern })}</p>
     </article>
   );
 }
 
 function PredictionCard({ prediction }: { prediction: IdeaPrediction }) {
+  const t = useTranslations("learning");
+
   return (
     <article className="rounded-2xl border border-herb-border bg-black/20 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -232,8 +240,8 @@ function PredictionCard({ prediction }: { prediction: IdeaPrediction }) {
         <span>CPA Band {prediction.predictedCpa}</span>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <InfoList title="Warum" items={prediction.rationale} />
-        <InfoList title="Risiken" items={prediction.risks} />
+        <InfoList title={t("whyTitle")} items={prediction.rationale} />
+        <InfoList title={t("risksTitle")} items={prediction.risks} />
       </div>
     </article>
   );

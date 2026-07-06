@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,6 +10,7 @@ import { listKnowledgeDocuments } from "@/lib/knowledge";
 
 export default async function ClientKnowledgePage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const t = await getTranslations("knowledge");
   const { clients } = await listClients();
   const activeClient = clients.find((client) => client.id === clientId);
 
@@ -22,8 +24,8 @@ export default async function ClientKnowledgePage({ params }: { params: Promise<
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="font-heading text-4xl">Wissensdatenbank</h2>
-          <p className="mt-2 text-sm text-white/60">Zielgruppen, Branding, Angebote und Claims fuer RAG-basierte Creative Analysen.</p>
+          <h2 className="font-heading text-4xl">{t("title")}</h2>
+          <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
         </div>
       </div>
 
@@ -35,18 +37,18 @@ export default async function ClientKnowledgePage({ params }: { params: Promise<
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Dokumente</CardTitle>
+          <CardTitle>{t("documentsTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {documents.length === 0 ? (
-            <EmptyState title="Noch keine Dokumente" description="Lade TXT, Markdown, JSON, PDF oder DOCX hoch. Die Dateien werden gespeichert, in Wissens-Chunks zerlegt und optional mit Embeddings indexiert." />
+            <EmptyState title={t("noDocumentsTitle")} description={t("noDocumentsDescription")} />
           ) : null}
           {documents.map((document) => (
             <div key={document.id} className="flex flex-col justify-between gap-3 rounded-xl border border-herb-border bg-black/20 p-4 md:flex-row md:items-center">
               <div>
                 <p className="font-medium text-white">{document.title}</p>
                 <p className="mt-1 text-xs text-white/45">
-                  {document.documentType} · {document.sourceType} · {document.chunkCount} Chunks
+                  {document.documentType} · {document.sourceType} · {t("chunkCount", { count: document.chunkCount })}
                   {document.fileSize ? ` · ${formatFileSize(document.fileSize)}` : ""}
                   {document.embeddingStatus ? ` · Embeddings: ${document.embeddingProvider ? `${document.embeddingProvider}/` : ""}${document.embeddingStatus}` : ""}
                 </p>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowRight, ImageIcon, Video } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { EmptyState } from "@/components/empty-state";
 import { PredictionToolTabs } from "@/components/prediction-tool-tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,6 +35,7 @@ function formatHref(clientId: string, format: "all" | "static" | "video") {
 
 export default async function PredictionHistoryPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<HistorySearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const [t, tCommon] = await Promise.all([getTranslations("predictionTool"), getTranslations("common")]);
   const format = activeFormat(resolvedSearchParams);
   const { analyses, error } = await listCreativePredictionAnalyses(clientId, format);
   const statics = analyses.filter((analysis) => analysis.format === "static").length;
@@ -45,12 +48,12 @@ export default async function PredictionHistoryPage({ params, searchParams }: { 
         <div>
           <h2 className="font-heading text-4xl">Prediction History</h2>
           <p className="mt-2 max-w-3xl text-sm text-white/60">
-            Gespeicherte Quality Scores fuer hochgeladene Statics und Videos inklusive Hook, Transcript, AI-Rationale und Benchmark-Snapshot.
+            {t("historySubtitle")}
           </p>
         </div>
         <Button asChild variant="gradient">
           <Link href={`/clients/${clientId}/prediction-tool`}>
-            Neue Analyse
+            {t("newAnalysis")}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
         </Button>
@@ -61,28 +64,28 @@ export default async function PredictionHistoryPage({ params, searchParams }: { 
       {error ? <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <SummaryCard label="Analysen" value={formatNumber(analyses.length)} />
+        <SummaryCard label={t("analysesLabel")} value={formatNumber(analyses.length)} />
         <SummaryCard label="Avg. Score" value={analyses.length > 0 ? `${avgScore}/100` : "-"} />
         <SummaryCard label="Statics" value={formatNumber(statics)} />
         <SummaryCard label="Videos" value={formatNumber(videos)} />
       </section>
 
       <div className="flex flex-wrap gap-2">
-        <FilterLink href={formatHref(clientId, "all")} active={format === "all"}>Alle</FilterLink>
+        <FilterLink href={formatHref(clientId, "all")} active={format === "all"}>{tCommon("all")}</FilterLink>
         <FilterLink href={formatHref(clientId, "static")} active={format === "static"}>Statics</FilterLink>
         <FilterLink href={formatHref(clientId, "video")} active={format === "video"}>Videos</FilterLink>
       </div>
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Analysierte Creatives</CardTitle>
+          <CardTitle>{t("analyzedCreativesTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           {analyses.length === 0 ? (
             <EmptyState
-              title="Noch keine Prediction History"
-              description="Sobald du ein Creative analysierst, wird der Quality Score hier gespeichert."
-              action={<Button asChild variant="gradient"><Link href={`/clients/${clientId}/prediction-tool`}>Analyse starten</Link></Button>}
+              title={t("noHistoryTitle")}
+              description={t("noHistoryDescription")}
+              action={<Button asChild variant="gradient"><Link href={`/clients/${clientId}/prediction-tool`}>{t("startAnalysis")}</Link></Button>}
             />
           ) : (
             <PredictionHistoryTable rows={analyses} />
@@ -119,6 +122,8 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function PredictionHistoryTable({ rows }: { rows: CreativePredictionAnalysis[] }) {
+  const t = useTranslations("predictionTool");
+
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[980px]">
@@ -130,7 +135,7 @@ function PredictionHistoryTable({ rows }: { rows: CreativePredictionAnalysis[] }
             <TableHead>Score</TableHead>
             <TableHead>Confidence</TableHead>
             <TableHead>Hook / Overlay</TableHead>
-            <TableHead>Erstellt</TableHead>
+            <TableHead>{t("createdColumn")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
