@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Oswald, Work_Sans } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { Suspense } from "react";
 import { Toaster } from "sonner";
 import { NavigationProgress } from "@/components/navigation-progress";
@@ -17,15 +19,19 @@ export const metadata: Metadata = {
 
 export const preferredRegion = "fra1";
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [locale, messages] = await Promise.all([getLocale(), getMessages()]);
+
   return (
-    <html lang="de">
+    <html lang={locale}>
       <body className={`${workSans.variable} ${oswald.variable} ${geistMono.variable} ${workSans.className}`}>
-        <Suspense fallback={null}>
-          <NavigationProgress />
-        </Suspense>
-        <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
-        <Toaster richColors position="top-right" />
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <Suspense fallback={null}>
+            <NavigationProgress />
+          </Suspense>
+          <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
+          <Toaster richColors position="top-right" />
+        </NextIntlClientProvider>
       </body>
     </html>
   );
