@@ -40,6 +40,7 @@ export function getPageTitle(pathname: string) {
   if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool")) return "Prediction Tool";
   if (pathname.startsWith("/clients") && pathname.includes("/batches/settings")) return "Batch Settings";
   if (pathname.startsWith("/clients") && pathname.includes("/batches")) return "Batches";
+  if (pathname.startsWith("/clients") && pathname.includes("/adsets/")) return "Ad Set";
   if (pathname.startsWith("/clients") && pathname.includes("/creatives")) return "Creatives";
   if (pathname.startsWith("/clients") && pathname.includes("/angles")) return "Creative Angles";
   if (pathname.startsWith("/clients") && pathname.includes("/ideas")) return "Ad Ideas";

@@ -220,6 +220,10 @@ function newestDate(values: Array<string | null>) {
   return new Date(Math.max(...timestamps)).toISOString();
 }
 
+function adSetDetailHref(clientId: string, adSetId: string) {
+  return `/clients/${clientId}/adsets/${adSetId}`;
+}
+
 function mapStoredItem(row: BatchFolderCheckRow): BatchOverviewItem {
   const matchType: BatchMetaMatch["type"] | null = row.match_type === "ad" || row.match_type === "adset" || row.match_type === "campaign" ? row.match_type : null;
   const match = matchType
@@ -229,7 +233,7 @@ function mapStoredItem(row: BatchFolderCheckRow): BatchOverviewItem {
         name: row.match_name ?? "",
         status: row.match_status,
         effectiveStatus: row.match_effective_status,
-        href: row.match_href
+        href: row.match_href ?? (matchType === "adset" && row.match_id ? adSetDetailHref(row.client_id, row.match_id) : null)
       }
     : null;
   const status = row.status === "live" || row.status === "found" || row.status === "missing" ? row.status : "missing";
@@ -498,7 +502,7 @@ async function listMetaEntities(clientId: string): Promise<{ entities: MetaEntit
       name: row.name as string,
       status: row.status ?? null,
       effectiveStatus: row.effective_status ?? null,
-      href: null,
+      href: adSetDetailHref(clientId, row.id),
       normalizedName: normalizeName(row.name as string),
       live: isLive(row.status ?? null, row.effective_status ?? null)
     }));
