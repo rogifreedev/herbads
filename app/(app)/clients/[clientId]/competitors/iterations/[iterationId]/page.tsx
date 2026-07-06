@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Play } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { CompetitorIterationStatusSelect } from "@/components/competitor-iteration-status-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +11,11 @@ import { formatDate, formatNumber } from "@/lib/metrics";
 
 export default async function CompetitorIterationDetailPage({ params }: { params: Promise<{ clientId: string; iterationId: string }> }) {
   const { clientId, iterationId } = await params;
+  const t = await getTranslations("competitors");
   const { iteration, error } = await getCompetitorIterationDetail(clientId, iterationId);
 
   if (!iteration) {
-    return <Alert variant="warning"><AlertDescription>{error ?? "Competitor Iteration wurde nicht gefunden."}</AlertDescription></Alert>;
+    return <Alert variant="warning"><AlertDescription>{error ?? t("iterationNotFound")}</AlertDescription></Alert>;
   }
 
   return (
@@ -23,7 +25,7 @@ export default async function CompetitorIterationDetailPage({ params }: { params
           <Button asChild variant="ghost" className="-ml-3 text-white/60 hover:text-white">
             <Link href={`/clients/${clientId}/competitors/iterations?tab=${iteration.format === "video" ? "videos" : "statics"}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Zurueck zu Competitor Iterations
+              {t("backToIterations")}
             </Link>
           </Button>
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -33,7 +35,7 @@ export default async function CompetitorIterationDetailPage({ params }: { params
             {iteration.score !== null ? <Badge variant="success">Score {formatNumber(iteration.score)}/100</Badge> : null}
           </div>
           <h2 className="mt-3 font-heading text-4xl text-white">{iteration.title}</h2>
-          <p className="mt-2 text-sm text-white/50">Erstellt am {formatDate(iteration.createdAt)} aus Competitor-Vorlage {iteration.sourceCompetitorName}</p>
+          <p className="mt-2 text-sm text-white/50">{t("createdFromCompetitorTemplate", { date: formatDate(iteration.createdAt), name: iteration.sourceCompetitorName })}</p>
         </div>
         <div className="w-full max-w-xs">
           <CompetitorIterationStatusSelect clientId={clientId} iterationId={iteration.id} status={iteration.status} />
@@ -43,7 +45,7 @@ export default async function CompetitorIterationDetailPage({ params }: { params
       <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Competitor Vorlage</CardTitle>
+            <CardTitle>{t("competitorTemplate")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <IterationSourcePreview iteration={iteration} />
@@ -69,7 +71,7 @@ export default async function CompetitorIterationDetailPage({ params }: { params
             </div>
             {iteration.sourceCreativePrimaryText || iteration.sourceCreativeHeadline ? (
               <div className="rounded-xl border border-herb-border bg-black/25 p-4 text-sm leading-6 text-white/65">
-                <p className="font-medium text-white">Vorlage Copy</p>
+                <p className="font-medium text-white">{t("templateCopy")}</p>
                 {iteration.sourceCreativeHeadline ? <p className="mt-2 font-medium text-white/80">{iteration.sourceCreativeHeadline}</p> : null}
                 {iteration.sourceCreativePrimaryText ? <p className="mt-2 whitespace-pre-wrap">{iteration.sourceCreativePrimaryText}</p> : null}
               </div>
@@ -80,27 +82,27 @@ export default async function CompetitorIterationDetailPage({ params }: { params
         <div className="space-y-6">
           <Card className="border-herb-border bg-herb-surface/90">
             <CardHeader>
-              <CardTitle>Neue Viktor-Kofler-Anweisung</CardTitle>
+              <CardTitle>{t("newInstructionTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <DetailBlock label="Beschreibung" value={iteration.description} />
-              <DetailBlock label="These" value={iteration.thesis} />
-              <DetailBlock label="Wieso" value={iteration.rationale} />
+              <DetailBlock label={t("descriptionLabel")} value={iteration.description} />
+              <DetailBlock label={t("thesisLabel")} value={iteration.thesis} />
+              <DetailBlock label={t("whyLabel")} value={iteration.rationale} />
               {iteration.format === "static" ? (
                 <DetailBlock label="Text Overlay" value={iteration.textOverlay} highlight />
               ) : (
                 <>
-                  <DetailBlock label="Neue Hook" value={iteration.hook} highlight />
+                  <DetailBlock label={t("newHookLabel")} value={iteration.hook} highlight />
                   <DetailBlock label="Script" value={iteration.script} />
                 </>
               )}
-              <DetailBlock label="Produktionsanweisungen" value={iteration.productionNotes} />
+              <DetailBlock label={t("productionNotesLabel")} value={iteration.productionNotes} />
             </CardContent>
           </Card>
 
           <Card className="border-herb-border bg-herb-surface/90">
             <CardHeader>
-              <CardTitle>Performance-Kontext</CardTitle>
+              <CardTitle>{t("performanceContext")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <SnapshotMetric label="Competitor" value={iteration.sourceCompetitorName} />

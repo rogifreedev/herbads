@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CompetitorIterationStatus } from "@/lib/competitor-iterations";
@@ -17,6 +18,7 @@ const statusLabels: Record<CompetitorIterationStatus, string> = {
 };
 
 export function CompetitorIterationStatusSelect({ clientId, iterationId, status }: { clientId: string; iterationId: string; status: CompetitorIterationStatus }) {
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const [value, setValue] = useState(status);
   const [pending, startTransition] = useTransition();
@@ -32,11 +34,11 @@ export function CompetitorIterationStatusSelect({ clientId, iterationId, status 
         body: JSON.stringify({ status: nextStatus })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Status konnte nicht gespeichert werden.");
+      if (!response.ok) throw new Error(result.error ?? tCommon("statusSaveError"));
       startTransition(() => router.refresh());
     } catch (error) {
       setValue(previousStatus);
-      toast.error(error instanceof Error ? error.message : "Status konnte nicht gespeichert werden.");
+      toast.error(error instanceof Error ? error.message : tCommon("statusSaveError"));
     }
   }
 

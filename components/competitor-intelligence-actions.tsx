@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,8 @@ function isActiveBulkStatus(status?: string) {
 }
 
 export function CompetitorCreateForm({ clientId }: { clientId: string }) {
+  const t = useTranslations("competitors");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -48,14 +51,14 @@ export function CompetitorCreateForm({ clientId }: { clientId: string }) {
         body: JSON.stringify({ name, metaAdLibraryUrl, websiteUrl })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Competitor konnte nicht gespeichert werden.");
+      if (!response.ok) throw new Error(result.error ?? t("competitorSaveError"));
       setName("");
       setMetaAdLibraryUrl("");
       setWebsiteUrl("");
-      toast.success("Competitor gespeichert.");
+      toast.success(t("competitorSaved"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Competitor konnte nicht gespeichert werden.");
+      toast.error(error instanceof Error ? error.message : t("competitorSaveError"));
     } finally {
       setLoading(false);
     }
@@ -66,12 +69,13 @@ export function CompetitorCreateForm({ clientId }: { clientId: string }) {
       <label className="grid gap-1 text-xs text-white/55">Name<Input value={name} onChange={(event) => setName(event.target.value)} className="h-9" /></label>
       <label className="grid gap-1 text-xs text-white/55">Website<Input value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} className="h-9" /></label>
       <label className="grid gap-1 text-xs text-white/55">Ad Library Link<Input value={metaAdLibraryUrl} onChange={(event) => setMetaAdLibraryUrl(event.target.value)} className="h-9" /></label>
-      <Button type="button" disabled={loading || pending} onClick={submit}>Speichern</Button>
+      <Button type="button" disabled={loading || pending} onClick={submit}>{tCommon("save")}</Button>
     </div>
   );
 }
 
 export function CompetitorSourceForm({ clientId, competitors }: Props) {
+  const t = useTranslations("competitors");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [competitorId, setCompetitorId] = useState("none");
@@ -87,12 +91,12 @@ export function CompetitorSourceForm({ clientId, competitors }: Props) {
         body: JSON.stringify({ competitorId: competitorId === "none" ? null : competitorId, url })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Source konnte nicht gespeichert werden.");
+      if (!response.ok) throw new Error(result.error ?? t("sourceSaveError"));
       setUrl("");
-      toast.success("Ad Library Source gespeichert.");
+      toast.success(t("sourceSaved"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Source konnte nicht gespeichert werden.");
+      toast.error(error instanceof Error ? error.message : t("sourceSaveError"));
     } finally {
       setLoading(false);
     }
@@ -104,18 +108,19 @@ export function CompetitorSourceForm({ clientId, competitors }: Props) {
         <Select value={competitorId} onValueChange={setCompetitorId}>
           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">Ohne Zuordnung</SelectItem>
+            <SelectItem value="none">{t("unassigned")}</SelectItem>
             {competitors.map((competitor) => <SelectItem key={competitor.id} value={competitor.id}>{competitor.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </label>
       <label className="grid gap-1 text-xs text-white/55">Meta Ad Library Link<Input value={url} onChange={(event) => setUrl(event.target.value)} className="h-9" /></label>
-      <Button type="button" disabled={loading || pending} onClick={submit}>Link speichern</Button>
+      <Button type="button" disabled={loading || pending} onClick={submit}>{t("saveLink")}</Button>
     </div>
   );
 }
 
 export function CompetitorCreativeForm({ clientId, competitors }: Props) {
+  const t = useTranslations("competitors");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [competitorId, setCompetitorId] = useState("none");
@@ -152,7 +157,7 @@ export function CompetitorCreativeForm({ clientId, competitors }: Props) {
         })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Competitor Creative konnte nicht gespeichert werden.");
+      if (!response.ok) throw new Error(result.error ?? t("creativeSaveError"));
       setSourceUrl("");
       setHook("");
       setPrimaryText("");
@@ -162,10 +167,10 @@ export function CompetitorCreativeForm({ clientId, competitors }: Props) {
       setStartedAt("");
       setEndedAt("");
       setImageUrl("");
-      toast.success("Competitor Creative gespeichert.");
+      toast.success(t("creativeSaved"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Competitor Creative konnte nicht gespeichert werden.");
+      toast.error(error instanceof Error ? error.message : t("creativeSaveError"));
     } finally {
       setLoading(false);
     }
@@ -178,7 +183,7 @@ export function CompetitorCreativeForm({ clientId, competitors }: Props) {
           <Select value={competitorId} onValueChange={setCompetitorId}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Ohne Zuordnung</SelectItem>
+              <SelectItem value="none">{t("unassigned")}</SelectItem>
               {competitors.map((competitor) => <SelectItem key={competitor.id} value={competitor.id}>{competitor.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -199,8 +204,8 @@ export function CompetitorCreativeForm({ clientId, competitors }: Props) {
         <label className="grid gap-1 text-xs text-white/55">Reach Max<Input value={reachMax} onChange={(event) => setReachMax(event.target.value)} inputMode="numeric" className="h-9" /></label>
       </div>
       <div className="grid gap-2 md:grid-cols-3">
-        <label className="grid gap-1 text-xs text-white/55">Startdatum<Input value={startedAt} onChange={(event) => setStartedAt(event.target.value)} placeholder="YYYY-MM-DD" className="h-9" /></label>
-        <label className="grid gap-1 text-xs text-white/55">Enddatum<Input value={endedAt} onChange={(event) => setEndedAt(event.target.value)} placeholder="optional" className="h-9" /></label>
+        <label className="grid gap-1 text-xs text-white/55">{t("startDate")}<Input value={startedAt} onChange={(event) => setStartedAt(event.target.value)} placeholder="YYYY-MM-DD" className="h-9" /></label>
+        <label className="grid gap-1 text-xs text-white/55">{t("endDate")}<Input value={endedAt} onChange={(event) => setEndedAt(event.target.value)} placeholder={t("optionalPlaceholder")} className="h-9" /></label>
         <label className="grid gap-1 text-xs text-white/55">Asset URL<Input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} className="h-9" /></label>
       </div>
       <div className="grid gap-2 md:grid-cols-2">
@@ -211,12 +216,13 @@ export function CompetitorCreativeForm({ clientId, competitors }: Props) {
         <label className="grid gap-1 text-xs text-white/55">Headline<Input value={headline} onChange={(event) => setHeadline(event.target.value)} className="h-9" /></label>
         <label className="grid gap-1 text-xs text-white/55">Primary Text<Input value={primaryText} onChange={(event) => setPrimaryText(event.target.value)} className="h-9" /></label>
       </div>
-      <Button type="button" disabled={loading || pending} onClick={submit}>Creative speichern</Button>
+      <Button type="button" disabled={loading || pending} onClick={submit}>{t("saveCreative")}</Button>
     </div>
   );
 }
 
 export function CompetitorAnalyzeButton({ clientId, creativeId }: { clientId: string; creativeId: string }) {
+  const t = useTranslations("competitors");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
@@ -226,11 +232,11 @@ export function CompetitorAnalyzeButton({ clientId, creativeId }: { clientId: st
     try {
       const response = await fetch(`/api/clients/${clientId}/competitors/creatives/${creativeId}/analyze`, { method: "POST" });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Analyse fehlgeschlagen.");
-      toast.success("Competitor Creative analysiert.");
+      if (!response.ok) throw new Error(result.error ?? t("analyzeError"));
+      toast.success(t("creativeAnalyzed"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Analyse fehlgeschlagen.");
+      toast.error(error instanceof Error ? error.message : t("analyzeError"));
     } finally {
       setLoading(false);
     }
@@ -239,12 +245,15 @@ export function CompetitorAnalyzeButton({ clientId, creativeId }: { clientId: st
   return (
     <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={loading || pending} onClick={analyze}>
       <Sparkles className="mr-2 h-4 w-4" />
-      Analysieren
+      {t("analyze")}
     </Button>
   );
 }
 
-export function CompetitorBulkAnalyzeButton({ clientId, creativeIds, label = "Alle Ads analysieren" }: { clientId: string; creativeIds: string[]; label?: string }) {
+export function CompetitorBulkAnalyzeButton({ clientId, creativeIds, label }: { clientId: string; creativeIds: string[]; label?: string }) {
+  const t = useTranslations("competitors");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<BulkCompetitorAnalysisStatus | null>(null);
@@ -291,15 +300,15 @@ export function CompetitorBulkAnalyzeButton({ clientId, creativeIds, label = "Al
     previousStatusRef.current = status.status;
 
     if (previousStatus && isActiveBulkStatus(previousStatus) && !isActiveBulkStatus(status.status)) {
-      if (status.failedItems > 0) toast.warning(`Competitor Bulk Analyse fertig mit ${status.failedItems} Fehlern.`);
-      else toast.success("Competitor Bulk Analyse abgeschlossen.");
+      if (status.failedItems > 0) toast.warning(t("bulkDoneWithErrors", { count: status.failedItems }));
+      else toast.success(t("bulkDone"));
       startTransition(() => router.refresh());
     }
-  }, [router, status]);
+  }, [router, status, t]);
 
   async function analyzeAll() {
     if (creativeIds.length === 0) return;
-    const confirmed = window.confirm(`${creativeIds.length} Competitor Ads im Hintergrund analysieren? Das startet ${creativeIds.length} AI-Anfragen und kann Kosten verursachen.`);
+    const confirmed = window.confirm(t("bulkConfirm", { count: creativeIds.length }));
     if (!confirmed) return;
 
     setLoading(true);
@@ -310,31 +319,32 @@ export function CompetitorBulkAnalyzeButton({ clientId, creativeIds, label = "Al
         body: JSON.stringify({ creativeIds })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Bulk Analyse fehlgeschlagen.");
+      if (!response.ok) throw new Error(result.error ?? t("bulkError"));
       setStatus(result.status ?? null);
-      toast.success("Competitor Bulk Analyse wurde als Hintergrundjob gestartet.");
+      toast.success(t("bulkStarted"));
       kickWorker().catch(() => undefined);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Bulk Analyse fehlgeschlagen.");
+      toast.error(error instanceof Error ? error.message : t("bulkError"));
     } finally {
       setLoading(false);
     }
   }
 
   if (isActiveBulkStatus(status?.status)) {
-    const pausedUntil = status?.pauseUntil ? new Date(status.pauseUntil).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : null;
+    const pausedUntil = status?.pauseUntil ? new Date(status.pauseUntil).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : null;
     return (
       <div className="flex flex-col gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-white md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-medium">Competitor Bulk Analyse laeuft im Hintergrund</p>
+          <p className="font-medium">{t("bulkRunning")}</p>
           <p className="mt-1 text-xs text-white/60">
-            {status.processedItems} von {status.totalItems} verarbeitet ({status.percent}%){status.failedItems > 0 ? `, ${status.failedItems} Fehler` : ""}
-            {pausedUntil ? `, pausiert bis ${pausedUntil}` : ""}
+            {t("bulkProgress", { processed: status.processedItems, total: status.totalItems, percent: status.percent })}
+            {status.failedItems > 0 ? t("bulkFailedSuffix", { count: status.failedItems }) : ""}
+            {pausedUntil ? t("bulkPausedSuffix", { time: pausedUntil }) : ""}
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={loading || isPending} onClick={() => loadStatus().catch(() => undefined)}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Aktualisieren
+          {tCommon("refresh")}
         </Button>
       </div>
     );
@@ -343,12 +353,13 @@ export function CompetitorBulkAnalyzeButton({ clientId, creativeIds, label = "Al
   return (
     <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={loading || creativeIds.length === 0} onClick={analyzeAll}>
       {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-      {label} ({creativeIds.length})
+      {label ?? t("analyzeAllAds")} ({creativeIds.length})
     </Button>
   );
 }
 
 export function CompetitorCrawlToggle({ clientId, competitorId, enabled }: { clientId: string; competitorId: string; enabled: boolean }) {
+  const t = useTranslations("competitors");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
@@ -362,11 +373,11 @@ export function CompetitorCrawlToggle({ clientId, competitorId, enabled }: { cli
         body: JSON.stringify({ crawlEnabled: nextEnabled })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Settings konnten nicht gespeichert werden.");
-      toast.success(nextEnabled ? "Competitor zum Crawlen verbunden." : "Competitor vom Crawl getrennt.");
+      if (!response.ok) throw new Error(result.error ?? t("settingsSaveError"));
+      toast.success(nextEnabled ? t("crawlConnectedToast") : t("crawlDisconnectedToast"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Settings konnten nicht gespeichert werden.");
+      toast.error(error instanceof Error ? error.message : t("settingsSaveError"));
     } finally {
       setLoading(false);
     }
@@ -381,12 +392,13 @@ export function CompetitorCrawlToggle({ clientId, competitorId, enabled }: { cli
         disabled={loading || pending}
         onChange={(event) => update(event.target.checked)}
       />
-      {enabled ? "Crawl verbunden" : "Nicht crawlen"}
+      {enabled ? t("crawlConnected") : t("dontCrawl")}
     </label>
   );
 }
 
 export function CompetitorSourceCrawlButton({ clientId, sourceId, status }: { clientId: string; sourceId: string; status: string }) {
+  const t = useTranslations("competitors");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
@@ -397,11 +409,11 @@ export function CompetitorSourceCrawlButton({ clientId, sourceId, status }: { cl
     try {
       const response = await fetch(`/api/clients/${clientId}/competitors/sources/${sourceId}/crawl`, { method: "POST" });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Crawl fehlgeschlagen.");
-      toast.success("Competitor Crawl Job gestartet.");
+      if (!response.ok) throw new Error(result.error ?? t("crawlError"));
+      toast.success(t("crawlStarted"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Crawl fehlgeschlagen.");
+      toast.error(error instanceof Error ? error.message : t("crawlError"));
       startTransition(() => router.refresh());
     } finally {
       setLoading(false);
@@ -411,7 +423,7 @@ export function CompetitorSourceCrawlButton({ clientId, sourceId, status }: { cl
   return (
     <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={disabled} onClick={crawl}>
       <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-      {loading || status === "running" ? "Crawl läuft" : "Crawl starten"}
+      {loading || status === "running" ? t("crawlRunningLabel") : t("startCrawl")}
     </Button>
   );
 }

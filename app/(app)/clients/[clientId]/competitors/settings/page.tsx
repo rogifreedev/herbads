@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import {
   CompetitorCreateForm,
   CompetitorCrawlToggle,
@@ -12,10 +13,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCompetitorOverview, type Competitor, type CompetitorSource } from "@/lib/competitors";
+import type { Translator } from "@/lib/i18n-types";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
 
 export default async function CompetitorSettingsPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const t = await getTranslations("competitors");
   const overview = await getCompetitorOverview(clientId);
   const competitorsById = new Map(overview.competitors.map((competitor) => [competitor.id, competitor]));
   const connectedCompetitors = overview.competitors.filter((competitor) => competitor.crawlEnabled);
@@ -26,7 +29,7 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-heading text-4xl">Competitor Settings</h2>
-          <p className="mt-2 text-sm text-white/60">Lege Competitors an, verbinde nur relevante Accounts fuer Crawls und verwalte Meta Ad Library Sources.</p>
+          <p className="mt-2 text-sm text-white/60">{t("settingsSubtitle")}</p>
         </div>
         <CompetitorSectionNav clientId={clientId} active="settings" />
       </div>
@@ -35,15 +38,15 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
 
       <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard label="Competitors" value={formatNumber(overview.totals.competitors)} />
-        <SummaryCard label="Verbunden" value={formatNumber(connectedCompetitors.length)} />
+        <SummaryCard label={t("connectedLabel")} value={formatNumber(connectedCompetitors.length)} />
         <SummaryCard label="Sources" value={formatNumber(overview.sources.length)} />
-        <SummaryCard label="Crawls fertig" value={formatNumber(completedSources)} />
+        <SummaryCard label={t("crawlsDone")} value={formatNumber(completedSources)} />
       </section>
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Competitor anlegen</CardTitle>
-          <CardDescription>Name, Website und Meta Ad Library Link reichen fuer den Start. Eigener CPM fuer Schaetzungen: {formatCurrency(overview.ownCpm, 2)} ({overview.ownCpmConfidence})</CardDescription>
+          <CardTitle>{t("createCompetitor")}</CardTitle>
+          <CardDescription>{t("createCompetitorDescription", { cpm: formatCurrency(overview.ownCpm, 2), confidence: overview.ownCpmConfidence })}</CardDescription>
         </CardHeader>
         <CardContent>
           <CompetitorCreateForm clientId={clientId} />
@@ -52,21 +55,21 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Competitors verbinden</CardTitle>
-          <CardDescription>Nur verbundene Competitors duerfen gecrawlt werden. So kannst du Quellen parken, ohne dass sie beim Crawl laufen.</CardDescription>
+          <CardTitle>{t("connectCompetitors")}</CardTitle>
+          <CardDescription>{t("connectCompetitorsDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {overview.competitors.length === 0 ? <EmptyState title="Keine Competitors" description="Lege zuerst einen Competitor mit Meta Ad Library Link an." /> : null}
+          {overview.competitors.length === 0 ? <EmptyState title={t("noCompetitors")} description={t("noCompetitorsDescription")} /> : null}
           {overview.competitors.map((competitor) => (
             <div key={competitor.id} className="rounded-xl border border-herb-border bg-black/20 p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-heading text-2xl text-white">{competitor.name}</p>
-                    <Badge variant={competitor.crawlEnabled ? "success" : "secondary"}>{competitor.crawlEnabled ? "Crawl verbunden" : "Nicht crawlen"}</Badge>
+                    <Badge variant={competitor.crawlEnabled ? "success" : "secondary"}>{competitor.crawlEnabled ? t("crawlConnected") : t("dontCrawl")}</Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/45">
-                    <span>Erstellt {formatDate(competitor.createdAt)}</span>
+                    <span>{t("createdOn", { date: formatDate(competitor.createdAt) })}</span>
                     {competitor.websiteUrl ? <Link href={competitor.websiteUrl} target="_blank" className="text-primary hover:text-white">{displayUrl(competitor.websiteUrl)}</Link> : null}
                     {competitor.metaAdLibraryUrl ? <Link href={competitor.metaAdLibraryUrl} target="_blank" className="text-primary hover:text-white">Ad Library</Link> : null}
                   </div>
@@ -82,15 +85,15 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
           <CardTitle>Ad Library Sources</CardTitle>
-          <CardDescription>Speichere direkte Meta Ad Library Links und starte Crawls nur fuer verbundene Competitors.</CardDescription>
+          <CardDescription>{t("sourcesDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <CompetitorSourceForm clientId={clientId} competitors={overview.competitors} />
           <div className="space-y-3">
-            {overview.sources.length === 0 ? <EmptyState title="Keine Sources" description="Speichere einen Ad Library Link, um Competitor Ads zu crawlen." /> : null}
+            {overview.sources.length === 0 ? <EmptyState title={t("noSources")} description={t("noSourcesDescription")} /> : null}
             {overview.sources.map((source) => {
               const competitor = source.competitorId ? competitorsById.get(source.competitorId) ?? null : null;
-              return <SourceRow key={source.id} clientId={clientId} source={source} competitor={competitor} />;
+              return <SourceRow key={source.id} clientId={clientId} source={source} competitor={competitor} t={t} />;
             })}
           </div>
         </CardContent>
@@ -99,8 +102,8 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
       {overview.detectedLinks.length > 0 ? (
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Gefundene Ad Library Links</CardTitle>
-            <CardDescription>Aus Kundenprofil und Wissensdatenbank erkannt. Speichere relevante Links als Source.</CardDescription>
+            <CardTitle>{t("detectedLinksTitle")}</CardTitle>
+            <CardDescription>{t("detectedLinksDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {overview.detectedLinks.map((link) => (
@@ -114,7 +117,7 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
       ) : null}
 
       <details className="rounded-2xl border border-herb-border bg-herb-surface/90 p-4">
-        <summary className="cursor-pointer select-none font-medium text-white">Advanced: Competitor Creative manuell ergaenzen</summary>
+        <summary className="cursor-pointer select-none font-medium text-white">{t("advancedManualCreative")}</summary>
         <div className="mt-4">
           <CompetitorCreativeForm clientId={clientId} competitors={overview.competitors} />
         </div>
@@ -123,7 +126,7 @@ export default async function CompetitorSettingsPage({ params }: { params: Promi
   );
 }
 
-function SourceRow({ clientId, source, competitor }: { clientId: string; source: CompetitorSource; competitor: Competitor | null }) {
+function SourceRow({ clientId, source, competitor, t }: { clientId: string; source: CompetitorSource; competitor: Competitor | null; t: Translator }) {
   const canCrawl = !competitor || competitor.crawlEnabled;
 
   return (
@@ -132,17 +135,17 @@ function SourceRow({ clientId, source, competitor }: { clientId: string; source:
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={sourceStatusVariant(source.status)}>{source.status}</Badge>
-            {competitor ? <Badge variant={competitor.crawlEnabled ? "success" : "secondary"}>{competitor.name}</Badge> : <Badge variant="outline">Ohne Zuordnung</Badge>}
-            <span className="text-xs text-white/45">Gespeichert {formatDate(source.createdAt)}</span>
+            {competitor ? <Badge variant={competitor.crawlEnabled ? "success" : "secondary"}>{competitor.name}</Badge> : <Badge variant="outline">{t("unassigned")}</Badge>}
+            <span className="text-xs text-white/45">{t("savedOn", { date: formatDate(source.createdAt) })}</span>
           </div>
           <Link href={source.url} target="_blank" className="block truncate text-primary hover:text-white">{source.url}</Link>
-          <p className="text-xs text-white/45">Zuletzt geprueft: {formatDate(source.lastCheckedAt)}</p>
+          <p className="text-xs text-white/45">{t("lastChecked", { date: formatDate(source.lastCheckedAt) })}</p>
         </div>
         <div className="flex flex-col items-start gap-2 lg:items-end">
           {canCrawl ? (
             <CompetitorSourceCrawlButton clientId={clientId} sourceId={source.id} status={source.status} />
           ) : (
-            <Badge variant="secondary">Crawl in Settings getrennt</Badge>
+            <Badge variant="secondary">{t("crawlDisconnectedBadge")}</Badge>
           )}
         </div>
       </div>

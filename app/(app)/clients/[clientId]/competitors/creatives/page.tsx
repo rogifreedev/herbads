@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { CompetitorBulkAnalyzeButton } from "@/components/competitor-intelligence-actions";
 import { CompetitorIntelligenceControls, type CompetitorIntelligenceTab } from "@/components/competitor-intelligence-controls";
 import { CompetitorCreativesTable } from "@/components/competitor-creatives-table";
@@ -12,6 +13,7 @@ import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/l
 import { getCompetitorReachBreakdown, getCompetitorReachByGender, getCompetitorReachByLocation, normalizeCompetitorGender } from "@/lib/competitor-demographics";
 import { getCompetitorOverview, type Competitor, type CompetitorCreative } from "@/lib/competitors";
 import type { CreativeEmotionScores } from "@/lib/creative-ai";
+import type { Translator } from "@/lib/i18n-types";
 import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
 
@@ -79,6 +81,7 @@ export default async function CompetitorCreativesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const t = await getTranslations("competitors");
   const overview = await getCompetitorOverview(clientId);
   const activeTab = resolveTab(firstParam(resolvedSearchParams.tab));
   const selectedCompetitorId = resolveCompetitorId(firstParam(resolvedSearchParams.competitor), overview.competitors);
@@ -95,7 +98,8 @@ export default async function CompetitorCreativesPage({
         <div>
           <h2 className="font-heading text-4xl">Competitor Intelligence</h2>
           <p className="mt-2 text-sm text-white/60">
-            {selectedCompetitor ? `${selectedCompetitor.name}: ` : ""}Meta Ads mit EU Transparency, Reach-Indizien, Angles und AI Analyse.
+            {selectedCompetitor ? `${selectedCompetitor.name}: ` : ""}
+            {t("intelligenceSubtitle")}
           </p>
         </div>
         <CompetitorSectionNav clientId={clientId} active="creatives" />
@@ -119,14 +123,15 @@ export default async function CompetitorCreativesPage({
           competitorCount={selectedCompetitorId ? 1 : overview.competitors.length}
           creativeCount={filteredCreatives.length}
           analyzedCount={filteredCreatives.filter((creative) => creative.analysis).length}
+          t={t}
         />
       ) : null}
 
-      {activeTab === "creatives" ? <CreativesTab clientId={clientId} groups={groups} creatives={filteredCreatives} /> : null}
+      {activeTab === "creatives" ? <CreativesTab clientId={clientId} groups={groups} creatives={filteredCreatives} t={t} /> : null}
 
-      {activeTab === "angles" ? <AnglesTab rows={angleRows} /> : null}
+      {activeTab === "angles" ? <AnglesTab rows={angleRows} t={t} /> : null}
 
-      {activeTab === "landingpages" ? <LandingpagesTab clientId={clientId} rows={landingpageRows} /> : null}
+      {activeTab === "landingpages" ? <LandingpagesTab clientId={clientId} rows={landingpageRows} t={t} /> : null}
     </div>
   );
 }
@@ -135,20 +140,22 @@ function OverviewTab({
   metrics,
   competitorCount,
   creativeCount,
-  analyzedCount
+  analyzedCount,
+  t
 }: {
   metrics: OverviewMetrics;
   competitorCount: number;
   creativeCount: number;
   analyzedCount: number;
+  t: Translator;
 }) {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <SummaryCard label="Reach insgesamt" value={metrics.totalReach > 0 ? formatNumber(metrics.totalReach) : "–"} />
-        <SummaryCard label="Spent insgesamt" value={formatCurrency(metrics.totalSpend)} />
-        <SummaryCard label="Länder Reach" value={metrics.topCountry ? metrics.topCountry.location : "–"} detail={metrics.topCountry ? formatNumber(metrics.topCountry.reach) : "keine EU Daten"} />
-        <SummaryCard label="Alter mit meisten Reach" value={metrics.topAge ? metrics.topAge.ageRange : "–"} detail={metrics.topAge ? formatNumber(metrics.topAge.reach) : "keine EU Daten"} />
+        <SummaryCard label={t("totalReach")} value={metrics.totalReach > 0 ? formatNumber(metrics.totalReach) : "–"} />
+        <SummaryCard label={t("totalSpent")} value={formatCurrency(metrics.totalSpend)} />
+        <SummaryCard label={t("countryReach")} value={metrics.topCountry ? metrics.topCountry.location : "–"} detail={metrics.topCountry ? formatNumber(metrics.topCountry.reach) : t("noEuData")} />
+        <SummaryCard label={t("topAgeReach")} value={metrics.topAge ? metrics.topAge.ageRange : "–"} detail={metrics.topAge ? formatNumber(metrics.topAge.reach) : t("noEuData")} />
         <SummaryCard label="Female Reach" value={metrics.femaleReach > 0 ? formatNumber(metrics.femaleReach) : "–"} />
         <SummaryCard label="Male Reach" value={metrics.maleReach > 0 ? formatNumber(metrics.maleReach) : "–"} />
       </section>
@@ -157,36 +164,39 @@ function OverviewTab({
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
             <CardTitle>Scope</CardTitle>
-            <CardDescription>Auswahl und Analyse-Fortschritt.</CardDescription>
+            <CardDescription>{t("scopeDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
             <MetricRow label="Competitors" value={formatNumber(competitorCount)} />
             <MetricRow label="Creatives" value={formatNumber(creativeCount)} />
-            <MetricRow label="Analysiert" value={formatNumber(analyzedCount)} />
-            <MetricRow label="Erster Fund" value={formatDate(metrics.firstFoundAt)} />
-            <MetricRow label="Neuester Fund" value={formatDate(metrics.latestFoundAt)} />
-            <MetricRow label="Zuletzt gesehen" value={formatDate(metrics.latestSeenAt)} />
+            <MetricRow label={t("analyzed")} value={formatNumber(analyzedCount)} />
+            <MetricRow label={t("firstFound")} value={formatDate(metrics.firstFoundAt)} />
+            <MetricRow label={t("latestFound")} value={formatDate(metrics.latestFoundAt)} />
+            <MetricRow label={t("lastSeen")} value={formatDate(metrics.latestSeenAt)} />
           </CardContent>
         </Card>
 
         <ReachTable
-          title="Länder Reach"
-          description="Aggregiert aus EU Ad Delivery nach Location."
-          emptyLabel="Noch keine Country-Reach-Daten gecrawlt."
+          title={t("countryReach")}
+          columnLabel={t("countriesLabel")}
+          description={t("countryReachDescription")}
+          emptyLabel={t("noCountryReachData")}
           rows={metrics.countries.map((country) => ({ label: country.location, value: country.reach }))}
         />
 
         <ReachTable
-          title="Alter Reach"
-          description="Aggregiert aus EU Ad Delivery nach Age Range."
-          emptyLabel="Noch keine Age-Reach-Daten gecrawlt."
+          title={t("ageReach")}
+          columnLabel={t("ageLabel")}
+          description={t("ageReachDescription")}
+          emptyLabel={t("noAgeReachData")}
           rows={metrics.ages.map((age) => ({ label: age.ageRange, value: age.reach }))}
         />
 
         <ReachTable
           title="Gender Reach"
-          description="Aggregiert aus EU Ad Delivery nach Gender."
-          emptyLabel="Noch keine Gender-Reach-Daten gecrawlt."
+          columnLabel="Gender"
+          description={t("genderReachDescription")}
+          emptyLabel={t("noGenderReachData")}
           rows={metrics.genders.map((gender) => ({ label: gender.gender, value: gender.reach }))}
         />
       </section>
@@ -194,13 +204,13 @@ function OverviewTab({
   );
 }
 
-function CreativesTab({ clientId, groups, creatives }: { clientId: string; groups: CompetitorCreativeGroup[]; creatives: CompetitorCreative[] }) {
+function CreativesTab({ clientId, groups, creatives, t }: { clientId: string; groups: CompetitorCreativeGroup[]; creatives: CompetitorCreative[]; t: Translator }) {
   return (
     <div className="space-y-6">
       {groups.length === 0 ? (
         <Card className="border-herb-border bg-herb-surface/90">
           <CardContent className="p-6">
-            <EmptyState title="Keine Competitor Creatives" description="Verbinde im Settings-Bereich einen Competitor und starte den Ad Library Crawl." />
+            <EmptyState title={t("noCompetitorCreatives")} description={t("noCompetitorCreativesDescription")} />
           </CardContent>
         </Card>
       ) : null}
@@ -212,10 +222,14 @@ function CreativesTab({ clientId, groups, creatives }: { clientId: string; group
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle>{group.competitorName}</CardTitle>
-                  <Badge variant={group.crawlEnabled ? "success" : "secondary"}>{group.crawlEnabled ? "Crawl verbunden" : "Nicht verbunden"}</Badge>
+                  <Badge variant={group.crawlEnabled ? "success" : "secondary"}>{group.crawlEnabled ? t("crawlConnected") : t("notConnected")}</Badge>
                 </div>
                 <CardDescription className="mt-2">
-                  {formatNumber(group.creatives.length)} Ads · {formatCurrency(sumSpend(group.creatives))} Est. Spend · {formatNumber(group.creatives.filter((creative) => creative.analysis).length)} analysiert
+                  {t("groupStats", {
+                    ads: formatNumber(group.creatives.length),
+                    spend: formatCurrency(sumSpend(group.creatives)),
+                    analyzed: formatNumber(group.creatives.filter((creative) => creative.analysis).length)
+                  })}
                 </CardDescription>
               </div>
               <CompetitorBulkAnalyzeButton clientId={clientId} creativeIds={group.creatives.map((creative) => creative.id)} />
@@ -230,14 +244,14 @@ function CreativesTab({ clientId, groups, creatives }: { clientId: string; group
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
           <CardTitle>Creative Grid</CardTitle>
-          <CardDescription>Schneller visueller Scan der besten gecrawlten Competitor Ads.</CardDescription>
+          <CardDescription>{t("creativeGridDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3 2xl:grid-cols-4">
           {creatives.length === 0 ? (
-            <EmptyState className="col-span-full" title="Noch keine Competitor Ads gecrawlt" description="Starte in den Competitor Settings den Crawl einer verbundenen Ad Library Source." />
+            <EmptyState className="col-span-full" title={t("noCrawledAds")} description={t("noCrawledAdsDescription")} />
           ) : null}
           {creatives.slice(0, 72).map((creative) => (
-            <GridCreativeCard key={creative.id} clientId={clientId} creative={creative} />
+            <GridCreativeCard key={creative.id} clientId={clientId} creative={creative} t={t} />
           ))}
         </CardContent>
       </Card>
@@ -245,16 +259,16 @@ function CreativesTab({ clientId, groups, creatives }: { clientId: string; group
   );
 }
 
-function AnglesTab({ rows }: { rows: AngleRow[] }) {
+function AnglesTab({ rows, t }: { rows: AngleRow[]; t: Translator }) {
   return (
     <Card className="border-herb-border bg-herb-surface/90">
       <CardHeader>
         <CardTitle>Angles</CardTitle>
-        <CardDescription>Aufteilung der analysierten Ads nach Angle, Reach, Spend und dominanter Emotion.</CardDescription>
+        <CardDescription>{t("anglesDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <EmptyState title="Noch keine Angles analysiert" description="Starte die Bulk Analyse im Creatives Tab, damit Hooks, Thesis und Angles berechnet werden." />
+          <EmptyState title={t("noAnglesAnalyzed")} description={t("noAnglesDescription")} />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-herb-border">
             <table className="min-w-[1280px] w-full text-left text-sm">
@@ -268,7 +282,7 @@ function AnglesTab({ rows }: { rows: AngleRow[] }) {
                   <th className="px-4 py-3">Score</th>
                   <th className="px-4 py-3">Emotion</th>
                   <th className="px-4 py-3">Competitors</th>
-                  <th className="px-4 py-3">Varianten</th>
+                  <th className="px-4 py-3">{t("variantsColumn")}</th>
                   <th className="px-4 py-3">Thesis</th>
                 </tr>
               </thead>
@@ -298,16 +312,16 @@ function AnglesTab({ rows }: { rows: AngleRow[] }) {
   );
 }
 
-function LandingpagesTab({ clientId, rows }: { clientId: string; rows: LandingpageRow[] }) {
+function LandingpagesTab({ clientId, rows, t }: { clientId: string; rows: LandingpageRow[]; t: Translator }) {
   return (
     <Card className="border-herb-border bg-herb-surface/90">
       <CardHeader>
         <CardTitle>Landingpages</CardTitle>
-        <CardDescription>Nach aggregiertem Reach sortiert, aus allen gecrawlten Competitor Ads mit Landingpage-URL.</CardDescription>
+        <CardDescription>{t("landingpagesDescription")}</CardDescription>
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <EmptyState title="Keine Landingpages gefunden" description="Noch keine gecrawlten Competitor Ads enthalten eine Landingpage-URL." />
+          <EmptyState title={t("noLandingpagesFound")} description={t("noLandingpagesDescription")} />
         ) : (
           <div className="max-h-[680px] overflow-auto rounded-xl border border-herb-border">
             <table className="min-w-[1360px] w-full text-left text-sm">
@@ -324,9 +338,9 @@ function LandingpagesTab({ clientId, rows }: { clientId: string; rows: Landingpa
                   <th className="px-4 py-3">Offer</th>
                   <th className="px-4 py-3">CTA</th>
                   <th className="px-4 py-3">Competitors</th>
-                  <th className="px-4 py-3 text-right">Ø Tage</th>
-                  <th className="px-4 py-3">Erster Start</th>
-                  <th className="px-4 py-3">Zuletzt gesehen</th>
+                  <th className="px-4 py-3 text-right">{t("avgDaysColumn")}</th>
+                  <th className="px-4 py-3">{t("firstStart")}</th>
+                  <th className="px-4 py-3">{t("lastSeen")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-herb-border">
@@ -344,14 +358,14 @@ function LandingpagesTab({ clientId, rows }: { clientId: string; rows: Landingpa
                     <td className="px-4 py-4 text-right text-white/70">{formatNumber(row.adCount)}</td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1.5">
-                        {row.activeAds > 0 ? <Badge variant="success">{formatNumber(row.activeAds)} aktiv</Badge> : null}
-                        {row.disabledAds > 0 ? <Badge variant="destructive">{formatNumber(row.disabledAds)} disabled</Badge> : null}
+                        {row.activeAds > 0 ? <Badge variant="success">{t("activeCount", { count: formatNumber(row.activeAds) })}</Badge> : null}
+                        {row.disabledAds > 0 ? <Badge variant="destructive">{t("disabledCount", { count: formatNumber(row.disabledAds) })}</Badge> : null}
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       {row.topCreative ? (
                         <Link href={`/clients/${clientId}/competitors/creatives/${row.topCreative.id}`} className="line-clamp-2 max-w-[260px] font-medium text-white hover:text-primary">
-                          {row.topCreative.analysis?.hook ?? row.topCreative.hook ?? row.topCreative.headline ?? "Creative ansehen"}
+                          {row.topCreative.analysis?.hook ?? row.topCreative.hook ?? row.topCreative.headline ?? t("viewCreative")}
                         </Link>
                       ) : (
                         <span className="text-white/55">–</span>
@@ -398,11 +412,13 @@ function MetricRow({ label, value }: { label: string; value: string }) {
 
 function ReachTable({
   title,
+  columnLabel,
   description,
   rows,
   emptyLabel
 }: {
   title: string;
+  columnLabel: string;
   description: string;
   rows: Array<{ label: string; value: number }>;
   emptyLabel: string;
@@ -421,7 +437,7 @@ function ReachTable({
             <table className="w-full text-left text-sm">
               <thead className="sticky top-0 bg-herb-surface text-xs uppercase tracking-[0.16em] text-white/45">
                 <tr>
-                  <th className="px-4 py-3">{title.replace(" Reach", "")}</th>
+                  <th className="px-4 py-3">{columnLabel}</th>
                   <th className="px-4 py-3 text-right">Reach</th>
                 </tr>
               </thead>
@@ -441,7 +457,7 @@ function ReachTable({
   );
 }
 
-function GridCreativeCard({ clientId, creative }: { clientId: string; creative: CompetitorCreative }) {
+function GridCreativeCard({ clientId, creative, t }: { clientId: string; creative: CompetitorCreative; t: Translator }) {
   return (
     <Link href={`/clients/${clientId}/competitors/creatives/${creative.id}`} className="group rounded-2xl border border-herb-border bg-black/30 p-4 transition hover:border-primary/60">
       <div className="aspect-[4/5] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_top,rgba(229,31,118,0.18),transparent_42%),#1f2937]">
@@ -464,13 +480,13 @@ function GridCreativeCard({ clientId, creative }: { clientId: string; creative: 
           <Badge variant="secondary">{creative.format}</Badge>
           <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status)}</Badge>
         </div>
-        <p className="line-clamp-2 font-medium text-white">{creative.analysis?.hook ?? creative.hook ?? creative.headline ?? "Ohne Hook"}</p>
+        <p className="line-clamp-2 font-medium text-white">{creative.analysis?.hook ?? creative.hook ?? creative.headline ?? t("noHook")}</p>
         <div className="grid grid-cols-2 gap-2 text-xs text-white/60">
           <span>Reach {creative.reachEstimate ? formatNumber(creative.reachEstimate) : "–"}</span>
           <span>Spend {formatCurrency(creative.estimatedSpend ?? 0)}</span>
           <span>Start {formatDate(creative.startedAt)}</span>
-          <span>Gefunden {formatDate(creative.createdAt)}</span>
-          <span>Gesehen {formatDate(creative.lastSeenAt)}</span>
+          <span>{t("found")} {formatDate(creative.createdAt)}</span>
+          <span>{t("seen")} {formatDate(creative.lastSeenAt)}</span>
           <span>Score {creative.rankingScore}/100</span>
         </div>
       </div>

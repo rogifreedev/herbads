@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const tabs: Array<{ id: CompetitorIntelligenceTab; label: string }> = [
 ];
 
 export function CompetitorIntelligenceControls({ activeTab, competitors, selectedCompetitorId }: Props) {
+  const t = useTranslations("competitors");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -65,10 +67,10 @@ export function CompetitorIntelligenceControls({ activeTab, competitors, selecte
       <div className="w-full xl:w-72">
         <Select value={selectedCompetitorId ?? "all"} onValueChange={updateCompetitor}>
           <SelectTrigger className="border-herb-border bg-black/20">
-            <SelectValue placeholder="Competitor auswählen" />
+            <SelectValue placeholder={t("selectCompetitor")} />
           </SelectTrigger>
           <SelectContent className="border-herb-border bg-herb-surface text-white">
-            <SelectItem value="all">Alle Competitors</SelectItem>
+            <SelectItem value="all">{t("allCompetitors")}</SelectItem>
             {competitors.map((competitor) => (
               <SelectItem key={competitor.id} value={competitor.id}>
                 {competitor.name}

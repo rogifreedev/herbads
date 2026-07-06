@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, ExternalLink } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { CompetitorFilterSelect } from "@/components/competitor-filter-select";
 import { CompetitorIterationsGenerateForm } from "@/components/competitor-iterations-generate-form";
 import { CompetitorIterationStatusSelect } from "@/components/competitor-iteration-status-select";
@@ -14,6 +15,7 @@ import { getCompetitorIterationsOverview, competitorIterationPerformanceLine, ty
 import { getCompetitorOverview, type Competitor } from "@/lib/competitors";
 import type { InsightDateRange } from "@/lib/date-filters";
 import { firstSearchParam, resolveInsightDateFilters, type DateFilterSearchParams } from "@/lib/date-filters";
+import type { Translator } from "@/lib/i18n-types";
 import { formatDate, formatNumber } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +39,7 @@ function tabHref(clientId: string, tab: "statics" | "videos", dateFilters: Insig
 
 export default async function CompetitorIterationsPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams & { competitor?: string | string[] }> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const t = await getTranslations("competitors");
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const tab = activeTab(resolvedSearchParams);
   const [iterationsOverview, competitorOverview] = await Promise.all([
@@ -53,9 +56,7 @@ export default async function CompetitorIterationsPage({ params, searchParams }:
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-heading text-4xl">Competitor Iterations</h2>
-          <p className="mt-2 max-w-3xl text-sm text-white/60">
-            Adaptiere Bestperformer von Competitors als neue Viktor-Kofler-Creatives. Die Mechanik kommt vom Competitor, die Ausfuehrung wird auf Brand, Angebot und Zielgruppe uebersetzt.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/60">{t("iterationsSubtitle")}</p>
         </div>
         <CompetitorSectionNav clientId={clientId} active="iterations" />
       </div>
@@ -97,21 +98,19 @@ export default async function CompetitorIterationsPage({ params, searchParams }:
           <CardTitle>{tab === "video" ? "Video Iterations" : "Static Iterations"}</CardTitle>
           <CardDescription>
             {selectedCompetitor ? `${selectedCompetitor.name}: ` : ""}
-            {tab === "video"
-              ? "Neue Viktor-Kofler-Hooks, Scripts und Produktionsideen aus funktionierenden Competitor Videos."
-              : "Neue Viktor-Kofler-Static-Ideen mit Angle, Vorlage und Text Overlay aus Competitor Gewinnern."}
+            {tab === "video" ? t("videoIterationsDescription") : t("staticIterationsDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
             <EmptyState
-              title={tab === "video" ? "Noch keine Video Iterations" : "Noch keine Static Iterations"}
-              description="Der manuelle Generator erstellt Iterations, sobald genuegend Competitor Bestperformer mit Analyse vorhanden sind."
+              title={tab === "video" ? t("noVideoIterations") : t("noStaticIterations")}
+              description={t("noIterationsDescription")}
             />
           ) : tab === "video" ? (
-            <VideoIterationsTable clientId={clientId} rows={rows} />
+            <VideoIterationsTable clientId={clientId} rows={rows} t={t} />
           ) : (
-            <StaticIterationsTable clientId={clientId} rows={rows} />
+            <StaticIterationsTable clientId={clientId} rows={rows} t={t} />
           )}
         </CardContent>
       </Card>
@@ -119,7 +118,7 @@ export default async function CompetitorIterationsPage({ params, searchParams }:
       {iterationsOverview.latestGenerations.length > 0 ? (
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Letzte Generierungen</CardTitle>
+            <CardTitle>{t("latestGenerations")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm text-white/60 md:grid-cols-2 xl:grid-cols-4">
             {iterationsOverview.latestGenerations.map((generation) => {
@@ -134,7 +133,7 @@ export default async function CompetitorIterationsPage({ params, searchParams }:
                   </div>
                   <p className="mt-2 text-xs text-white/45">{generation.generation_key}</p>
                   <p className="mt-1 text-xs text-white/45">{formatDate(generation.created_at)}</p>
-                  {sourceCount !== null ? <p className="mt-2 text-xs text-white/55">Quellen: {formatNumber(sourceCount)}</p> : null}
+                  {sourceCount !== null ? <p className="mt-2 text-xs text-white/55">{t("sourcesCount", { count: formatNumber(sourceCount) })}</p> : null}
                   {note ? <p className="mt-2 text-xs leading-5 text-white/50">{note}</p> : null}
                   {generation.error_message ? <p className="mt-2 text-xs text-red-200">{generation.error_message}</p> : null}
                 </div>
@@ -198,7 +197,7 @@ function SourceLink({ iteration }: { iteration: CompetitorIteration }) {
   );
 }
 
-function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: CompetitorIteration[] }) {
+function StaticIterationsTable({ clientId, rows, t }: { clientId: string; rows: CompetitorIteration[]; t: Translator }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[1040px]">
@@ -207,10 +206,10 @@ function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: Com
             <TableHead>Title</TableHead>
             <TableHead>Angle</TableHead>
             <TableHead>Competitor</TableHead>
-            <TableHead>Vorlage</TableHead>
+            <TableHead>{t("template")}</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Erstellt am</TableHead>
+            <TableHead>{t("createdAtColumn")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -236,7 +235,7 @@ function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: Com
   );
 }
 
-function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: CompetitorIteration[] }) {
+function VideoIterationsTable({ clientId, rows, t }: { clientId: string; rows: CompetitorIteration[]; t: Translator }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[1280px]">
@@ -245,11 +244,11 @@ function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: Comp
             <TableHead>Title</TableHead>
             <TableHead>Angle</TableHead>
             <TableHead>Competitor</TableHead>
-            <TableHead>Vorlage</TableHead>
+            <TableHead>{t("template")}</TableHead>
             <TableHead>Hook / Script</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Erstellt am</TableHead>
+            <TableHead>{t("createdAtColumn")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useTranslations } from "next-intl";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { getCompetitorDeliveryLocations } from "@/lib/competitor-demographics";
 import { competitorCreativeStatusLabel, isCompetitorCreativeDisabled } from "@/lib/competitor-creative-status";
 import type { CompetitorCreative } from "@/lib/competitors";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import type { Translator } from "@/lib/i18n-types";
 
 type Props = {
   clientId: string;
@@ -58,7 +60,7 @@ function targetGender(creative: CompetitorCreative) {
   return creative.genderSignals.includes("all") ? "All" : creative.genderSignals.slice(0, 2).join(", ") || "–";
 }
 
-function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
+function columns(clientId: string, t: Translator): ColumnDef<CompetitorCreative>[] {
   return [
     {
       accessorKey: "hook",
@@ -68,7 +70,7 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
         return (
           <div className="max-w-[360px]">
             <Link href={`/clients/${clientId}/competitors/creatives/${creative.id}`} className="font-medium text-white hover:text-primary">
-              {creative.analysis?.hook ?? creative.hook ?? creative.headline ?? "Ohne Hook"}
+              {creative.analysis?.hook ?? creative.hook ?? creative.headline ?? t("noHook")}
             </Link>
             <p className="mt-1 line-clamp-2 text-xs text-white/50">{creative.primaryText ?? creative.headline ?? creative.adLibraryId}</p>
           </div>
@@ -117,9 +119,9 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
     {
       id: "activeDays",
       accessorFn: (creative) => creative.activeDays ?? 0,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tage" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("daysColumn")} />,
       cell: ({ row }) => <span className="text-white">{row.original.activeDays ? formatNumber(row.original.activeDays) : "–"}</span>,
-      meta: { label: "Tage" }
+      meta: { label: t("daysColumn") }
     },
     {
       accessorKey: "startedAt",
@@ -129,28 +131,28 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
     },
     {
       accessorKey: "endedAt",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Ende" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("end")} />,
       cell: ({ row }) => <span className="text-white">{formatDate(row.original.endedAt)}</span>,
-      meta: { label: "Ende" }
+      meta: { label: t("end") }
     },
     {
       accessorKey: "createdAt",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Gefunden" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("found")} />,
       cell: ({ row }) => <span className="text-white">{formatDate(row.original.createdAt)}</span>,
-      meta: { label: "Gefunden" }
+      meta: { label: t("found") }
     },
     {
       accessorKey: "lastSeenAt",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Gesehen" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("seen")} />,
       cell: ({ row }) => <span className="text-white">{formatDate(row.original.lastSeenAt)}</span>,
-      meta: { label: "Gesehen" }
+      meta: { label: t("seen") }
     },
     {
       id: "target",
       accessorFn: targetLocations,
-      header: "Länder",
+      header: t("countriesLabel"),
       cell: ({ row }) => <LocationBadges locations={targetLocationList(row.original)} />,
-      meta: { label: "Länder" }
+      meta: { label: t("countriesLabel") }
     },
     {
       id: "age",
@@ -169,21 +171,23 @@ function columns(clientId: string): ColumnDef<CompetitorCreative>[] {
     {
       id: "source",
       accessorFn: sourceLabel,
-      header: "Quelle",
+      header: t("sourceLabel"),
       cell: ({ row }) => <Badge variant="outline">{sourceLabel(row.original)}</Badge>,
-      meta: { label: "Quelle" }
+      meta: { label: t("sourceLabel") }
     },
     {
       id: "analysis",
       accessorFn: (creative) => creative.analysis?.rankingScore ?? 0,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Analyse" />,
-      cell: ({ row }) => row.original.analysis ? <Badge variant="success">Analysiert</Badge> : <Badge variant="secondary">Offen</Badge>,
-      meta: { label: "Analyse" }
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("analysisTitle")} />,
+      cell: ({ row }) => row.original.analysis ? <Badge variant="success">{t("analyzedBadge")}</Badge> : <Badge variant="secondary">{t("openBadge")}</Badge>,
+      meta: { label: t("analysisTitle") }
     }
   ];
 }
 
 export function CompetitorCreativesTable({ clientId, creatives }: Props) {
+  const t = useTranslations("competitors");
+  const tCommon = useTranslations("common");
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -208,15 +212,17 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
     });
   }, [creatives, normalizedQuery]);
 
+  const tableColumns = useMemo(() => columns(clientId, t), [clientId, t]);
+
   return (
     <DataTable
-      columns={columns(clientId)}
+      columns={tableColumns}
       data={filtered}
       pageSize={10}
       minWidthClassName="min-w-[1720px]"
-      emptyLabel="Keine Competitor Creatives fuer diese Auswahl."
-      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Hook, Copy, Ad Library ID" className="h-9 sm:w-80" />}
-      toolbarActions={<span className="text-xs text-white/45">{formatNumber(filtered.length)} von {formatNumber(creatives.length)}</span>}
+      emptyLabel={t("noCreativesForSelection")}
+      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} className="h-9 sm:w-80" />}
+      toolbarActions={<span className="text-xs text-white/45">{tCommon("countOfTotal", { filtered: formatNumber(filtered.length), total: formatNumber(creatives.length) })}</span>}
     />
   );
 }
