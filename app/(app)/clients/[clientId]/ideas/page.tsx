@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { AdIdeaStatusSelect } from "@/components/ad-idea-status-select";
 import { AdIdeasGenerateForm } from "@/components/ad-ideas-generate-form";
 import { EmptyState } from "@/components/empty-state";
@@ -10,28 +12,29 @@ import { formatCurrency, formatDecimal, formatNumber, formatPercent } from "@/li
 
 export default async function AdIdeasPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const t = await getTranslations("ideas");
   const overview = await getAdIdeasOverview(clientId);
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-heading text-4xl">Ad Ideas</h2>
-        <p className="mt-2 text-sm text-white/60">Hook Intelligence, Meta-Ads-Learnings und neue Creative-Ideen fuer Reels und Static Images.</p>
+        <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
       </div>
 
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <SummaryCard label="Gespeicherte Ideen" value={formatNumber(overview.totals.ideas)} />
+        <SummaryCard label={t("savedIdeas")} value={formatNumber(overview.totals.ideas)} />
         <SummaryCard label="Hook Patterns" value={formatNumber(overview.totals.hooks)} />
-        <SummaryCard label="AI analysiert" value={formatNumber(overview.totals.analyzedCreatives)} />
-        <SummaryCard label="Aktive Meta Ads" value={formatNumber(overview.totals.activeAds)} />
+        <SummaryCard label={t("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
+        <SummaryCard label={t("activeMetaAds")} value={formatNumber(overview.totals.activeAds)} />
       </section>
 
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Neue Ideen generieren</CardTitle>
-          <CardDescription>OpenRouter nutzt Top-Hooks, schwache Hooks, Meta Campaign Objectives, Adset Optimization Goals und aktive Ads als Kontext.</CardDescription>
+          <CardTitle>{t("generateTitle")}</CardTitle>
+          <CardDescription>{t("generateDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <AdIdeasGenerateForm clientId={clientId} />
@@ -41,20 +44,20 @@ export default async function AdIdeasPage({ params }: { params: Promise<{ client
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Beste Hooks</CardTitle>
-            <CardDescription>Aggregiert aus gespeicherten AI-Hooks, Creative Performance und Meta-Ads-Kontext.</CardDescription>
+            <CardTitle>{t("bestHooks")}</CardTitle>
+            <CardDescription>{t("bestHooksDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {overview.hookInsights.length === 0 ? (
-              <EmptyState title="Noch keine Hook Insights" description="Analysiere zuerst Creatives per AI, damit Hooks erkannt und mit Meta Performance verbunden werden koennen." />
+              <EmptyState title={t("noHookInsightsTitle")} description={t("noHookInsightsDescription")} />
             ) : overview.hookInsights.slice(0, 8).map((insight) => <HookInsightCard key={insight.hook} clientId={clientId} insight={insight} />)}
           </CardContent>
         </Card>
 
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Meta Kontext</CardTitle>
-            <CardDescription>Diese Signale fliessen in neue Ideen ein.</CardDescription>
+            <CardTitle>{t("metaContext")}</CardTitle>
+            <CardDescription>{t("metaContextDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-white/65">
             <ContextBlock title="Campaign Objectives" items={contextItems(overview.metaContextSummary.campaignObjectives)} />
@@ -67,11 +70,11 @@ export default async function AdIdeasPage({ params }: { params: Promise<{ client
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
           <CardTitle>Idea Board</CardTitle>
-          <CardDescription>Gespeicherte Vorschlaege mit Produktionsstatus. Spaeter werden Ideen mit Live-Creatives verknuepft.</CardDescription>
+          <CardDescription>{t("ideaBoardDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {overview.ideas.length === 0 ? (
-            <EmptyState title="Noch keine Ideen" description="Generiere die ersten Ad Ideas aus Hook- und Meta-Ads-Learnings." />
+            <EmptyState title={t("noIdeasTitle")} description={t("noIdeasDescription")} />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {overview.ideas.map((idea) => (
@@ -121,12 +124,13 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function HookInsightCard({ clientId, insight }: { clientId: string; insight: HookInsight }) {
+  const t = useTranslations("ideas");
   return (
     <div className="rounded-xl border border-herb-border bg-black/20 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="font-medium text-white">{insight.hook}</p>
-          <p className="mt-1 text-xs text-white/45">{insight.formats.join(", ") || "Format offen"} · {insight.funnelStages.join(", ") || "Funnel offen"}</p>
+          <p className="mt-1 text-xs text-white/45">{insight.formats.join(", ") || t("formatOpen")} · {insight.funnelStages.join(", ") || t("funnelOpen")}</p>
         </div>
         <div className="text-right">
           <p className="font-heading text-2xl text-primary">{insight.avgScore}</p>
@@ -159,10 +163,11 @@ function HookInsightCard({ clientId, insight }: { clientId: string; insight: Hoo
 }
 
 function ContextBlock({ title, items }: { title: string; items: string[] }) {
+  const tCommon = useTranslations("common");
   return (
     <div>
       <p className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45">{title}</p>
-      {items.length === 0 ? <p className="text-white/45">Keine Daten</p> : <div className="flex flex-wrap gap-2">{items.map((item) => <span key={item} className="rounded-full bg-white/5 px-2 py-1 text-xs">{item}</span>)}</div>}
+      {items.length === 0 ? <p className="text-white/45">{tCommon("noData")}</p> : <div className="flex flex-wrap gap-2">{items.map((item) => <span key={item} className="rounded-full bg-white/5 px-2 py-1 text-xs">{item}</span>)}</div>}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ExternalLink, Settings } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import { BatchCheckButton } from "@/components/batch-check-button";
 import { BatchesSectionNav } from "@/components/batches-section-nav";
 import { EmptyState } from "@/components/empty-state";
@@ -8,13 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { batchMetaMatchLabel, batchStatusLabel, getBatchOverview, isBatchSnapshotStale, type BatchOverviewItem } from "@/lib/batches";
+import { batchMetaMatchLabel, getBatchOverview, isBatchSnapshotStale, type BatchOverviewItem } from "@/lib/batches";
 import { formatDate, formatNumber } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
 export default async function BatchesPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
+  const t = await getTranslations("batches");
+  const locale = await getLocale();
   const overview = await getBatchOverview(clientId);
   const settings = overview.settings;
 
@@ -23,7 +27,7 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-heading text-4xl">Batches</h2>
-          <p className="mt-2 text-sm text-white/60">Gespeicherter Batch-Snapshot aus Supabase. Drive wird nur taeglich per Cron oder manuell ueberprueft.</p>
+          <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {settings && settings.folders.length > 0 ? <BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} /> : null}
@@ -35,9 +39,9 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
         <Card className="border-herb-border bg-herb-surface/90">
           <CardContent className="p-6">
             <EmptyState
-              title="Kein Batch-Ordner verbunden"
-              description="Speichere zuerst mindestens einen Google Drive Root-Folder fuer die Batch-Unterordner."
-              action={<Button asChild variant="gradient"><Link href={`/clients/${clientId}/batches/settings`}>Settings oeffnen</Link></Button>}
+              title={t("noFolderTitle")}
+              description={t("noFolderDescription")}
+              action={<Button asChild variant="gradient"><Link href={`/clients/${clientId}/batches/settings`}>{t("openSettings")}</Link></Button>}
             />
           </CardContent>
         </Card>
@@ -50,23 +54,23 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
           ) : null}
           {settings.lastCheckStatus === "running" ? (
             <Alert>
-              <AlertDescription>Batch Check laeuft gerade. Die Seite zeigt den letzten gespeicherten Snapshot.</AlertDescription>
+              <AlertDescription>{t("checkRunning")}</AlertDescription>
             </Alert>
           ) : null}
           {settings.lastCheckStatus !== "running" && isBatchSnapshotStale(settings.lastCheckedAt) ? (
             <Alert variant="warning">
               <AlertDescription>
-                {settings.lastCheckedAt ? "Der letzte Batch Check ist aelter als 24 Stunden." : "Es gibt noch keinen gespeicherten Batch Check."} Starte den Abgleich ueber Ueberpruefen.
+                {settings.lastCheckedAt ? t("staleCheck") : t("noStoredCheck")} {t("startCheckHint")}
               </AlertDescription>
             </Alert>
           ) : null}
 
           <section className="grid gap-4 md:grid-cols-5">
-            <SummaryCard label="Root Ordner" value={formatNumber(settings.folders.length)} />
-            <SummaryCard label="Geschaltet" value={formatNumber(overview.totals.live)} />
-            <SummaryCard label="Gefunden" value={formatNumber(overview.totals.found)} />
-            <SummaryCard label="Nicht gefunden" value={formatNumber(overview.totals.missing)} />
-            <SummaryCard label="Letzter Check" value={settings.lastCheckedAt ? formatDateTime(settings.lastCheckedAt) : "-"} />
+            <SummaryCard label={t("rootFolders")} value={formatNumber(settings.folders.length)} />
+            <SummaryCard label={t("statusLive")} value={formatNumber(overview.totals.live)} />
+            <SummaryCard label={t("statusFound")} value={formatNumber(overview.totals.found)} />
+            <SummaryCard label={t("statusMissing")} value={formatNumber(overview.totals.missing)} />
+            <SummaryCard label={t("lastCheck")} value={settings.lastCheckedAt ? formatDateTime(settings.lastCheckedAt, locale) : "-"} />
           </section>
 
           <Card className="border-herb-border bg-herb-surface/90">
@@ -75,7 +79,7 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
                 <div>
                   <CardTitle>Batch Check</CardTitle>
                   <CardDescription>
-                    {formatNumber(overview.totals.metaEntities)} Meta-Namen im letzten Abgleich. {formatNumber(settings.folders.length)} Root-Ordner verbunden.
+                    {t("checkSummary", { metaEntities: formatNumber(overview.totals.metaEntities), folders: formatNumber(settings.folders.length) })}
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -92,8 +96,8 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
             <CardContent>
               {overview.items.length === 0 ? (
                 <EmptyState
-                  title="Noch kein Batch Snapshot"
-                  description="Starte einmal Ueberpruefen. Danach laedt diese Seite nur noch die gespeicherten Ergebnisse aus Supabase."
+                  title={t("noSnapshotTitle")}
+                  description={t("noSnapshotDescription")}
                   action={<BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} />}
                 />
               ) : (
@@ -107,11 +111,11 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
   );
 }
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null, locale: string) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -126,17 +130,25 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
+  const t = useTranslations("batches");
+  const locale = useLocale();
+  const statusLabels: Record<BatchOverviewItem["status"], string> = {
+    live: t("statusLive"),
+    found: t("statusFoundInactive"),
+    missing: t("statusMissing")
+  };
+
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[1120px]">
         <TableHeader className="bg-white/[0.03]">
           <TableRow className="hover:bg-transparent">
             <TableHead>Root</TableHead>
-            <TableHead>Batch Ordner</TableHead>
+            <TableHead>{t("folderColumn")}</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Meta Match</TableHead>
-            <TableHead>Drive geaendert</TableHead>
-            <TableHead>Geprueft</TableHead>
+            <TableHead>{t("driveModified")}</TableHead>
+            <TableHead>{t("checkedColumn")}</TableHead>
             <TableHead>Drive</TableHead>
           </TableRow>
         </TableHeader>
@@ -144,7 +156,7 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
           {rows.map((row) => (
             <TableRow key={`${row.sourceFolderId ?? "root"}-${row.id}`} className="align-top">
               <TableCell>
-                <Badge variant="outline">{row.sourceFolderLabel ?? "Drive Ordner"}</Badge>
+                <Badge variant="outline">{row.sourceFolderLabel ?? t("driveFolderFallback")}</Badge>
               </TableCell>
               <TableCell>
                 <p className="line-clamp-2 min-w-[260px] font-medium text-white">{row.name}</p>
@@ -152,7 +164,7 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
                 <p className="mt-1 font-mono text-xs text-white/40">{row.id}</p>
               </TableCell>
               <TableCell>
-                <Badge variant={statusVariant(row.status)}>{batchStatusLabel(row.status)}</Badge>
+                <Badge variant={statusVariant(row.status)}>{statusLabels[row.status]}</Badge>
               </TableCell>
               <TableCell>
                 {row.match ? (
@@ -168,18 +180,18 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
                 )}
                 {row.match ? (
                   <p className="mt-1 text-xs text-white/40">
-                    Status: {row.match.effectiveStatus ?? row.match.status ?? "-"}
+                    {t("statusLine", { status: row.match.effectiveStatus ?? row.match.status ?? "-" })}
                   </p>
                 ) : null}
               </TableCell>
               <TableCell className="text-white/60">{formatDate(row.modifiedTime)}</TableCell>
-              <TableCell className="text-white/60">{formatDateTime(row.checkedAt)}</TableCell>
+              <TableCell className="text-white/60">{formatDateTime(row.checkedAt, locale)}</TableCell>
               <TableCell>
                 {row.webViewLink ? (
                   <Button asChild variant="outline" size="sm" className="border-herb-border">
                     <Link href={row.webViewLink} target="_blank">
                       <ExternalLink className="mr-2 h-4 w-4" />
-                      Oeffnen
+                      {t("open")}
                     </Link>
                   </Button>
                 ) : (

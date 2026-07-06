@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ExternalLink } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { AdIterationStatusSelect } from "@/components/ad-iteration-status-select";
 import { AdIterationsGenerateForm } from "@/components/ad-iterations-generate-form";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
@@ -34,6 +36,8 @@ function tabHref(clientId: string, tab: "statics" | "videos", dateFilters: Insig
 
 export default async function IterationsPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const t = await getTranslations("iterations");
+  const tCreatives = await getTranslations("creatives");
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const tab = activeTab(resolvedSearchParams);
   const overview = await getAdIterationsOverview(clientId);
@@ -45,7 +49,7 @@ export default async function IterationsPage({ params, searchParams }: { params:
         <div>
           <h2 className="font-heading text-4xl">Iterations</h2>
           <p className="mt-2 max-w-3xl text-sm text-white/60">
-            Woechentliche AI-Varianten aus Bestperformer Ads. Jede Iteration bleibt mit der bestehenden Vorlage verlinkt und kann per Status in Produktion, Test oder Winner verschoben werden.
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
@@ -57,7 +61,7 @@ export default async function IterationsPage({ params, searchParams }: { params:
       <MetaAdsTabs clientId={clientId} active="iterations" />
 
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCreatives("dateRangeError")}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-3">
         <SummaryCard label="Iterations" value={formatNumber(overview.totals.all)} />
@@ -74,16 +78,14 @@ export default async function IterationsPage({ params, searchParams }: { params:
         <CardHeader>
           <CardTitle>{tab === "video" ? "Video Iterations" : "Static Iterations"}</CardTitle>
           <CardDescription>
-            {tab === "video"
-              ? "Neue Hooks, Scripts und Produktionsideen fuer gut funktionierende Video Ads."
-              : "Neue Static-Ideen mit Angle, Vorlage und Detailansicht fuer die Creative-Anweisungen."}
+            {tab === "video" ? t("videoDescription") : t("staticDescription")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
             <EmptyState
-              title={tab === "video" ? "Noch keine Video Iterations" : "Noch keine Static Iterations"}
-              description="Der Weekly Cron oder der manuelle Generator erstellt Iterations, sobald genuegend Bestperformer mit AI Analyse vorhanden sind."
+              title={tab === "video" ? t("noVideoIterations") : t("noStaticIterations")}
+              description={t("noIterationsDescription")}
             />
           ) : tab === "video" ? (
             <VideoIterationsTable clientId={clientId} rows={rows} />
@@ -96,7 +98,7 @@ export default async function IterationsPage({ params, searchParams }: { params:
       {overview.latestGenerations.length > 0 ? (
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Letzte Generierungen</CardTitle>
+            <CardTitle>{t("latestGenerations")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm text-white/60 md:grid-cols-2 xl:grid-cols-4">
             {overview.latestGenerations.map((generation) => {
@@ -111,7 +113,7 @@ export default async function IterationsPage({ params, searchParams }: { params:
                   </div>
                   <p className="mt-2 text-xs text-white/45">{generation.generation_key}</p>
                   <p className="mt-1 text-xs text-white/45">{formatDate(generation.created_at)}</p>
-                  {sourceCount !== null ? <p className="mt-2 text-xs text-white/55">Quellen: {formatNumber(sourceCount)}</p> : null}
+                  {sourceCount !== null ? <p className="mt-2 text-xs text-white/55">{t("sourcesCount", { count: formatNumber(sourceCount) })}</p> : null}
                   {note ? <p className="mt-2 text-xs leading-5 text-white/50">{note}</p> : null}
                   {generation.error_message ? <p className="mt-2 text-xs text-red-200">{generation.error_message}</p> : null}
                 </div>
@@ -176,6 +178,7 @@ function SourceLink({ iteration }: { iteration: AdIteration }) {
 }
 
 function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: AdIteration[] }) {
+  const t = useTranslations("iterations");
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[920px]">
@@ -183,10 +186,10 @@ function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: AdI
           <TableRow className="hover:bg-transparent">
             <TableHead>Title</TableHead>
             <TableHead>Angle</TableHead>
-            <TableHead>Vorlage</TableHead>
+            <TableHead>{t("template")}</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Erstellt am</TableHead>
+            <TableHead>{t("createdAtColumn")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -212,6 +215,7 @@ function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: AdI
 }
 
 function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: AdIteration[] }) {
+  const t = useTranslations("iterations");
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[1240px]">
@@ -219,11 +223,11 @@ function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: AdIt
           <TableRow className="hover:bg-transparent">
             <TableHead>Title</TableHead>
             <TableHead>Angle</TableHead>
-            <TableHead>Vorlage</TableHead>
+            <TableHead>{t("template")}</TableHead>
             <TableHead>Hook / Script</TableHead>
             <TableHead>Score</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Erstellt am</TableHead>
+            <TableHead>{t("createdAtColumn")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

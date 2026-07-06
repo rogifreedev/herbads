@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { formatCurrency, formatDate, formatDecimal, formatNumber, formatPercent 
 import type { BatchPerformanceItem } from "@/lib/batch-performance";
 
 type SortKey = "score" | "spend" | "roas" | "ctr" | "purchases" | "cpa" | "hookRate" | "outboundCvr";
+type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 
 function numericInput(value: string) {
   const parsed = Number(value.trim().replace(",", "."));
@@ -25,8 +27,8 @@ function formatNullableCurrency(value: number | null) {
   return value === null ? "â€“" : formatCurrency(value, 2);
 }
 
-function batchStatusLabel(status: BatchPerformanceItem["status"]) {
-  return status === "live" ? "Geschaltet" : "Gefunden";
+function batchStatusLabel(status: BatchPerformanceItem["status"], t: Translator) {
+  return status === "live" ? t("statusLive") : t("statusFound");
 }
 
 function statusVariant(status: BatchPerformanceItem["status"]) {
@@ -73,7 +75,7 @@ function FilterDropdown({ label, activeLabel, children }: { label: string; activ
   );
 }
 
-function realColumns(): ColumnDef<BatchPerformanceItem>[] {
+function realColumns(t: Translator, tCreatives: Translator): ColumnDef<BatchPerformanceItem>[] {
   return [
     {
       accessorKey: "batchName",
@@ -83,7 +85,7 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
         return (
           <div className="min-w-[280px]">
             <p className="line-clamp-2 font-medium text-white">{batch.batchName}</p>
-            <p className="mt-1 text-xs text-white/45">{batch.sourceFolderLabel ?? "Drive Ordner"}</p>
+            <p className="mt-1 text-xs text-white/45">{batch.sourceFolderLabel ?? t("driveFolderFallback")}</p>
             {batch.path !== batch.batchName ? <p className="mt-1 line-clamp-1 text-xs text-white/35">{batch.path}</p> : null}
           </div>
         );
@@ -101,7 +103,7 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
           <div className="min-w-[300px]">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{matchTypeLabel(batch.match.type)}</Badge>
-              <Badge variant={statusVariant(batch.status)}>{batchStatusLabel(batch.status)}</Badge>
+              <Badge variant={statusVariant(batch.status)}>{batchStatusLabel(batch.status, t)}</Badge>
             </div>
             {batch.match.href ? (
               <Link href={batch.match.href} className="mt-2 block line-clamp-2 font-medium text-primary hover:text-white">
@@ -110,7 +112,7 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
             ) : (
               <p className="mt-2 line-clamp-2 font-medium text-white">{label}</p>
             )}
-            <p className="mt-1 text-xs text-white/40">Meta Status: {batch.match.effectiveStatus ?? batch.match.status ?? "-"}</p>
+            <p className="mt-1 text-xs text-white/40">{t("metaStatusLine", { status: batch.match.effectiveStatus ?? batch.match.status ?? "-" })}</p>
           </div>
         );
       },
@@ -145,9 +147,9 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
     },
     {
       accessorKey: "firstActiveDate",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Erstmalig aktiv" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={tCreatives("firstActive")} />,
       cell: ({ row }) => <span className="text-white">{formatDate(row.original.firstActiveDate)}</span>,
-      meta: { label: "Erstmalig aktiv" }
+      meta: { label: tCreatives("firstActive") }
     },
     {
       id: "spend",
@@ -242,9 +244,9 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
     },
     {
       accessorKey: "checkedAt",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Geprueft" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("checkedColumn")} />,
       cell: ({ row }) => <span className="text-white/65">{formatDate(row.original.checkedAt)}</span>,
-      meta: { label: "Geprueft" }
+      meta: { label: t("checkedColumn") }
     },
     {
       id: "drive",
@@ -252,7 +254,7 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
       cell: ({ row }) => row.original.driveHref ? (
         <Link href={row.original.driveHref} target="_blank" className="inline-flex items-center gap-2 text-primary hover:text-white">
           <ExternalLink className="h-4 w-4" />
-          Ordner
+          {t("folderLink")}
         </Link>
       ) : <span className="text-white/45">-</span>,
       meta: { label: "Drive" }
@@ -261,6 +263,10 @@ function realColumns(): ColumnDef<BatchPerformanceItem>[] {
 }
 
 export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: BatchPerformanceItem[]; pageSize?: number }) {
+  const t = useTranslations("batches");
+  const tCommon = useTranslations("common");
+  const tCreatives = useTranslations("creatives");
+  const locale = useLocale();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"ALL" | "live" | "found">("ALL");
   const [type, setType] = useState<"all" | BatchPerformanceItem["match"]["type"]>("all");
@@ -291,11 +297,12 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
       if (!normalizedQuery) return true;
       return [batch.batchName, batch.path, batch.sourceFolderLabel, batch.match.name, batch.match.status, batch.match.effectiveStatus, batch.match.type].some((value) => value?.toLowerCase().includes(normalizedQuery));
     })
-    .sort((left, right) => sortValue(right, sort) - sortValue(left, sort) || left.batchName.localeCompare(right.batchName, "de")), [minCtrValue, minRoasValue, minSpendValue, normalizedQuery, rows, sort, status, type]);
+    .sort((left, right) => sortValue(right, sort) - sortValue(left, sort) || left.batchName.localeCompare(right.batchName, locale)), [locale, minCtrValue, minRoasValue, minSpendValue, normalizedQuery, rows, sort, status, type]);
+  const columns = useMemo(() => realColumns(t, tCreatives), [t, tCreatives]);
   const hasAdvancedFilters = minSpend || minRoas || minCtr;
   const hasFilters = query || status !== "ALL" || type !== "all" || sort !== "spend" || hasAdvancedFilters;
-  const statusLabel = status === "ALL" ? "Alle" : batchStatusLabel(status);
-  const typeLabel = type === "all" ? "Alle" : matchTypeLabel(type);
+  const statusLabel = status === "ALL" ? tCommon("all") : batchStatusLabel(status, t);
+  const typeLabel = type === "all" ? tCommon("all") : matchTypeLabel(type);
   const sortLabels: Record<SortKey, string> = {
     spend: "Spend",
     score: "Score",
@@ -324,29 +331,29 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
       </CardHeader>
       <CardContent>
         <DataTable
-          columns={realColumns()}
+          columns={columns}
           data={filteredRows}
           pageSize={pageSize}
           minWidthClassName="min-w-[2200px]"
-          emptyLabel={rows.length === 0 ? "Keine gefundenen Batches im gespeicherten Snapshot." : "Keine Batches fuer die aktuelle Auswahl."}
+          emptyLabel={rows.length === 0 ? t("emptyNoBatches") : t("emptyFiltered")}
           toolbarLeft={
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Batch, Root, Match" className="h-9 sm:w-80" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} className="h-9 sm:w-80" />
           }
           toolbarActions={
             <>
-              <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(rows.length)}</span>
-              <FilterDropdown label="Status" activeLabel={statusLabel}>
-                <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>Alle ({formatNumber(rows.length)})</FilterChip>
-                <FilterChip active={status === "live"} onClick={() => setStatus("live")}>Geschaltet ({formatNumber(statusCounts.live ?? 0)})</FilterChip>
-                <FilterChip active={status === "found"} onClick={() => setStatus("found")}>Gefunden ({formatNumber(statusCounts.found ?? 0)})</FilterChip>
+              <span className="text-xs text-white/45">{tCommon("countOfTotal", { filtered: formatNumber(filteredRows.length), total: formatNumber(rows.length) })}</span>
+              <FilterDropdown label={tCommon("status")} activeLabel={statusLabel}>
+                <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>{tCommon("allWithCount", { count: formatNumber(rows.length) })}</FilterChip>
+                <FilterChip active={status === "live"} onClick={() => setStatus("live")}>{t("statusLive")} ({formatNumber(statusCounts.live ?? 0)})</FilterChip>
+                <FilterChip active={status === "found"} onClick={() => setStatus("found")}>{t("statusFound")} ({formatNumber(statusCounts.found ?? 0)})</FilterChip>
               </FilterDropdown>
               <FilterDropdown label="Match" activeLabel={typeLabel}>
-                <FilterChip active={type === "all"} onClick={() => setType("all")}>Alle</FilterChip>
+                <FilterChip active={type === "all"} onClick={() => setType("all")}>{tCommon("all")}</FilterChip>
                 <FilterChip active={type === "ad"} onClick={() => setType("ad")}>Ad ({formatNumber(typeCounts.ad ?? 0)})</FilterChip>
                 <FilterChip active={type === "adset"} onClick={() => setType("adset")}>Ad Set ({formatNumber(typeCounts.adset ?? 0)})</FilterChip>
                 <FilterChip active={type === "campaign"} onClick={() => setType("campaign")}>Campaign ({formatNumber(typeCounts.campaign ?? 0)})</FilterChip>
               </FilterDropdown>
-              <FilterDropdown label="Sortierung" activeLabel={sortLabels[sort]}>
+              <FilterDropdown label={tCommon("sortBy")} activeLabel={sortLabels[sort]}>
                 <FilterChip active={sort === "spend"} onClick={() => setSort("spend")}>Spend</FilterChip>
                 <FilterChip active={sort === "score"} onClick={() => setSort("score")}>Score</FilterChip>
                 <FilterChip active={sort === "roas"} onClick={() => setSort("roas")}>ROAS</FilterChip>
@@ -359,11 +366,11 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="outline" size="sm" className="border-herb-border">
-                    Werte{hasAdvancedFilters ? " aktiv" : ""}
+                    {hasAdvancedFilters ? tCreatives("valuesActive") : tCreatives("values")}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[min(92vw,360px)] border-herb-border bg-herb-surface p-4 text-white">
-                  <DropdownMenuLabel className="p-0">Performance Mindestwerte</DropdownMenuLabel>
+                  <DropdownMenuLabel className="p-0">{tCreatives("minimumValues")}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <div className="grid gap-2">
                     <label className="grid gap-1 text-xs text-white/55">Min. Spend<Input value={minSpend} onChange={(event) => setMinSpend(event.target.value)} inputMode="decimal" placeholder="100" className="h-9" /></label>

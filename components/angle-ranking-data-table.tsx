@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useTranslations } from "next-intl";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ type AdsetAnglesDataTableProps = {
   clientId: string;
   adsets: AdsetAngleItem[];
 };
+
+type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 
 function scoreVariant(score: number): "success" | "warning" | "secondary" {
   if (score >= 70) return "success";
@@ -64,7 +67,7 @@ function adsetSearchText(adset: AdsetAngleItem) {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
-function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
+function angleColumns(clientId: string, t: Translator): ColumnDef<AngleInsight>[] {
   return [
     {
       accessorKey: "angle",
@@ -85,9 +88,9 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
     },
     {
       accessorKey: "score",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Punkte" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("points")} />,
       cell: ({ row }) => <Score value={row.original.score} />,
-      meta: { label: "Punkte" }
+      meta: { label: t("points") }
     },
     {
       accessorKey: "adsetCount",
@@ -124,14 +127,14 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
     },
     {
       id: "formats",
-      header: "Formate",
+      header: t("formats"),
       cell: ({ row }) => (
         <div className="flex max-w-[220px] flex-wrap gap-1">
           {row.original.formats.map((format) => <Badge key={format} variant="outline">{format}</Badge>)}
           {row.original.funnelStages.map((stage) => <Badge key={stage} variant="secondary">{stage}</Badge>)}
         </div>
       ),
-      meta: { label: "Formate" }
+      meta: { label: t("formats") }
     },
     {
       id: "details",
@@ -141,7 +144,7 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
         const angle = row.original;
         return (
           <details className="min-w-[260px] rounded-lg border border-herb-border bg-black/20 p-2 text-xs text-white/60">
-            <summary className="cursor-pointer select-none text-primary">Hooks & Beispiele</summary>
+            <summary className="cursor-pointer select-none text-primary">{t("hooksAndExamples")}</summary>
             <div className="mt-3 space-y-3">
               {angle.topHooks.length > 0 ? (
                 <div>
@@ -152,7 +155,7 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
                 </div>
               ) : null}
               <div>
-                <p className="mb-1 uppercase tracking-[0.14em] text-white/35">Beispiel-Adsets</p>
+                <p className="mb-1 uppercase tracking-[0.14em] text-white/35">{t("exampleAdsets")}</p>
                 <div className="space-y-1">
                   {angle.exampleAdsets.map((adset) => (
                     <div key={adset.id} className="flex items-center justify-between gap-2 rounded bg-white/[0.03] px-2 py-1">
@@ -175,7 +178,7 @@ function angleColumns(clientId: string): ColumnDef<AngleInsight>[] {
   ];
 }
 
-function adsetColumns(clientId: string): ColumnDef<AdsetAngleItem>[] {
+function adsetColumns(clientId: string, t: Translator): ColumnDef<AdsetAngleItem>[] {
   return [
     {
       accessorKey: "adsetName",
@@ -192,7 +195,7 @@ function adsetColumns(clientId: string): ColumnDef<AdsetAngleItem>[] {
             </div>
             {adset.representativeCreativeId && adset.representativeCreativeName ? (
               <Link href={`/clients/${clientId}/creatives/${adset.representativeCreativeId}`} className="block truncate text-xs text-primary hover:text-white">
-                Beispiel: {adset.representativeCreativeName}
+                {t("exampleCreative", { name: adset.representativeCreativeName })}
               </Link>
             ) : null}
           </div>
@@ -208,9 +211,9 @@ function adsetColumns(clientId: string): ColumnDef<AdsetAngleItem>[] {
     },
     {
       accessorKey: "score",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Punkte" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("points")} />,
       cell: ({ row }) => <Score value={row.original.score} />,
-      meta: { label: "Punkte" }
+      meta: { label: t("points") }
     },
     {
       accessorKey: "confidence",
@@ -279,6 +282,8 @@ function adsetColumns(clientId: string): ColumnDef<AdsetAngleItem>[] {
 }
 
 export function AngleRankingDataTable({ clientId, angles }: AngleRankingDataTableProps) {
+  const t = useTranslations("angles");
+  const tCommon = useTranslations("common");
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRows = useMemo(() => {
@@ -286,18 +291,19 @@ export function AngleRankingDataTable({ clientId, angles }: AngleRankingDataTabl
       .filter((angle) => !normalizedQuery || angleSearchText(angle).includes(normalizedQuery))
       .sort((a, b) => b.score - a.score || b.spend - a.spend);
   }, [angles, normalizedQuery]);
+  const columns = useMemo(() => angleColumns(clientId, t), [clientId, t]);
 
   return (
     <DataTable
-      columns={angleColumns(clientId)}
+      columns={columns}
       data={filteredRows}
       pageSize={10}
       minWidthClassName="min-w-[1420px]"
-      emptyLabel="Keine Angles fuer die aktuelle Suche."
-      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Angle, Hook, Beispiel-Adset" className="h-9 sm:w-96" />}
+      emptyLabel={t("emptyAngles")}
+      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchAnglesPlaceholder")} className="h-9 sm:w-96" />}
       toolbarActions={
         <>
-          <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(angles.length)}</span>
+          <span className="text-xs text-white/45">{tCommon("countOfTotal", { filtered: formatNumber(filteredRows.length), total: formatNumber(angles.length) })}</span>
           {query ? <Button type="button" variant="outline" size="sm" className="border-herb-border" onClick={() => setQuery("")}>Reset</Button> : null}
         </>
       }
@@ -306,6 +312,8 @@ export function AngleRankingDataTable({ clientId, angles }: AngleRankingDataTabl
 }
 
 export function AdsetAnglesDataTable({ clientId, adsets }: AdsetAnglesDataTableProps) {
+  const t = useTranslations("angles");
+  const tCommon = useTranslations("common");
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRows = useMemo(() => {
@@ -313,18 +321,19 @@ export function AdsetAnglesDataTable({ clientId, adsets }: AdsetAnglesDataTableP
       .filter((adset) => !normalizedQuery || adsetSearchText(adset).includes(normalizedQuery))
       .sort((a, b) => b.score - a.score || b.spend - a.spend);
   }, [adsets, normalizedQuery]);
+  const columns = useMemo(() => adsetColumns(clientId, t), [clientId, t]);
 
   return (
     <DataTable
-      columns={adsetColumns(clientId)}
+      columns={columns}
       data={filteredRows}
       pageSize={12}
       minWidthClassName="min-w-[1680px]"
-      emptyLabel="Keine Adsets fuer die aktuelle Suche."
-      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Adset, Angle, Hook oder Primary Text" className="h-9 sm:w-96" />}
+      emptyLabel={t("emptyAdsets")}
+      toolbarLeft={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchAdsetsPlaceholder")} className="h-9 sm:w-96" />}
       toolbarActions={
         <>
-          <span className="text-xs text-white/45">{formatNumber(filteredRows.length)} von {formatNumber(adsets.length)}</span>
+          <span className="text-xs text-white/45">{tCommon("countOfTotal", { filtered: formatNumber(filteredRows.length), total: formatNumber(adsets.length) })}</span>
           {query ? <Button type="button" variant="outline" size="sm" className="border-herb-border" onClick={() => setQuery("")}>Reset</Button> : null}
         </>
       }

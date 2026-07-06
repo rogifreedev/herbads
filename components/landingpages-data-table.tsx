@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { DataTableColumnHeader } from "@/components/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -15,28 +17,31 @@ type LandingpagesDataTableProps = {
   emptyLabel: string;
 };
 
+type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
+
 function formatMatch(value: number | null) {
   return value === null ? "–" : `${Math.round(value)}/100`;
 }
 
-function matchSourceLabel(value: LandingpageListItem["matchSource"]) {
+function matchSourceLabel(value: LandingpageListItem["matchSource"], t: Translator) {
   if (value === "landingpage") return "LP Match";
   if (value === "creative_ai") return "Creative AI Proxy";
-  return "Nicht analysiert";
+  return t("notAnalyzed");
 }
 
 function AnalysisStatus({ landingpage }: { landingpage: LandingpageListItem }) {
+  const t = useTranslations("landingpages");
   const analysis = landingpage.landingpageAnalysis;
-  if (!analysis) return <Badge variant="secondary">Nicht gecrawlt</Badge>;
+  if (!analysis) return <Badge variant="secondary">{t("notCrawled")}</Badge>;
   if (analysis.status === "completed") {
     return (
       <div className="space-y-1">
-        <Badge variant="success">Analysiert</Badge>
+        <Badge variant="success">{t("analyzed")}</Badge>
         <p className="text-xs text-white/45">{formatDate(analysis.analyzedAt)}</p>
       </div>
     );
   }
-  if (analysis.status === "failed") return <Badge variant="destructive">Fehler</Badge>;
+  if (analysis.status === "failed") return <Badge variant="destructive">{t("failed")}</Badge>;
   return <Badge variant="warning">{analysis.status}</Badge>;
 }
 
@@ -46,7 +51,7 @@ function SignalBadge({ signal }: { signal: LandingpageSignal }) {
   return <Badge variant="warning">WATCH</Badge>;
 }
 
-function columns(clientId: string): ColumnDef<LandingpageListItem>[] {
+function columns(clientId: string, t: Translator): ColumnDef<LandingpageListItem>[] {
   return [
     {
       accessorKey: "displayUrl",
@@ -61,9 +66,9 @@ function columns(clientId: string): ColumnDef<LandingpageListItem>[] {
     },
     {
       accessorKey: "adCount",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Anzahl Ads" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t("adCountLabel")} />,
       cell: ({ row }) => <span className="text-white">{formatNumber(row.original.adCount)}</span>,
-      meta: { label: "Anzahl Ads" }
+      meta: { label: t("adCountLabel") }
     },
     {
       id: "spend",
@@ -81,10 +86,10 @@ function columns(clientId: string): ColumnDef<LandingpageListItem>[] {
     },
     {
       id: "analysis",
-      header: "Analyse",
+      header: t("analysisColumn"),
       cell: ({ row }) => <AnalysisStatus landingpage={row.original} />,
       enableSorting: false,
-      meta: { label: "Analyse" }
+      meta: { label: t("analysisColumn") }
     },
     {
       id: "match",
@@ -93,7 +98,7 @@ function columns(clientId: string): ColumnDef<LandingpageListItem>[] {
       cell: ({ row }) => (
         <div className="text-white">
           <p>{formatMatch(row.original.matchScore)}</p>
-          <p className="mt-1 text-xs text-white/40">{matchSourceLabel(row.original.matchSource)}</p>
+          <p className="mt-1 text-xs text-white/40">{matchSourceLabel(row.original.matchSource, t)}</p>
         </div>
       ),
       meta: { label: "Match" }
@@ -115,5 +120,7 @@ function columns(clientId: string): ColumnDef<LandingpageListItem>[] {
 }
 
 export function LandingpagesDataTable({ clientId, landingpages, emptyLabel }: LandingpagesDataTableProps) {
-  return <DataTable columns={columns(clientId)} data={landingpages} pageSize={12} minWidthClassName="min-w-[1320px]" emptyLabel={emptyLabel} />;
+  const t = useTranslations("landingpages");
+  const tableColumns = useMemo(() => columns(clientId, t), [clientId, t]);
+  return <DataTable columns={tableColumns} data={landingpages} pageSize={12} minWidthClassName="min-w-[1320px]" emptyLabel={emptyLabel} />;
 }

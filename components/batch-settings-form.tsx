@@ -3,6 +3,7 @@
 import { FormEvent, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,8 @@ type Props = {
 };
 
 export function BatchSettingsForm({ clientId, settings }: Props) {
+  const t = useTranslations("batches");
+  const locale = useLocale();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [label, setLabel] = useState("");
@@ -32,20 +35,20 @@ export function BatchSettingsForm({ clientId, settings }: Props) {
         body: JSON.stringify({ label, googleDriveFolderUrl })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Batch Settings konnten nicht gespeichert werden.");
+      if (!response.ok) throw new Error(result.error ?? t("settingsSaveError"));
       setLabel("");
       setGoogleDriveFolderUrl("");
-      toast.success("Drive Ordner gespeichert.");
+      toast.success(t("folderSaved"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Batch Settings konnten nicht gespeichert werden.");
+      toast.error(error instanceof Error ? error.message : t("settingsSaveError"));
     } finally {
       setLoading(false);
     }
   }
 
   async function remove(folderId: string) {
-    const confirmed = window.confirm("Drive Ordner aus den Batch Settings entfernen? Gespeicherte Checks fuer diesen Ordner werden geloescht.");
+    const confirmed = window.confirm(t("removeFolderConfirm"));
     if (!confirmed) return;
 
     setLoading(true);
@@ -56,11 +59,11 @@ export function BatchSettingsForm({ clientId, settings }: Props) {
         body: JSON.stringify({ folderId })
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Drive Ordner konnte nicht entfernt werden.");
-      toast.success("Drive Ordner entfernt.");
+      if (!response.ok) throw new Error(result.error ?? t("folderRemoveError"));
+      toast.success(t("folderRemoved"));
       startTransition(() => router.refresh());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Drive Ordner konnte nicht entfernt werden.");
+      toast.error(error instanceof Error ? error.message : t("folderRemoveError"));
     } finally {
       setLoading(false);
     }
@@ -84,7 +87,7 @@ export function BatchSettingsForm({ clientId, settings }: Props) {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="googleDriveFolderUrl" className="text-xs uppercase tracking-[0.16em] text-white/45">
-              Google Drive Root-Ordner
+              {t("rootFolderLabel")}
             </Label>
             <Input
               id="googleDriveFolderUrl"
@@ -97,14 +100,14 @@ export function BatchSettingsForm({ clientId, settings }: Props) {
         </div>
         <Button type="submit" disabled={loading || pending || !googleDriveFolderUrl.trim()}>
           <Plus className="mr-2 h-4 w-4" />
-          Ordner hinzufügen
+          {t("addFolder")}
         </Button>
       </form>
 
       <div className="space-y-3">
         {(settings?.folders ?? []).length === 0 ? (
           <div className="rounded-xl border border-dashed border-herb-border bg-black/20 p-4 text-sm text-white/55">
-            Noch keine Drive Ordner gespeichert.
+            {t("noFoldersYet")}
           </div>
         ) : null}
         {settings?.folders.map((folder) => (
@@ -114,14 +117,14 @@ export function BatchSettingsForm({ clientId, settings }: Props) {
               <p className="mt-1 break-all font-mono text-xs text-white/45">{folder.googleDriveFolderId}</p>
               {folder.googleDriveFolderUrl ? <p className="mt-1 truncate text-xs text-white/40">{folder.googleDriveFolderUrl}</p> : null}
               <p className="mt-2 text-xs text-white/45">
-                Status: {folder.lastCheckStatus}
-                {folder.lastCheckedAt ? ` · zuletzt geprüft ${new Date(folder.lastCheckedAt).toLocaleString("de-DE")}` : ""}
+                {t("statusLine", { status: folder.lastCheckStatus })}
+                {folder.lastCheckedAt ? ` · ${t("lastCheckedAt", { date: new Date(folder.lastCheckedAt).toLocaleString(locale) })}` : ""}
               </p>
               {folder.lastCheckError ? <p className="mt-2 text-xs text-amber-200">{folder.lastCheckError}</p> : null}
             </div>
             <Button type="button" variant="outline" size="sm" className="border-herb-border" disabled={loading || pending} onClick={() => remove(folder.id)}>
               <Trash2 className="mr-2 h-4 w-4" />
-              Entfernen
+              {t("removeFolder")}
             </Button>
           </div>
         ))}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Play } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { AdIterationStatusSelect } from "@/components/ad-iteration-status-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +11,12 @@ import { formatDate, formatNumber } from "@/lib/metrics";
 
 export default async function IterationDetailPage({ params }: { params: Promise<{ clientId: string; iterationId: string }> }) {
   const { clientId, iterationId } = await params;
+  const t = await getTranslations("iterations");
+  const tCommon = await getTranslations("common");
   const { iteration, error } = await getAdIterationDetail(clientId, iterationId);
 
   if (!iteration) {
-    return <Alert variant="warning"><AlertDescription>{error ?? "Iteration wurde nicht gefunden."}</AlertDescription></Alert>;
+    return <Alert variant="warning"><AlertDescription>{error ?? t("notFound")}</AlertDescription></Alert>;
   }
 
   return (
@@ -23,7 +26,7 @@ export default async function IterationDetailPage({ params }: { params: Promise<
           <Button asChild variant="ghost" className="-ml-3 text-white/60 hover:text-white">
             <Link href={`/clients/${clientId}/iterations?tab=${iteration.format === "video" ? "videos" : "statics"}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Zurueck zu Iterations
+              {t("backToIterations")}
             </Link>
           </Button>
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -32,7 +35,7 @@ export default async function IterationDetailPage({ params }: { params: Promise<
             {iteration.score !== null ? <Badge variant="success">Score {formatNumber(iteration.score)}/100</Badge> : null}
           </div>
           <h2 className="mt-3 font-heading text-4xl text-white">{iteration.title}</h2>
-          <p className="mt-2 text-sm text-white/50">Erstellt am {formatDate(iteration.createdAt)} aus Vorlage {iteration.sourceCreativeName}</p>
+          <p className="mt-2 text-sm text-white/50">{t("createdFromTemplate", { date: formatDate(iteration.createdAt), name: iteration.sourceCreativeName })}</p>
         </div>
         <div className="w-full max-w-xs">
           <AdIterationStatusSelect clientId={clientId} iterationId={iteration.id} status={iteration.status} />
@@ -42,7 +45,7 @@ export default async function IterationDetailPage({ params }: { params: Promise<
       <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
         <Card className="border-herb-border bg-herb-surface/90">
           <CardHeader>
-            <CardTitle>Vorlage Bild</CardTitle>
+            <CardTitle>{t("templateImage")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <IterationSourcePreview iteration={iteration} />
@@ -63,7 +66,7 @@ export default async function IterationDetailPage({ params }: { params: Promise<
             </div>
             {iteration.sourceCreativeBody || iteration.sourceCreativeTitle ? (
               <div className="rounded-xl border border-herb-border bg-black/25 p-4 text-sm leading-6 text-white/65">
-                <p className="font-medium text-white">Vorlage Copy</p>
+                <p className="font-medium text-white">{t("templateCopy")}</p>
                 <p className="mt-2 whitespace-pre-wrap">{iteration.sourceCreativeBody ?? iteration.sourceCreativeTitle}</p>
               </div>
             ) : null}
@@ -73,32 +76,32 @@ export default async function IterationDetailPage({ params }: { params: Promise<
         <div className="space-y-6">
           <Card className="border-herb-border bg-herb-surface/90">
             <CardHeader>
-              <CardTitle>Neue Creative-Anweisung</CardTitle>
+              <CardTitle>{t("newInstructionTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <DetailBlock label="Beschreibung" value={iteration.description} />
-              <DetailBlock label="These" value={iteration.thesis} />
-              <DetailBlock label="Wieso" value={iteration.rationale} />
+              <DetailBlock label={t("descriptionLabel")} value={iteration.description} />
+              <DetailBlock label={t("thesisLabel")} value={iteration.thesis} />
+              <DetailBlock label={t("whyLabel")} value={iteration.rationale} />
               {iteration.format === "static" ? (
                 <DetailBlock label="Text Overlay" value={iteration.textOverlay} highlight />
               ) : (
                 <>
-                  <DetailBlock label="Neue Hook" value={iteration.hook} highlight />
+                  <DetailBlock label={t("newHookLabel")} value={iteration.hook} highlight />
                   <DetailBlock label="Script" value={iteration.script} />
                 </>
               )}
-              <DetailBlock label="Produktionsanweisungen" value={iteration.productionNotes} />
+              <DetailBlock label={t("productionNotesLabel")} value={iteration.productionNotes} />
             </CardContent>
           </Card>
 
           <Card className="border-herb-border bg-herb-surface/90">
             <CardHeader>
-              <CardTitle>Performance-Kontext</CardTitle>
+              <CardTitle>{t("performanceContext")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
-              <SnapshotMetric label="Quelle" value={iteration.sourceCreativeName} />
+              <SnapshotMetric label={t("sourceLabel")} value={iteration.sourceCreativeName} />
               <SnapshotMetric label="Performance" value={iterationPerformanceLine(iteration)} />
-              <SnapshotMetric label="Status" value={iteration.status} />
+              <SnapshotMetric label={tCommon("status")} value={iteration.status} />
             </CardContent>
           </Card>
         </div>

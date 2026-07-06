@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { FormField } from "@/components/form-field";
 import { LandingpageAnalysisButton } from "@/components/landingpage-analysis-button";
@@ -63,6 +64,9 @@ function filterLandingpages(landingpages: LandingpageListItem[], searchParams: S
 
 export default async function ClientLandingpagesPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const t = await getTranslations("landingpages");
+  const tCommon = await getTranslations("common");
+  const tCreatives = await getTranslations("creatives");
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const { landingpages, error } = await listClientLandingpages(clientId, activeDateRange);
@@ -88,7 +92,7 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
         <div>
           <h2 className="font-heading text-4xl">Landingpages</h2>
           <p className="mt-2 max-w-3xl text-sm text-white/60">
-            Alle Landingpage-URLs aus den Meta Creatives, aggregiert nach Ads, Spend, ROAS und Landingpage/Ad-Match. Nach dem Crawl nutzt Match echte Landingpage-Signale statt nur Creative-AI-Scores.
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -102,7 +106,7 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCreatives("dateRangeError")}</AlertDescription></Alert> : null}
 
       <div className="grid gap-3 md:grid-cols-4">
         <Metric label="Landingpages" value={`${formatNumber(filtered.length)} / ${formatNumber(landingpages.length)}`} />
@@ -115,21 +119,21 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
         <CardHeader>
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <CardTitle>Filter</CardTitle>
+              <CardTitle>{t("filterTitle")}</CardTitle>
               <p className="mt-2 text-sm text-white/55">
-                {filtered.length} von {landingpages.length} Landingpages sichtbar
+                {t("visibleCount", { filtered: filtered.length, total: landingpages.length })}
               </p>
             </div>
             {hasActiveFilters ? (
               <Button asChild variant="outline" className="border-herb-border">
-                <Link href={`/clients/${clientId}/creatives/landingpages`}>Filter zuruecksetzen</Link>
+                <Link href={`/clients/${clientId}/creatives/landingpages`}>{t("resetFilters")}</Link>
               </Button>
             ) : null}
           </div>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
-            <FormField label="Suche" className="md:col-span-2 xl:col-span-2">
+            <FormField label={tCommon("search")} className="md:col-span-2 xl:col-span-2">
               <Input
                 name="q"
                 defaultValue={filters.query}
@@ -140,21 +144,21 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
               <Select name="signal" defaultValue={filters.signal}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Alle ({landingpages.length})</SelectItem>
+                  <SelectItem value="ALL">{tCommon("allWithCount", { count: landingpages.length })}</SelectItem>
                   <SelectItem value="GOOD">GOOD ({signalCounts.GOOD ?? 0})</SelectItem>
                   <SelectItem value="WATCH">WATCH ({signalCounts.WATCH ?? 0})</SelectItem>
                   <SelectItem value="BLEED">BLEED ({signalCounts.BLEED ?? 0})</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Sortierung">
+            <FormField label={tCommon("sortBy")}>
               <Select name="sort" defaultValue={filters.sort}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="spend">SPENT</SelectItem>
                   <SelectItem value="roas">ROAS</SelectItem>
                   <SelectItem value="match">Match</SelectItem>
-                  <SelectItem value="ads">Anzahl Ads</SelectItem>
+                  <SelectItem value="ads">{t("adCountLabel")}</SelectItem>
                   <SelectItem value="url">URL</SelectItem>
                 </SelectContent>
               </Select>
@@ -184,7 +188,7 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
               />
             </FormField>
             <div className="flex items-end md:col-span-2 xl:col-span-1">
-              <Button type="submit" className="w-full">Anwenden</Button>
+              <Button type="submit" className="w-full">{tCommon("apply")}</Button>
             </div>
           </form>
         </CardContent>
@@ -195,7 +199,7 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
           <CardTitle>Landingpage Performance</CardTitle>
         </CardHeader>
         <CardContent>
-          <LandingpagesDataTable clientId={clientId} landingpages={filtered} emptyLabel={landingpages.length === 0 ? "Keine Landingpage-URLs gefunden. Fuehre zuerst den Meta Sync aus oder pruefe, ob Creatives Landing URLs enthalten." : "Keine Treffer. Passe Suche oder Filter an."} />
+          <LandingpagesDataTable clientId={clientId} landingpages={filtered} emptyLabel={landingpages.length === 0 ? t("emptyNoUrls") : t("emptyFiltered")} />
         </CardContent>
       </Card>
     </div>

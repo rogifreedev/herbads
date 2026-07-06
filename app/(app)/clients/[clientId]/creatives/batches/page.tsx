@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { BatchPerformanceTable } from "@/components/batch-performance-table";
 import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { MetaAdsTabs } from "@/components/meta-ads-tabs";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientCreativeBatchesPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const t = await getTranslations("batches");
+  const tCreatives = await getTranslations("creatives");
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const { batches, error } = await listFoundBatchPerformance(clientId, activeDateRange);
@@ -32,7 +35,7 @@ export default async function ClientCreativeBatchesPage({ params, searchParams }
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-heading text-4xl">Batch Performance</h2>
-          <p className="mt-2 max-w-3xl text-sm text-white/60">Gefundene Batch-Ordner aus dem gespeicherten Snapshot, angereichert mit Meta KPIs im gewaehlten Zeitraum.</p>
+          <p className="mt-2 max-w-3xl text-sm text-white/60">{t("performanceSubtitle")}</p>
         </div>
         <CreativeDateRangePicker defaultDays={30} />
       </div>
@@ -42,7 +45,7 @@ export default async function ClientCreativeBatchesPage({ params, searchParams }
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCreatives("dateRangeError")}</AlertDescription></Alert> : null}
 
       <div className="grid gap-3 md:grid-cols-5">
         <Metric label="Batches" value={formatNumber(batches.length)} />
