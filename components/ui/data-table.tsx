@@ -14,6 +14,7 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 import { Settings2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -38,7 +39,8 @@ type DataTableProps<TData, TValue> = {
   toolbarActions?: React.ReactNode;
 };
 
-export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Ergebnisse.", pageSize = 10, initialPageIndex = 0, minWidthClassName, toolbarLeft, toolbarActions }: DataTableProps<TData, TValue>) {
+export function DataTable<TData, TValue>({ columns, data, emptyLabel, pageSize = 10, initialPageIndex = 0, minWidthClassName, toolbarLeft, toolbarActions }: DataTableProps<TData, TValue>) {
+  const t = useTranslations("common");
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -80,11 +82,11 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="border-border">
                 <Settings2 className="mr-2 h-4 w-4" />
-                Spalten
+                {t("columns")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="border-border bg-popover text-popover-foreground">
-              <DropdownMenuLabel>Spalten anzeigen</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("showColumns")}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {table
                 .getAllColumns()
@@ -121,7 +123,7 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  {emptyLabel}
+                  {emptyLabel ?? t("noResults")}
                 </TableCell>
               </TableRow>
             )}
@@ -129,16 +131,16 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
         </Table>
       </div>
       <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <span>{formatNumber(table.getFilteredRowModel().rows.length)} Zeilen</span>
+        <span>{t("rowCount", { count: formatNumber(table.getFilteredRowModel().rows.length) })}</span>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="border-border" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-            Zurueck
+            {t("back")}
           </Button>
           <span className="min-w-24 text-center">
-            Seite {table.getState().pagination.pageIndex + 1} von {Math.max(1, table.getPageCount())}
+            {t("pageOf", { page: table.getState().pagination.pageIndex + 1, total: Math.max(1, table.getPageCount()) })}
           </span>
           <Button variant="outline" size="sm" className="border-border" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-            Weiter
+            {t("next")}
           </Button>
         </div>
       </div>

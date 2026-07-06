@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,6 +33,7 @@ const fallbackClients: ClientOption[] = mockClients.map((client) => ({
 }));
 
 export function ClientSwitcher() {
+  const t = useTranslations("common");
   const pathname = usePathname();
   const router = useRouter();
   const [clients, setClients] = useState<ClientOption[]>(fallbackClients);
@@ -84,7 +86,7 @@ export function ClientSwitcher() {
               {activeClient?.name.slice(0, 1) ?? "K"}
             </span>
             <span className="truncate text-left leading-tight">
-              <span className="block truncate">{activeClient?.name ?? "Kunde wählen"}</span>
+              <span className="block truncate">{activeClient?.name ?? t("selectClient")}</span>
               {activeClient?.adAccountId ? <span className="block truncate font-mono text-[10px] text-muted-foreground">{activeClient.adAccountId}</span> : null}
             </span>
           </span>
@@ -92,10 +94,10 @@ export function ClientSwitcher() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Kunden wechseln</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("switchClient")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {clients.length === 0 ? (
-          <DropdownMenuItem disabled>Kein Kunde angelegt</DropdownMenuItem>
+          <DropdownMenuItem disabled>{t("noClientCreated")}</DropdownMenuItem>
         ) : null}
         {clients.map((client) => (
           <DropdownMenuItem

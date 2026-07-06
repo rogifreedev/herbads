@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarIcon } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import type { DateRange } from "react-day-picker";
@@ -9,12 +10,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-const PRESETS = [
-  { label: "7 Tage", days: 7 },
-  { label: "14 Tage", days: 14 },
-  { label: "30 Tage", days: 30 },
-  { label: "90 Tage", days: 90 }
-];
+const PRESET_DAYS = [7, 14, 30, 90];
 
 function parseDateParam(value: string | null) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
@@ -30,8 +26,8 @@ function formatDateInput(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatDateLabel(date: Date) {
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+function formatDateLabel(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
 function defaultRange(days: number | undefined): DateRange | undefined {
@@ -48,14 +44,9 @@ function rangeFromParams(since: string | null, until: string | null, defaultDays
   return from || to ? { from, to } : defaultRange(defaultDays);
 }
 
-function rangeLabel(range: DateRange | undefined) {
-  if (range?.from && range.to) return `${formatDateLabel(range.from)} - ${formatDateLabel(range.to)}`;
-  if (range?.from) return `ab ${formatDateLabel(range.from)}`;
-  if (range?.to) return `bis ${formatDateLabel(range.to)}`;
-  return "Alle Daten";
-}
-
 export function CreativeDateRangePicker({ defaultDays }: { defaultDays?: number }) {
+  const t = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -115,6 +106,13 @@ export function CreativeDateRangePicker({ defaultDays }: { defaultDays?: number 
     pushRange(nextRange);
   }
 
+  function rangeLabel(currentRange: DateRange | undefined) {
+    if (currentRange?.from && currentRange.to) return `${formatDateLabel(currentRange.from, locale)} - ${formatDateLabel(currentRange.to, locale)}`;
+    if (currentRange?.from) return t("fromDate", { date: formatDateLabel(currentRange.from, locale) });
+    if (currentRange?.to) return t("untilDate", { date: formatDateLabel(currentRange.to, locale) });
+    return t("allData");
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -130,13 +128,13 @@ export function CreativeDateRangePicker({ defaultDays }: { defaultDays?: number 
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto p-0" sideOffset={8}>
         <div className="grid gap-2 border-b border-herb-border p-3 sm:grid-cols-5">
-          {PRESETS.map((preset) => (
-            <Button key={preset.days} type="button" variant="outline" size="sm" className="border-herb-border bg-black/20" onClick={() => applyPreset(preset.days)} disabled={isPending}>
-              {preset.label}
+          {PRESET_DAYS.map((days) => (
+            <Button key={days} type="button" variant="outline" size="sm" className="border-herb-border bg-black/20" onClick={() => applyPreset(days)} disabled={isPending}>
+              {t("daysPreset", { days })}
             </Button>
           ))}
           <Button type="button" variant="outline" size="sm" className="border-herb-border bg-black/20" onClick={clearRange} disabled={isPending}>
-            Gesamt
+            {t("allRange")}
           </Button>
         </div>
         <Calendar
@@ -149,10 +147,10 @@ export function CreativeDateRangePicker({ defaultDays }: { defaultDays?: number 
         />
         <div className="flex items-center justify-between gap-2 border-t border-herb-border p-3">
           <Button type="button" variant="ghost" size="sm" onClick={clearRange} disabled={isPending || !range}>
-            Gesamter Zeitraum
+            {t("entirePeriod")}
           </Button>
           <Button type="button" size="sm" onClick={() => pushRange(range)} disabled={isPending}>
-            Anwenden
+            {t("apply")}
           </Button>
         </div>
       </PopoverContent>

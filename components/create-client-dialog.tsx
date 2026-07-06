@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ type MetaAdAccountOption = {
 };
 
 export function CreateClientDialog({ trigger = "button" }: CreateClientDialogProps) {
+  const t = useTranslations("common");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,7 +58,7 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
       setAccountsLoading(false);
 
       if (!response.ok) {
-        setAccountsError(result.error ?? "Meta Werbekonten konnten nicht geladen werden.");
+        setAccountsError(result.error ?? t("metaAdAccountsLoadError"));
         setUseManualAccount(true);
         return;
       }
@@ -68,7 +70,7 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
     loadAccounts().catch((error) => {
       if (ignore) return;
       setAccountsLoading(false);
-      setAccountsError(error instanceof Error ? error.message : "Meta Werbekonten konnten nicht geladen werden.");
+      setAccountsError(error instanceof Error ? error.message : t("metaAdAccountsLoadError"));
       setUseManualAccount(true);
     });
 
@@ -76,7 +78,7 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
       ignore = true;
       setAccountsLoading(false);
     };
-  }, [accounts.length, open]);
+  }, [accounts.length, open, t]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,11 +103,11 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
     setLoading(false);
 
     if (!response.ok) {
-      toast.error(result.error ?? "Kunde konnte nicht angelegt werden.");
+      toast.error(result.error ?? t("clientCreateError"));
       return;
     }
 
-    toast.success("Kunde angelegt.");
+    toast.success(t("clientCreated"));
     setOpen(false);
     window.dispatchEvent(new Event("herbads-clients-changed"));
     router.refresh();
@@ -116,29 +118,29 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger === "icon" ? (
-          <Button variant="gradient" size="icon" className="hidden shadow-lg shadow-primary/20 sm:inline-flex" aria-label="Kunde anlegen">
+          <Button variant="gradient" size="icon" className="hidden shadow-lg shadow-primary/20 sm:inline-flex" aria-label={t("createClient")}>
             <Plus className="h-5 w-5" />
           </Button>
         ) : (
-          <Button variant="gradient">Kunde anlegen</Button>
+          <Button variant="gradient">{t("createClient")}</Button>
         )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Kunde anlegen</DialogTitle>
+          <DialogTitle>{t("createClient")}</DialogTitle>
           <DialogDescription>
-            Lege einen Kunden und das zugehoerige Meta Werbekonto an. Weitere Details kannst du spaeter im Kundenprofil pflegen.
+            {t("createClientDescription")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Kundenname</Label>
-            <Input id="name" name="name" placeholder="z. B. Herb Demo Account" required />
+            <Label htmlFor="name">{t("clientName")}</Label>
+            <Input id="name" name="name" placeholder={t("clientNamePlaceholder")} required />
           </div>
           <div className="space-y-2">
-            <Label>Meta Werbekonto</Label>
+            <Label>{t("metaAdAccount")}</Label>
             {useManualAccount ? (
-              <Input name="manualMetaAccountId" placeholder="act_123456789 oder 123456789" required />
+              <Input name="manualMetaAccountId" placeholder={t("metaAdAccountPlaceholder")} required />
             ) : (
               <select
                 className="flex h-10 w-full rounded-md border border-input bg-black/20 px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -148,7 +150,7 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
                 disabled={accountsLoading || accounts.length === 0}
               >
                 <option value="" className="bg-herb-surface text-white">
-                  {accountsLoading ? "Werbekonten werden geladen..." : "Werbekonto auswählen"}
+                  {accountsLoading ? t("adAccountsLoading") : t("selectAdAccount")}
                 </option>
                 {accounts.map((account) => (
                   <option key={account.accountId} value={account.accountId} className="bg-herb-surface text-white">
@@ -163,23 +165,23 @@ export function CreateClientDialog({ trigger = "button" }: CreateClientDialogPro
               className="text-xs font-medium text-primary hover:underline"
               onClick={() => setUseManualAccount((current) => !current)}
             >
-              {useManualAccount ? "Aus Meta-Liste auswählen" : "Werbekonto manuell eintragen"}
+              {useManualAccount ? t("selectFromMetaList") : t("enterAdAccountManually")}
             </button>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="brandName">Brand Name optional</Label>
-            <Input id="brandName" name="brandName" placeholder="Markenname" />
+            <Label htmlFor="brandName">{t("brandNameOptional")}</Label>
+            <Input id="brandName" name="brandName" placeholder={t("brandNamePlaceholder")} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="targetAudience">Zielgruppe optional</Label>
-            <Input id="targetAudience" name="targetAudience" placeholder="Kurzbeschreibung der Zielgruppe" />
+            <Label htmlFor="targetAudience">{t("targetAudienceOptional")}</Label>
+            <Input id="targetAudience" name="targetAudience" placeholder={t("targetAudiencePlaceholder")} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" className="border-herb-border" onClick={() => setOpen(false)}>
-              Abbrechen
+              {t("cancel")}
             </Button>
             <Button type="submit" variant="gradient" disabled={loading}>
-              {loading ? "Speichert..." : "Kunde speichern"}
+              {loading ? t("saving") : t("saveClient")}
             </Button>
           </DialogFooter>
         </form>

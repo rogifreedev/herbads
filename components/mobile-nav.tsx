@@ -2,22 +2,24 @@
 
 import { useState } from "react";
 import { Menu } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "@/components/sidebar-nav";
 
 export function MobileNav() {
+  const t = useTranslations("nav");
   const [open, setOpen] = useState(false);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-foreground/70 hover:text-foreground lg:hidden" aria-label="Navigation öffnen">
+        <Button variant="ghost" size="icon" className="text-foreground/70 hover:text-foreground lg:hidden" aria-label={t("openNavigation")}>
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-[300px] border-herb-border bg-sidebar p-0">
-        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SheetTitle className="sr-only">{t("navigation")}</SheetTitle>
         <SidebarNav onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
