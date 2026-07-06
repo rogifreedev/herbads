@@ -1,8 +1,10 @@
+import { getTranslations } from "next-intl/server";
 import { IntegrationsDataTable } from "@/components/integrations-data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getOptionalEnv } from "@/lib/env";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const [t, tCommon] = await Promise.all([getTranslations("settings"), getTranslations("common")]);
   const integrations = [
     { label: "Supabase URL", key: "NEXT_PUBLIC_SUPABASE_URL", configured: Boolean(getOptionalEnv("NEXT_PUBLIC_SUPABASE_URL")) },
     { label: "Supabase Anon Key", key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", configured: Boolean(getOptionalEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")) },
@@ -18,21 +20,21 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-heading text-4xl">Einstellungen</h2>
-        <p className="mt-2 text-sm text-white/60">Globale App-, Integrations- und Nutzer-Einstellungen.</p>
+        <h2 className="font-heading text-4xl">{t("title")}</h2>
+        <p className="mt-2 text-sm text-white/60">{t("subtitle")}</p>
       </div>
       <section className="grid gap-4 md:grid-cols-3">
-        <StatusCard label="Integrationen" value={`${configuredCount}/${integrations.length}`} />
+        <StatusCard label={t("integrationsTitle")} value={`${configuredCount}/${integrations.length}`} />
         <StatusCard label="Node Runtime" value={process.versions.node} />
-        <StatusCard label="Daily Sync Lookback" value={`${getOptionalEnv("META_DAILY_SYNC_LOOKBACK_DAYS", "7")} Tage`} />
+        <StatusCard label="Daily Sync Lookback" value={tCommon("daysPreset", { days: Number(getOptionalEnv("META_DAILY_SYNC_LOOKBACK_DAYS", "7")) })} />
       </section>
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
-          <CardTitle>Integrationen</CardTitle>
+          <CardTitle>{t("integrationsTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <IntegrationsDataTable integrations={integrations} />
-          <p className="mt-3 text-xs text-white/45">Werte werden aus Sicherheitsgruenden nicht angezeigt, nur der Konfigurationsstatus.</p>
+          <p className="mt-3 text-xs text-white/45">{t("securityNote")}</p>
         </CardContent>
       </Card>
     </div>

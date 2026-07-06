@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 
 function safeNext(value: string | null) {
@@ -24,6 +25,7 @@ function clearSupabaseAuthCookies() {
 }
 
 export function GoogleLoginButton() {
+  const t = useTranslations("auth");
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const next = safeNext(searchParams.get("next"));
@@ -36,7 +38,7 @@ export function GoogleLoginButton() {
 
   return (
     <Button type="button" variant="gradient" className="w-full" disabled={loading} onClick={login}>
-      {loading ? "Weiterleitung..." : "Mit Google Workspace einloggen"}
+      {loading ? t("redirecting") : t("loginButton")}
     </Button>
   );
 }

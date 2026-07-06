@@ -705,6 +705,25 @@
     "ctaPreferences": "CTA Präferenzen",
     "saveProfile": "Kundenprofil speichern"
   },
+  "settings": {
+    "title": "Einstellungen",
+    "subtitle": "Globale App-, Integrations- und Nutzer-Einstellungen.",
+    "integrationsTitle": "Integrationen",
+    "securityNote": "Werte werden aus Sicherheitsgründen nicht angezeigt, nur der Konfigurationsstatus.",
+    "columnIntegration": "Integration",
+    "columnEnvKey": "Env Key",
+    "statusConfigured": "konfiguriert",
+    "statusMissing": "fehlt",
+    "noIntegrations": "Keine Integrationen definiert."
+  },
+  "auth": {
+    "loginTitle": "Herb Ads Login",
+    "loginDescription": "Zugriff ist nur für Team-Mitglieder mit einem Google Workspace Account von herb-media.com erlaubt.",
+    "errorDomain": "Zugriff verweigert. Bitte verwende einen Google Workspace Account von herb-media.com.",
+    "errorOauth": "Google Login konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+    "loginButton": "Mit Google Workspace einloggen",
+    "redirecting": "Weiterleitung…"
+  },
   "reports": {
     "title": "Reports",
     "subtitle": "Exportierbare Creative Learnings und Kundenreports.",
