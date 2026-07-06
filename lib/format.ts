@@ -1,3 +1,5 @@
+// Fixed de-DE formatting by design; de/it number and date formats are near-identical
+// (1.234,56 € / 07.07.2026 vs 07/07/2026) — revisit if an en locale lands.
 export function formatCurrency(value: number, maximumFractionDigits = 0) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits }).format(value);
 }

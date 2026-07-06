@@ -13,6 +13,7 @@ import { formatNumber } from "@/lib/metrics";
 export default async function CreativeLearningPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
   const t = await getTranslations("learning");
+  const tCommon = await getTranslations("common");
   const overview = await getCreativeLearningOverview(clientId);
 
   return (
@@ -29,7 +30,7 @@ export default async function CreativeLearningPage({ params }: { params: Promise
 
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <SummaryCard label="Creatives" value={formatNumber(overview.totals.creatives)} />
-        <SummaryCard label={t("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
+        <SummaryCard label={tCommon("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
         <SummaryCard label="Angles" value={formatNumber(overview.totals.angles)} />
         <SummaryCard label="Ad Ideas" value={formatNumber(overview.totals.ideas)} />
         <SummaryCard label="Avg Score" value={formatNumber(overview.totals.avgCreativeScore)} />
@@ -215,7 +216,7 @@ function HookOpportunityCard({ item }: { item: HookOpportunity }) {
 }
 
 function PredictionCard({ prediction }: { prediction: IdeaPrediction }) {
-  const t = useTranslations("learning");
+  const tCommon = useTranslations("common");
 
   return (
     <article className="rounded-2xl border border-herb-border bg-black/20 p-4">
@@ -240,8 +241,8 @@ function PredictionCard({ prediction }: { prediction: IdeaPrediction }) {
         <span>CPA Band {prediction.predictedCpa}</span>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <InfoList title={t("whyTitle")} items={prediction.rationale} />
-        <InfoList title={t("risksTitle")} items={prediction.risks} />
+        <InfoList title={tCommon("whyTitle")} items={prediction.rationale} />
+        <InfoList title={tCommon("risksTitle")} items={prediction.risks} />
       </div>
     </article>
   );

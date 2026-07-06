@@ -217,6 +217,7 @@ function PredictionEmptyState({ format }: { format: PredictionFormat }) {
 
 function PredictionResultView({ result, historyHref }: { result: CreativePredictionResult; historyHref: string | null }) {
   const t = useTranslations("predictionTool");
+  const tCommon = useTranslations("common");
 
   return (
     <>
@@ -269,11 +270,11 @@ function PredictionResultView({ result, historyHref }: { result: CreativePredict
         </Card>
 
         <Card className="border-herb-border bg-herb-surface/90">
-          <CardHeader><CardTitle>{t("whyTitle")}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{tCommon("whyTitle")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <ListBlock title="Rationale" items={result.rationale} />
             <ListBlock title={t("strengthsTitle")} items={result.ai.strengths} />
-            <ListBlock title={t("risksTitle")} items={result.ai.risks} />
+            <ListBlock title={tCommon("risksTitle")} items={result.ai.risks} />
             <ListBlock title={t("improvementsTitle")} items={result.ai.recommendations} />
           </CardContent>
         </Card>

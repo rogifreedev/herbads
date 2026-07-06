@@ -86,7 +86,7 @@ export default async function ClientDashboardPage({ params, searchParams }: { pa
       {breakdowns.error ? (
         <Alert variant="warning"><AlertDescription>{t("breakdownsLoadError", { error: breakdowns.error })}</AlertDescription></Alert>
       ) : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{dateFilters.dateError}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         {metricCards.map((metric) => (

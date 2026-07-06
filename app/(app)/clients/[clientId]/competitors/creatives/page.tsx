@@ -478,7 +478,7 @@ function GridCreativeCard({ clientId, creative, t }: { clientId: string; creativ
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{creative.competitorName}</Badge>
           <Badge variant="secondary">{creative.format}</Badge>
-          <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status)}</Badge>
+          <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status, t)}</Badge>
         </div>
         <p className="line-clamp-2 font-medium text-white">{creative.analysis?.hook ?? creative.hook ?? creative.headline ?? t("noHook")}</p>
         <div className="grid grid-cols-2 gap-2 text-xs text-white/60">

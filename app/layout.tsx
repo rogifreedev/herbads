@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Oswald, Work_Sans } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Toaster } from "sonner";
 import { NavigationProgress } from "@/components/navigation-progress";
@@ -12,10 +12,13 @@ const workSans = Work_Sans({ subsets: ["latin"], variable: "--font-work-sans" })
 const oswald = Oswald({ subsets: ["latin"], variable: "--font-oswald" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
-export const metadata: Metadata = {
-  title: "Herb Ads",
-  description: "Creative Intelligence fuer Meta Ads"
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common");
+  return {
+    title: "Herb Ads",
+    description: t("appDescription")
+  };
+}
 
 export const preferredRegion = "fra1";
 

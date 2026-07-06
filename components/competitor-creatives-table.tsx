@@ -90,7 +90,7 @@ function columns(clientId: string, t: Translator): ColumnDef<CompetitorCreative>
       header: "Status",
       cell: ({ row }) => (
         <Badge variant={isCompetitorCreativeDisabled(row.original.status) ? "destructive" : "success"}>
-          {competitorCreativeStatusLabel(row.original.status)}
+          {competitorCreativeStatusLabel(row.original.status, t)}
         </Badge>
       ),
       meta: { label: "Status" }
@@ -200,7 +200,7 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
         creative.adLibraryId,
         creative.format,
         creative.status,
-        competitorCreativeStatusLabel(creative.status),
+        competitorCreativeStatusLabel(creative.status, t),
         formatDate(creative.startedAt),
         formatDate(creative.endedAt),
         formatDate(creative.createdAt),
@@ -210,7 +210,7 @@ export function CompetitorCreativesTable({ clientId, creatives }: Props) {
         creative.analysis?.offer
       ].some((value) => value?.toLowerCase().includes(normalizedQuery));
     });
-  }, [creatives, normalizedQuery]);
+  }, [creatives, normalizedQuery, t]);
 
   const tableColumns = useMemo(() => columns(clientId, t), [clientId, t]);
 

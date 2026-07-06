@@ -12,6 +12,7 @@ import { formatDate, formatNumber } from "@/lib/metrics";
 export default async function CompetitorIterationDetailPage({ params }: { params: Promise<{ clientId: string; iterationId: string }> }) {
   const { clientId, iterationId } = await params;
   const t = await getTranslations("competitors");
+  const tCommon = await getTranslations("common");
   const { iteration, error } = await getCompetitorIterationDetail(clientId, iterationId);
 
   if (!iteration) {
@@ -52,7 +53,7 @@ export default async function CompetitorIterationDetailPage({ params }: { params
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{iteration.sourceCreativeType}</Badge>
-                <Badge variant="secondary">{competitorIterationPerformanceLine(iteration)}</Badge>
+                <Badge variant="secondary">{competitorIterationPerformanceLine(iteration) ?? tCommon("noPerformanceSnapshot")}</Badge>
               </div>
               <Link href={iteration.sourceCreativeHref} className="group flex items-center gap-2 text-primary hover:text-white">
                 <span className="line-clamp-2">{iteration.sourceCreativeName}</span>
@@ -106,7 +107,7 @@ export default async function CompetitorIterationDetailPage({ params }: { params
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <SnapshotMetric label="Competitor" value={iteration.sourceCompetitorName} />
-              <SnapshotMetric label="Performance" value={competitorIterationPerformanceLine(iteration)} />
+              <SnapshotMetric label="Performance" value={competitorIterationPerformanceLine(iteration) ?? tCommon("noPerformanceSnapshot")} />
               <SnapshotMetric label="Status" value={iteration.status} />
             </CardContent>
           </Card>

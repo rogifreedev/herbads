@@ -66,7 +66,6 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const t = await getTranslations("landingpages");
   const tCommon = await getTranslations("common");
-  const tCreatives = await getTranslations("creatives");
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const { landingpages, error } = await listClientLandingpages(clientId, activeDateRange);
@@ -106,7 +105,7 @@ export default async function ClientLandingpagesPage({ params, searchParams }: {
       {error ? (
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCreatives("dateRangeError")}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
 
       <div className="grid gap-3 md:grid-cols-4">
         <Metric label="Landingpages" value={`${formatNumber(filtered.length)} / ${formatNumber(landingpages.length)}`} />

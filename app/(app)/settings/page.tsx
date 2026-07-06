@@ -26,7 +26,8 @@ export default async function SettingsPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <StatusCard label={t("integrationsTitle")} value={`${configuredCount}/${integrations.length}`} />
         <StatusCard label="Node Runtime" value={process.versions.node} />
-        <StatusCard label="Daily Sync Lookback" value={tCommon("daysPreset", { days: Number(getOptionalEnv("META_DAILY_SYNC_LOOKBACK_DAYS", "7")) })} />
+        {/* "Node Runtime" / "Daily Sync Lookback" stay English as technical terms, consistent with the env integration labels above. */}
+        <StatusCard label="Daily Sync Lookback" value={tCommon("daysPreset", { days: Number(getOptionalEnv("META_DAILY_SYNC_LOOKBACK_DAYS", "7")) || 7 })} />
       </section>
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>

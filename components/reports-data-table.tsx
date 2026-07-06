@@ -22,10 +22,11 @@ export type ReportTableRow = {
 
 export function ReportsDataTable({ reports }: { reports: ReportTableRow[] }) {
   const t = useTranslations("reports");
+  const tCommon = useTranslations("common");
   const columns = useMemo<ColumnDef<ReportTableRow>[]>(() => [
     { accessorKey: "clientName", header: ({ column }) => <DataTableColumnHeader column={column} title={t("clientColumn")} />, cell: ({ row }) => <span className="text-white">{row.original.clientName}</span>, meta: { label: t("clientColumn") } },
     { accessorKey: "creatives", header: ({ column }) => <DataTableColumnHeader column={column} title="Creatives" />, cell: ({ row }) => <span className="text-white">{formatNumber(row.original.creatives)}</span>, meta: { label: "Creatives" } },
-    { accessorKey: "analyzed", header: ({ column }) => <DataTableColumnHeader column={column} title={t("aiAnalyzed")} />, cell: ({ row }) => <span className="text-white">{formatNumber(row.original.analyzed)}</span>, meta: { label: t("aiAnalyzed") } },
+    { accessorKey: "analyzed", header: ({ column }) => <DataTableColumnHeader column={column} title={tCommon("aiAnalyzed")} />, cell: ({ row }) => <span className="text-white">{formatNumber(row.original.analyzed)}</span>, meta: { label: tCommon("aiAnalyzed") } },
     { accessorKey: "avgScore", header: ({ column }) => <DataTableColumnHeader column={column} title="Avg. Score" />, cell: ({ row }) => <span className="text-primary">{row.original.avgScore === null ? "–" : `${row.original.avgScore}/100`}</span>, meta: { label: "Avg. Score" } },
     { accessorKey: "totalSpend", header: ({ column }) => <DataTableColumnHeader column={column} title="Spend" />, cell: ({ row }) => <span className="text-white">{formatCurrency(row.original.totalSpend)}</span>, meta: { label: "Spend" } },
     { accessorKey: "purchases", header: ({ column }) => <DataTableColumnHeader column={column} title="Conversions" />, cell: ({ row }) => <span className="text-white">{formatNumber(row.original.purchases)}</span>, meta: { label: "Conversions" } },
@@ -41,7 +42,7 @@ export function ReportsDataTable({ reports }: { reports: ReportTableRow[] }) {
       enableSorting: false,
       enableHiding: false
     }
-  ], [t]);
+  ], [t, tCommon]);
 
   return <DataTable columns={columns} data={reports} pageSize={10} minWidthClassName="min-w-[900px]" emptyLabel={t("noClientsYet")} />;
 }

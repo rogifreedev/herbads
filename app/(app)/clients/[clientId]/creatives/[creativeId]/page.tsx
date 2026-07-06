@@ -59,7 +59,7 @@ function resolveDateFilters(searchParams: SearchParams) {
 
 export default async function CreativeDetailPage({ params, searchParams }: { params: Promise<{ clientId: string; creativeId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId, creativeId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const [t, locale] = await Promise.all([getTranslations("creatives"), getLocale()]);
+  const [t, tCommon, locale] = await Promise.all([getTranslations("creatives"), getTranslations("common"), getLocale()]);
   const dateFilters = resolveDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const [{ creative, error }, { analysis, error: analysisError }, { transcript, error: transcriptError }] = await Promise.all([
@@ -155,7 +155,7 @@ export default async function CreativeDetailPage({ params, searchParams }: { par
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{t("dateRangeError")}</AlertDescription></Alert> : null}
+          {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
             <Metric label="Creative Score" value={`${creative.performanceScore.score}/100`} highlight />
             <Metric label="Spend" value={formatCurrency(creative.metrics.spend)} />

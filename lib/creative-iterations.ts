@@ -1018,9 +1018,11 @@ export function iterationStatusLabel(status: IterationStatus) {
   return labels[status];
 }
 
-export function iterationPerformanceLine(iteration: AdIteration) {
+// Returns null when no snapshot metrics exist; render sites translate the fallback
+// (common.noPerformanceSnapshot). KPI terms (Spend/ROAS/CTR) stay untranslated by design.
+export function iterationPerformanceLine(iteration: AdIteration): string | null {
   const metrics = iteration.performanceSnapshot.metrics as JsonRecord | undefined;
-  if (!metrics) return "Keine Performance Snapshot Daten";
+  if (!metrics) return null;
   return [
     `Spend ${formatCurrency(Number(metrics.spend ?? 0))}`,
     `ROAS ${formatDecimal(numberValue(metrics.roas))}`,

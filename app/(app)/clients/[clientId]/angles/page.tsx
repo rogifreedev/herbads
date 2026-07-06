@@ -47,7 +47,7 @@ function resolveDateFilters(searchParams: SearchParams) {
 export default async function CreativeAnglesPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const t = await getTranslations("angles");
-  const tCreatives = await getTranslations("creatives");
+  const tCommon = await getTranslations("common");
   const dateFilters = resolveDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const overview = await getCreativeAnglesOverview(clientId, activeDateRange);
@@ -65,13 +65,13 @@ export default async function CreativeAnglesPage({ params, searchParams }: { par
       <MetaAdsTabs clientId={clientId} active="angles" />
 
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCreatives("dateRangeError")}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-5">
         <SummaryCard label="Angles" value={formatNumber(overview.totals.angles)} />
         <SummaryCard label="Adsets" value={formatNumber(overview.totals.adsets)} />
         <SummaryCard label="Creatives" value={formatNumber(overview.totals.creatives)} />
-        <SummaryCard label={t("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
+        <SummaryCard label={tCommon("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
         <SummaryCard label={t("avgPoints")} value={`${formatNumber(overview.totals.avgScore)}/100`} />
       </section>
 

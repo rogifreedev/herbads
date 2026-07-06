@@ -52,7 +52,7 @@ export default async function IterationDetailPage({ params }: { params: Promise<
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{iteration.sourceCreativeType}</Badge>
-                <Badge variant="secondary">{iterationPerformanceLine(iteration)}</Badge>
+                <Badge variant="secondary">{iterationPerformanceLine(iteration) ?? tCommon("noPerformanceSnapshot")}</Badge>
               </div>
               <Link href={iteration.sourceCreativeHref} className="group flex items-center gap-2 text-primary hover:text-white">
                 <span className="line-clamp-2">{iteration.sourceCreativeName}</span>
@@ -100,7 +100,7 @@ export default async function IterationDetailPage({ params }: { params: Promise<
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <SnapshotMetric label={t("sourceLabel")} value={iteration.sourceCreativeName} />
-              <SnapshotMetric label="Performance" value={iterationPerformanceLine(iteration)} />
+              <SnapshotMetric label="Performance" value={iterationPerformanceLine(iteration) ?? tCommon("noPerformanceSnapshot")} />
               <SnapshotMetric label={tCommon("status")} value={iteration.status} />
             </CardContent>
           </Card>

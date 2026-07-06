@@ -99,7 +99,7 @@ export function ClientProfileForm({ clientId, profile }: ClientProfileFormProps)
           <TextAreaField label={t("offers")} name="offers" defaultValue={profile.offers} />
           <TextAreaField label={t("forbiddenClaims")} name="forbiddenClaims" defaultValue={profile.forbiddenClaims} />
           <TextAreaField label="Brand No-Gos" name="brandNoGos" defaultValue={profile.brandNoGos} />
-          <TextAreaField label={t("competitorsLabel")} name="competitors" defaultValue={profile.competitors} />
+          <TextAreaField label={t("competitors")} name="competitors" defaultValue={profile.competitors} />
           <TextAreaField label={t("ctaPreferences")} name="ctaPreferences" defaultValue={profile.ctaPreferences} />
           <div className="lg:col-span-2">
             <Button type="submit" variant="gradient" disabled={saving || generating}>

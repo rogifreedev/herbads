@@ -911,12 +911,6 @@ export function isBatchSnapshotStale(value: string | null) {
   return Date.now() - date.getTime() >= BATCH_CHECK_INTERVAL_MS;
 }
 
-export function batchStatusLabel(status: BatchOverviewItem["status"]) {
-  if (status === "live") return "Geschaltet";
-  if (status === "found") return "Gefunden, nicht aktiv";
-  return "Nicht gefunden";
-}
-
 export function batchMetaMatchLabel(match: BatchMetaMatch) {
   return `${metaTypeLabel(match.type)}: ${match.name}`;
 }

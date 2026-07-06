@@ -8,6 +8,7 @@ import { getClientById } from "@/lib/clients";
 export default async function MetaAdsSettingsPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
   const t = await getTranslations("metaSettings");
+  const tCommon = await getTranslations("common");
   const { client, error } = await getClientById(clientId);
 
   return (
@@ -15,7 +16,7 @@ export default async function MetaAdsSettingsPage({ params }: { params: Promise<
       <div>
         <p className="text-sm uppercase tracking-[0.22em] text-primary">META Ads</p>
         <h2 className="mt-2 font-heading text-4xl">Settings</h2>
-        <p className="mt-2 font-mono text-xs text-white/45">{client.adAccountId ?? t("noAccount")}</p>
+        <p className="mt-2 font-mono text-xs text-white/45">{client.adAccountId ?? tCommon("noAccount")}</p>
       </div>
 
       {error ? (

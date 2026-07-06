@@ -1007,9 +1007,11 @@ export async function generateWeeklyCompetitorIterationsForAllClients() {
   return { generationKey: key, range, clients: clientIds.length, results };
 }
 
-export function competitorIterationPerformanceLine(iteration: CompetitorIteration) {
+// Returns null when no snapshot metrics exist; render sites translate the fallback
+// (common.noPerformanceSnapshot). KPI terms (Reach/Spend/Score) stay untranslated by design.
+export function competitorIterationPerformanceLine(iteration: CompetitorIteration): string | null {
   const metrics = iteration.performanceSnapshot.metrics as JsonRecord | undefined;
-  if (!metrics) return "Keine Performance Snapshot Daten";
+  if (!metrics) return null;
   return [
     `Reach ${formatNumber(Number(metrics.reachEstimate ?? 0))}`,
     `Spend ${formatCurrency(Number(metrics.estimatedSpend ?? 0))}`,

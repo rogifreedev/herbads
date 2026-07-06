@@ -12,7 +12,7 @@
     "back": "Zurück",
     "next": "Weiter",
     "pageOf": "Seite {page} von {total}",
-    "daysPreset": "{days} Tage",
+    "daysPreset": "{days, plural, one {# Tag} other {# Tage}}",
     "allRange": "Gesamt",
     "entirePeriod": "Gesamter Zeitraum",
     "apply": "Anwenden",
@@ -31,7 +31,14 @@
     "countOfTotal": "{filtered} von {total}",
     "status": "Status",
     "count": "Anzahl",
-    "statusSaveError": "Status konnte nicht gespeichert werden."
+    "statusSaveError": "Status konnte nicht gespeichert werden.",
+    "noAccount": "Kein Meta Account hinterlegt",
+    "dateRangeError": "Startdatum darf nicht nach dem Enddatum liegen.",
+    "aiAnalyzed": "AI analysiert",
+    "whyTitle": "Warum",
+    "risksTitle": "Risiken",
+    "noPerformanceSnapshot": "Keine Performance Snapshot Daten",
+    "appDescription": "Creative Intelligence für Meta Ads"
   },
   "creatives": {
     "searchCreativesPlaceholder": "Suche nach Name, Copy, CTA, Meta ID",
@@ -45,7 +52,6 @@
     "librarySubtitle": "Alle Meta Creatives, Performance KPIs und AI Analysen an einem Ort.",
     "rankingTitle": "Creative Ranking",
     "gridTitle": "Creative Grid",
-    "dateRangeError": "Startdatum darf nicht nach dem Enddatum liegen.",
     "noneSyncedTitle": "Noch keine Creatives synchronisiert",
     "noneSyncedDescription": "Starte im Kundendashboard den Meta Sync, um Creatives zu laden.",
     "adCount": "{count} Ads",
@@ -102,12 +108,12 @@
     "emotionFomo": "FOMO",
     "analyzeError": "Creative konnte nicht analysiert werden.",
     "analysisSaved": "Creative Analyse gespeichert.",
-    "analyzing": "Analysiert...",
+    "analyzing": "Analysiert…",
     "reanalyze": "Neu analysieren",
     "startAiAnalysis": "AI Analyse starten",
     "transcribeError": "Video konnte nicht transkribiert werden.",
     "transcriptSaved": "Video-Transcript gespeichert.",
-    "transcribing": "Transkribiert...",
+    "transcribing": "Transkribiert…",
     "updateTranscript": "Transcript aktualisieren",
     "transcribeVideo": "Video transkribieren",
     "bulkConfirm": "{count} Creatives im Hintergrund neu analysieren? Das startet {count} AI-Anfragen und kann Kosten verursachen.",
@@ -283,7 +289,7 @@
     "checkBatches": "Batches prüfen",
     "checkFailed": "Batch Check fehlgeschlagen.",
     "checkSaved": "Batch Check gespeichert: {count} Ordner geprüft.",
-    "checking": "Prüft...",
+    "checking": "Prüft…",
     "check": "Überprüfen",
     "settingsSaveError": "Batch Settings konnten nicht gespeichert werden.",
     "folderSaved": "Drive Ordner gespeichert.",
@@ -303,7 +309,6 @@
   },
   "angles": {
     "subtitle": "Messaging-Angles auf Adset-Basis, mit Creative-Signalen erkannt und Adset-Performance bewertet.",
-    "aiAnalyzed": "AI analysiert",
     "avgPoints": "Ø Punkte",
     "rankingDescription": "Punktestand kombiniert Adset Performance und Erkennungs-Sicherheit des dominanten Angles.",
     "noAnglesTitle": "Noch keine Angles",
@@ -368,7 +373,6 @@
   "ideas": {
     "subtitle": "Hook Intelligence, Meta-Ads-Learnings und neue Creative-Ideen für Reels und Static Images.",
     "savedIdeas": "Gespeicherte Ideen",
-    "aiAnalyzed": "AI analysiert",
     "activeMetaAds": "Aktive Meta Ads",
     "generateTitle": "Neue Ideen generieren",
     "generateDescription": "OpenRouter nutzt Top-Hooks, schwache Hooks, Meta Campaign Objectives, Adset Optimization Goals und aktive Ads als Kontext.",
@@ -538,7 +542,10 @@
     "generateError": "Competitor Iterations konnten nicht generiert werden.",
     "generatedCount": "{count, plural, one {# neue Competitor Iteration generiert.} other {# neue Competitor Iterations generiert.}}",
     "generatedNone": "Generation abgeschlossen, keine neuen Competitor Iterations erstellt.",
-    "generateButton": "Competitor Iterations generieren"
+    "generateButton": "Competitor Iterations generieren",
+    "statusActive": "Aktiv",
+    "statusDisabled": "Deaktiviert",
+    "statusUnknown": "Unbekannt"
   },
   "knowledge": {
     "title": "Wissensdatenbank",
@@ -566,7 +573,6 @@
   },
   "learning": {
     "subtitle": "Datenbasierte Gewinner-Muster, Fatigue-Signale, neue Hook-/Angle-Chancen und Prediction Scores für Ad Ideas.",
-    "aiAnalyzed": "AI analysiert",
     "generateTitle": "Neue AI-Ideen aus Learnings generieren",
     "generateDescription": "Nutzt OpenRouter mit aktuellen Winner-/Loser-Patterns, Fatigue-Signalen, Opportunities, Hook Insights und Meta-Kontext. Die Ideen werden gespeichert und danach unten im Prediction Board bewertet.",
     "generateButton": "Learning-Ideen generieren",
@@ -594,9 +600,7 @@
     "predictionBoardDescription": "Bestehende Ad Ideas mit prognostischem Score aus Angle-Historie, Hook-Ähnlichkeit und Ideen-Score.",
     "noPredictionsTitle": "Noch keine Predictions",
     "noPredictionsDescription": "Generiere zuerst Ad Ideas. Danach bewertet das Learning System die Launch-Wahrscheinlichkeit.",
-    "sourceLabel": "Quelle: {source}",
-    "whyTitle": "Warum",
-    "risksTitle": "Risiken"
+    "sourceLabel": "Quelle: {source}"
   },
   "predictionTool": {
     "tabAnalysis": "Analyse",
@@ -616,9 +620,7 @@
     "createdAtLine": "Erstellt am {date}",
     "uploadContextTitle": "Upload Kontext",
     "fileLabel": "Datei",
-    "whyTitle": "Warum",
     "strengthsTitle": "Stärken",
-    "risksTitle": "Risiken",
     "improvementsTitle": "Verbesserungen",
     "emotionsTitle": "Emotionen",
     "noHistoricalMatch": "Kein klarer historischer Match",
@@ -645,7 +647,6 @@
     "videoLoadError": "Video konnte nicht geladen werden."
   },
   "metaSettings": {
-    "noAccount": "Kein Meta Account hinterlegt",
     "syncTitle": "Meta synchronisieren",
     "syncButton": "Meta synchronisieren",
     "syncDescription": "Manueller Sync für Kampagnen, Ads, Creatives und Insights im ausgewählten Zeitraum.",
@@ -655,7 +656,6 @@
     "syncDoneWithErrors": "Meta Sync fertig mit {failed, plural, one {# fehlerhaften Zeitraum} other {# fehlerhaften Zeiträumen}}. {insights} Insights gespeichert.",
     "syncComplete": "Meta Sync abgeschlossen: {ads} Ads, {creatives} Creatives, {insights} Insights.",
     "syncResumed": "Meta Sync wird nach Reload fortgesetzt.",
-    "dateRangeError": "Startdatum darf nicht nach dem Enddatum liegen.",
     "syncConfirm": "{count, plural, one {# Zeitraum} other {# Zeiträume}} von {since} bis {until} synchronisieren? Der Sync bleibt nach Reload sichtbar und setzt fort.",
     "fromLabel": "Von",
     "toLabel": "Bis",
@@ -689,7 +689,6 @@
   },
   "clientSettings": {
     "kicker": "Kundeneinstellungen",
-    "noAccount": "Kein Meta Account hinterlegt",
     "saveError": "Kundenprofil konnte nicht gespeichert werden.",
     "saved": "Kundenprofil gespeichert.",
     "generateError": "Kundenprofil konnte nicht generiert werden.",
@@ -701,7 +700,7 @@
     "targetAudience": "Zielgruppe",
     "offers": "Angebote",
     "forbiddenClaims": "Verbotene Claims",
-    "competitorsLabel": "Wettbewerber",
+    "competitors": "Wettbewerber",
     "ctaPreferences": "CTA Präferenzen",
     "saveProfile": "Kundenprofil speichern"
   },
@@ -729,7 +728,6 @@
     "subtitle": "Exportierbare Creative Learnings und Kundenreports.",
     "overviewTitle": "Report Übersicht",
     "clientColumn": "Kunde",
-    "aiAnalyzed": "AI analysiert",
     "action": "Aktion",
     "viewReport": "Report ansehen",
     "noClientsYet": "Noch keine Kunden für Reports vorhanden."

@@ -73,6 +73,7 @@ function dateSearchSuffix(filters: ReturnType<typeof resolveDateFilters>) {
 export default async function ClientCreativesPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<SearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const t = await getTranslations("creatives");
+  const tCommon = await getTranslations("common");
   const dateFilters = resolveDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
   const { creatives, error } = await listClientCreatives(clientId, activeDateRange);
@@ -100,7 +101,7 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
         <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert>
       ) : null}
 
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{t("dateRangeError")}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
 
       <CreativeRankingTable
         clientId={clientId}

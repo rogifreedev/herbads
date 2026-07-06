@@ -37,7 +37,7 @@ function tabHref(clientId: string, tab: "statics" | "videos", dateFilters: Insig
 export default async function IterationsPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<DateFilterSearchParams> }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const t = await getTranslations("iterations");
-  const tCreatives = await getTranslations("creatives");
+  const tCommon = await getTranslations("common");
   const dateFilters = resolveInsightDateFilters(resolvedSearchParams);
   const tab = activeTab(resolvedSearchParams);
   const overview = await getAdIterationsOverview(clientId);
@@ -61,7 +61,7 @@ export default async function IterationsPage({ params, searchParams }: { params:
       <MetaAdsTabs clientId={clientId} active="iterations" />
 
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
-      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCreatives("dateRangeError")}</AlertDescription></Alert> : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 md:grid-cols-3">
         <SummaryCard label="Iterations" value={formatNumber(overview.totals.all)} />
@@ -216,6 +216,7 @@ function StaticIterationsTable({ clientId, rows }: { clientId: string; rows: AdI
 
 function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: AdIteration[] }) {
   const t = useTranslations("iterations");
+  const tCommon = useTranslations("common");
   return (
     <div className="overflow-x-auto rounded-xl border border-herb-border">
       <Table className="min-w-[1240px]">
@@ -244,7 +245,7 @@ function VideoIterationsTable({ clientId, rows }: { clientId: string; rows: AdIt
               <TableCell className="max-w-[360px] text-white/70">
                 {iteration.hook ? <p className="font-medium text-white">{iteration.hook}</p> : null}
                 <p className="mt-2 line-clamp-3">{iteration.script ?? iteration.description ?? "-"}</p>
-                <p className="mt-2 text-xs text-white/40">{iterationPerformanceLine(iteration)}</p>
+                <p className="mt-2 text-xs text-white/40">{iterationPerformanceLine(iteration) ?? tCommon("noPerformanceSnapshot")}</p>
               </TableCell>
               <TableCell className="text-white">{iteration.score === null ? "-" : `${formatNumber(iteration.score)}/100`}</TableCell>
               <TableCell><AdIterationStatusSelect clientId={clientId} iterationId={iteration.id} status={iteration.status} /></TableCell>

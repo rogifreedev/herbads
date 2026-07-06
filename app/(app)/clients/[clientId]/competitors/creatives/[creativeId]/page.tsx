@@ -41,7 +41,7 @@ export default async function CompetitorCreativeDetailPage({ params }: { params:
             <div className="flex flex-wrap items-center gap-2">
               <Badge>{creative.competitorName}</Badge>
               <Badge variant="secondary">{creative.format}</Badge>
-              <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status)}</Badge>
+              <Badge variant={isCompetitorCreativeDisabled(creative.status) ? "destructive" : "success"}>{competitorCreativeStatusLabel(creative.status, t)}</Badge>
               <Badge variant="outline">Score {creative.rankingScore}/100</Badge>
             </div>
           </CardHeader>

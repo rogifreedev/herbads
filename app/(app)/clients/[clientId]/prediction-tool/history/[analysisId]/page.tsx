@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export default async function PredictionHistoryDetailPage({ params }: { params: Promise<{ clientId: string; analysisId: string }> }) {
   const { clientId, analysisId } = await params;
   const t = await getTranslations("predictionTool");
+  const tCommon = await getTranslations("common");
   const { analysis, error } = await getCreativePredictionAnalysis(clientId, analysisId);
 
   if (!analysis) {
@@ -123,11 +124,11 @@ export default async function PredictionHistoryDetailPage({ params }: { params: 
             </Card>
 
             <Card className="border-herb-border bg-herb-surface/90">
-              <CardHeader><CardTitle>{t("whyTitle")}</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{tCommon("whyTitle")}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <ListBlock title="Rationale" items={analysis.rationale} />
                 <ListBlock title={t("strengthsTitle")} items={analysis.ai.strengths} />
-                <ListBlock title={t("risksTitle")} items={analysis.ai.risks} />
+                <ListBlock title={tCommon("risksTitle")} items={analysis.ai.risks} />
                 <ListBlock title={t("improvementsTitle")} items={analysis.ai.recommendations} />
               </CardContent>
             </Card>

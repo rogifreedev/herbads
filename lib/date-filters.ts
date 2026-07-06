@@ -3,7 +3,7 @@ export type DateFilterSearchParams = Record<string, string | string[] | undefine
 export type InsightDateRange = {
   since: string | null;
   until: string | null;
-  dateError?: string | null;
+  dateError?: boolean;
   range?: "all" | null;
 };
 
@@ -37,6 +37,7 @@ export function resolveInsightDateFilters(searchParams: DateFilterSearchParams, 
   const hasExplicitDateRange = Boolean(firstSearchParam(searchParams.since) || firstSearchParam(searchParams.until));
   const since = isAllRange ? null : dateParam(searchParams.since) ?? (hasExplicitDateRange ? null : dateDaysAgo(defaultDays));
   const until = isAllRange ? null : dateParam(searchParams.until) ?? (hasExplicitDateRange ? null : formatDateInput(new Date()));
-  const dateError = since && until && since > until ? "Startdatum darf nicht nach dem Enddatum liegen." : null;
+  // Truthiness flag only; pages render their own translated message (common.dateRangeError).
+  const dateError = Boolean(since && until && since > until);
   return { since, until, dateError, range: isAllRange ? "all" : null };
 }

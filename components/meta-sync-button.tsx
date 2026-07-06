@@ -156,7 +156,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
   async function sync() {
     if (!since || !until) return;
     if (since > until) {
-      toast.error(t("dateRangeError"));
+      toast.error(tCommon("dateRangeError"));
       return;
     }
 

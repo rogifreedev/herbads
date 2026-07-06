@@ -13,6 +13,7 @@ import { formatCurrency, formatDecimal, formatNumber, formatPercent } from "@/li
 export default async function AdIdeasPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params;
   const t = await getTranslations("ideas");
+  const tCommon = await getTranslations("common");
   const overview = await getAdIdeasOverview(clientId);
 
   return (
@@ -27,7 +28,7 @@ export default async function AdIdeasPage({ params }: { params: Promise<{ client
       <section className="grid gap-4 md:grid-cols-4">
         <SummaryCard label={t("savedIdeas")} value={formatNumber(overview.totals.ideas)} />
         <SummaryCard label="Hook Patterns" value={formatNumber(overview.totals.hooks)} />
-        <SummaryCard label={t("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
+        <SummaryCard label={tCommon("aiAnalyzed")} value={formatNumber(overview.totals.analyzedCreatives)} />
         <SummaryCard label={t("activeMetaAds")} value={formatNumber(overview.totals.activeAds)} />
       </section>
 
