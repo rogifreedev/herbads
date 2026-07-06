@@ -1,0 +1,41 @@
+{
+  "common": {
+    "loading": "Caricamento…",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "search": "Cerca",
+    "noData": "Nessun dato"
+  },
+  "topbar": {
+    "subtitle": "Performance dell'agenzia e Creative Intelligence",
+    "metaSynced": "Meta sincronizzato",
+    "notifications": "Notifiche",
+    "settings": "Impostazioni",
+    "logout": "Esci",
+    "language": "Lingua",
+    "german": "Deutsch",
+    "italian": "Italiano"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "metaAds": "META Ads",
+    "creatives": "Creatives",
+    "iterations": "Iterations",
+    "settings": "Impostazioni",
+    "competitors": "Competitors",
+    "predictionTool": "Prediction Tool",
+    "analysis": "Analisi",
+    "history": "Cronologia",
+    "batches": "Batches",
+    "reports": "Report",
+    "clients": "Clienti",
+    "clientProfile": "Profilo cliente",
+    "knowledgeBase": "Base di conoscenza",
+    "appSettings": "Impostazioni app",
+    "brandTagline": "Creative Intelligence",
+    "metaSync": "Meta Sync",
+    "dailySyncReady": "Sync giornaliero pronto",
+    "live": "Live",
+    "library": "Library"
+  }
+}

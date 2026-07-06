@@ -1,0 +1,41 @@
+{
+  "common": {
+    "loading": "Lädt…",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "search": "Suchen",
+    "noData": "Keine Daten"
+  },
+  "topbar": {
+    "subtitle": "Agenturweite Performance und Creative Intelligence",
+    "metaSynced": "Meta synced",
+    "notifications": "Benachrichtigungen",
+    "settings": "Einstellungen",
+    "logout": "Abmelden",
+    "language": "Sprache",
+    "german": "Deutsch",
+    "italian": "Italiano"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "metaAds": "META Ads",
+    "creatives": "Creatives",
+    "iterations": "Iterations",
+    "settings": "Einstellungen",
+    "competitors": "Competitors",
+    "predictionTool": "Prediction Tool",
+    "analysis": "Analyse",
+    "history": "History",
+    "batches": "Batches",
+    "reports": "Reports",
+    "clients": "Kunden",
+    "clientProfile": "Kundenprofil",
+    "knowledgeBase": "Wissensdatenbank",
+    "appSettings": "App Einstellungen",
+    "brandTagline": "Creative Intelligence",
+    "metaSync": "Meta Sync",
+    "dailySyncReady": "Daily Sync bereit",
+    "live": "Live",
+    "library": "Library"
+  }
+}
