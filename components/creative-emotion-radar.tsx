@@ -42,7 +42,7 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
     .join(" ");
 
   return (
-    <div className="rounded-xl border border-herb-border bg-black/20 p-4">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-xs)]">
       <div className="flex flex-col gap-4">
         <div className="mx-auto w-full max-w-[320px]">
           <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Emotion Radar Chart" className="h-auto w-full">
@@ -54,7 +54,7 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
                   return `${point.x},${point.y}`;
                 }).join(" ")}
                 fill="none"
-                stroke="rgba(255,255,255,0.12)"
+                stroke="hsl(var(--border))"
                 strokeWidth="1"
               />
             ))}
@@ -65,25 +65,25 @@ export function CreativeEmotionRadar({ scores }: { scores: CreativeEmotionScores
 
               return (
                 <g key={emotion.key}>
-                  <line x1={center} y1={center} x2={end.x} y2={end.y} stroke="rgba(255,255,255,0.16)" strokeWidth="1" />
-                  <text x={label.x} y={label.y} textAnchor={anchor} dominantBaseline="middle" className="fill-white/60 text-[11px] font-medium">
+                  <line x1={center} y1={center} x2={end.x} y2={end.y} stroke="hsl(var(--muted-foreground) / 0.28)" strokeWidth="1" />
+                  <text x={label.x} y={label.y} textAnchor={anchor} dominantBaseline="middle" className="fill-muted-foreground text-[11px] font-medium">
                     {emotion.shortLabel}
                   </text>
                 </g>
               );
             })}
-            <polygon points={valuePoints} fill="rgba(229,31,118,0.28)" stroke="#e51f76" strokeWidth="2" />
+            <polygon points={valuePoints} fill="hsl(var(--primary) / 0.22)" stroke="hsl(var(--primary))" strokeWidth="2" />
             {emotions.map((emotion, index) => {
               const point = polarPoint(center, radius, index, total, scoreValue(scores, emotion.key) / 100);
-              return <circle key={emotion.key} cx={point.x} cy={point.y} r="4" fill="#e51f76" stroke="white" strokeOpacity="0.8" strokeWidth="1" />;
+              return <circle key={emotion.key} cx={point.x} cy={point.y} r="4" fill="hsl(var(--primary))" stroke="hsl(var(--card))" strokeWidth="1.5" />;
             })}
           </svg>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
           {emotions.map((emotion) => (
-            <div key={emotion.key} className="min-w-0 rounded-lg bg-white/[0.03] px-3 py-2">
-              <p className="text-xs text-white/45">{emotion.label}</p>
-              <p className="mt-1 whitespace-nowrap font-heading text-xl text-white 2xl:text-2xl">{scoreValue(scores, emotion.key)}/100</p>
+            <div key={emotion.key} className="min-w-0 rounded-lg border border-border bg-secondary/70 px-3 py-2">
+              <p className="text-xs text-muted-foreground">{emotion.label}</p>
+              <p className="mt-1 whitespace-nowrap font-heading text-xl text-foreground 2xl:text-2xl">{scoreValue(scores, emotion.key)}/100</p>
             </div>
           ))}
         </div>
