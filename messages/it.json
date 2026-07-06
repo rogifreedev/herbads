@@ -546,7 +546,7 @@
     "documentsTitle": "Documenti",
     "noDocumentsTitle": "Ancora nessun documento",
     "noDocumentsDescription": "Carica TXT, Markdown, JSON, PDF o DOCX. I file vengono salvati, suddivisi in chunk di conoscenza e opzionalmente indicizzati con embedding.",
-    "chunkCount": "{count} Chunks",
+    "chunkCount": "{count, plural, one {# chunk} other {# chunks}}",
     "uploadError": "Impossibile caricare il documento di conoscenza.",
     "uploadSuccess": "Documento di conoscenza salvato e indicizzato.",
     "uploadTitle": "Carica documento",
@@ -647,6 +647,7 @@
   "metaSettings": {
     "noAccount": "Nessun account Meta configurato",
     "syncTitle": "Sincronizza Meta",
+    "syncButton": "Sincronizza Meta",
     "syncDescription": "Sync manuale per campagne, ads, creatives e insights nel periodo selezionato.",
     "requestFailed": "Richiesta fallita",
     "rangeError": "{since} – {until}: {message}",

@@ -546,7 +546,7 @@
     "documentsTitle": "Dokumente",
     "noDocumentsTitle": "Noch keine Dokumente",
     "noDocumentsDescription": "Lade TXT, Markdown, JSON, PDF oder DOCX hoch. Die Dateien werden gespeichert, in Wissens-Chunks zerlegt und optional mit Embeddings indexiert.",
-    "chunkCount": "{count} Chunks",
+    "chunkCount": "{count, plural, one {# Chunk} other {# Chunks}}",
     "uploadError": "Wissensdokument konnte nicht hochgeladen werden.",
     "uploadSuccess": "Wissensdokument gespeichert und indexiert.",
     "uploadTitle": "Dokument hochladen",
@@ -647,6 +647,7 @@
   "metaSettings": {
     "noAccount": "Kein Meta Account hinterlegt",
     "syncTitle": "Meta synchronisieren",
+    "syncButton": "Meta synchronisieren",
     "syncDescription": "Manueller Sync für Kampagnen, Ads, Creatives und Insights im ausgewählten Zeitraum.",
     "requestFailed": "Request fehlgeschlagen",
     "rangeError": "{since} bis {until}: {message}",

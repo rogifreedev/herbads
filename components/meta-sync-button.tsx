@@ -196,7 +196,7 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
       </div>
       <Button type="button" variant="gradient" onClick={sync} disabled={loading || !since || !until}>
         <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        {loading ? t("syncing") : t("syncTitle")}
+        {loading ? t("syncing") : t("syncButton")}
       </Button>
       {loading ? (
         <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 text-xs text-white/70">
