@@ -92,6 +92,33 @@
     background: hsl(var(--primary) / 0.18);
     color: hsl(var(--foreground));
   }
+
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  th {
+    border-bottom: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  td {
+    border-bottom: 1px solid hsl(var(--border) / 0.8);
+    color: hsl(var(--foreground));
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody tr:hover {
+    background-color: hsl(var(--primary) / 0.05);
+  }
 }
 
 @layer utilities {
@@ -102,6 +129,15 @@
 
   .herb-glow {
     box-shadow: var(--shadow-brand);
+  }
+
+  .herb-row:hover {
+    background-color: hsl(var(--primary) / 0.05) !important;
+  }
+
+  .herb-table-surface .bg-white\/\[0\.03\],
+  .herb-table-surface .bg-white\/\[0\.05\] {
+    background-color: transparent !important;
   }
 
   .text-white {

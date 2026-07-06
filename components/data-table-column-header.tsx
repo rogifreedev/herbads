@@ -19,12 +19,12 @@ export function DataTableColumnHeader<TData, TValue>({ column, title, className 
     <div className={cn("flex items-center gap-2", className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="-ml-3 h-8 text-white/60 hover:text-white data-[state=open]:bg-secondary">
+          <Button variant="ghost" size="sm" className="-ml-3 h-8 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground hover:bg-primary/5 hover:text-foreground data-[state=open]:bg-primary/10">
             <span>{title}</span>
             {column.getIsSorted() === "desc" ? <ArrowDown className="ml-2 h-4 w-4" /> : column.getIsSorted() === "asc" ? <ArrowUp className="ml-2 h-4 w-4" /> : <ChevronsUpDown className="ml-2 h-4 w-4" />}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="border-herb-border bg-herb-surface text-white">
+        <DropdownMenuContent align="start" className="border-border bg-popover text-popover-foreground">
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
             <ArrowUp className="mr-2 h-4 w-4" />
             Aufsteigend

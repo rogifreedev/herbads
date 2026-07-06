@@ -78,12 +78,12 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
           {toolbarActions}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="border-herb-border">
+              <Button variant="outline" size="sm" className="border-border">
                 <Settings2 className="mr-2 h-4 w-4" />
                 Spalten
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-herb-border bg-herb-surface text-white">
+            <DropdownMenuContent align="end" className="border-border bg-popover text-popover-foreground">
               <DropdownMenuLabel>Spalten anzeigen</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {table
@@ -98,9 +98,9 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
           </DropdownMenu>
         </div>
       </div>
-      <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-herb-border">
+      <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-sm)]">
         <Table className={cn(minWidthClassName)}>
-          <TableHeader className="bg-white/[0.03]">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => (
@@ -120,7 +120,7 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-white/55">
+                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                   {emptyLabel}
                 </TableCell>
               </TableRow>
@@ -128,16 +128,16 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel = "Keine Er
           </TableBody>
         </Table>
       </div>
-      <div className="flex flex-col gap-3 text-sm text-white/55 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <span>{formatNumber(table.getFilteredRowModel().rows.length)} Zeilen</span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="border-herb-border" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          <Button variant="outline" size="sm" className="border-border" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
             Zurueck
           </Button>
           <span className="min-w-24 text-center">
             Seite {table.getState().pagination.pageIndex + 1} von {Math.max(1, table.getPageCount())}
           </span>
-          <Button variant="outline" size="sm" className="border-herb-border" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          <Button variant="outline" size="sm" className="border-border" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
             Weiter
           </Button>
         </div>
