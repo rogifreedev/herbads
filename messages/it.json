@@ -1,4 +1,4 @@
-{
+﻿{
   "common": {
     "loading": "Caricamento…",
     "save": "Salva",
@@ -429,7 +429,7 @@
     "noLandingpagesFound": "Nessuna landingpage trovata",
     "noLandingpagesDescription": "Nessun Competitor Ad crawlato contiene ancora un URL di landingpage.",
     "activeCount": "{count} attivi",
-    "disabledCount": "{count} disabled",
+    "disabledCount": "{count} disattivate",
     "viewCreative": "Vedi Creative",
     "avgDaysColumn": "Ø giorni",
     "firstStart": "Primo start",
