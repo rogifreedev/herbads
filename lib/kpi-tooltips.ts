@@ -1,4 +1,4 @@
-const kpiTooltipKeys: Record<string, string> = {
+export const kpiTooltipKeys: Record<string, string> = {
   "Creative Score": "creativeScore",
   Spend: "spend",
   ROAS: "roas",

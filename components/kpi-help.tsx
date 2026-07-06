@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { kpiTooltipKey } from "@/lib/kpi-tooltips";
 
-export function KpiHelp({ label, description }: { label: string; description?: string | null }) {
+export function KpiHelp({ label, description, tooltipKey }: { label: string; description?: string | null; tooltipKey?: string | null }) {
   const t = useTranslations("kpi");
-  const tooltipKey = kpiTooltipKey(label);
-  const content = description ?? (tooltipKey ? t(tooltipKey) : null);
+  const resolvedTooltipKey = tooltipKey ?? kpiTooltipKey(label);
+  const content = description ?? (resolvedTooltipKey ? t(resolvedTooltipKey) : null);
   if (!content) return null;
 
   return (

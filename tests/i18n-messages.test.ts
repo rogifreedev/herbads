@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import deMessages from "@/messages/de.json";
 import itMessages from "@/messages/it.json";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, isSupportedLocale } from "@/lib/i18n-locales";
+import { kpiTooltipKeys } from "@/lib/kpi-tooltips";
 import { navItems } from "@/lib/navigation";
 import { getPageTitle } from "@/lib/routes";
 
@@ -47,6 +48,11 @@ describe("message key existence", () => {
   it("every nav item title (including children) resolves in the de catalog", () => {
     const titles = navItems.flatMap((item) => [item.title, ...(item.children?.map((child) => child.title) ?? [])]);
     const missing = titles.filter((title) => typeof resolveKey(deMessages, `nav.${title}`) !== "string");
+    expect(missing).toEqual([]);
+  });
+
+  it("every kpi tooltip key resolves in the de catalog", () => {
+    const missing = Object.values(kpiTooltipKeys).filter((key) => typeof resolveKey(deMessages, `kpi.${key}`) !== "string");
     expect(missing).toEqual([]);
   });
 
