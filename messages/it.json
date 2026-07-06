@@ -27,14 +27,16 @@
     "allWithCount": "Tutti ({count})",
     "type": "Tipo",
     "sortBy": "Ordinamento",
-    "firstActive": "Prima attivazione",
+    "countOfTotal": "{filtered} di {total}"
+  },
+  "creatives": {
     "searchCreativesPlaceholder": "Cerca per nome, copy, CTA, ID Meta",
     "noCreativesForSelection": "Nessuna creative per la selezione attuale.",
     "noSampleCreatives": "Nessuna creative di esempio.",
-    "countOfTotal": "{filtered} di {total}",
+    "firstActive": "Prima attivazione",
+    "minimumValues": "Valori minimi di performance",
     "values": "Valori",
-    "valuesActive": "Valori attivi",
-    "minimumValues": "Valori minimi di performance"
+    "valuesActive": "Valori attivi"
   },
   "clients": {
     "title": "Clienti",

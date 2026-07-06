@@ -82,7 +82,7 @@ function FilterDropdown({ label, activeLabel, children }: { label: string; activ
   );
 }
 
-function realColumns(t: Translator, clientId?: string, detailHrefSuffix = ""): ColumnDef<CreativeListItem>[] {
+function realColumns(t: Translator, tCommon: Translator, clientId?: string, detailHrefSuffix = ""): ColumnDef<CreativeListItem>[] {
   return [
     {
       accessorKey: "name",
@@ -114,9 +114,9 @@ function realColumns(t: Translator, clientId?: string, detailHrefSuffix = ""): C
     },
     {
       accessorKey: "type",
-      header: t("type"),
+      header: tCommon("type"),
       cell: ({ row }) => <CreativeTypeBadge type={row.original.type} />,
-      meta: { label: t("type") }
+      meta: { label: tCommon("type") }
     },
     {
       accessorKey: "funnelStage",
@@ -236,10 +236,10 @@ function realColumns(t: Translator, clientId?: string, detailHrefSuffix = ""): C
   ];
 }
 
-function mockColumns(t: Translator): ColumnDef<MockCreativeRow>[] {
+function mockColumns(tCommon: Translator): ColumnDef<MockCreativeRow>[] {
   return [
     { accessorKey: "name", header: "Creative", cell: ({ row }) => <span className="text-white">{row.original.name}</span>, meta: { label: "Creative" } },
-    { accessorKey: "type", header: t("type"), cell: ({ row }) => <CreativeTypeBadge type={row.original.type} />, meta: { label: t("type") } },
+    { accessorKey: "type", header: tCommon("type"), cell: ({ row }) => <CreativeTypeBadge type={row.original.type} />, meta: { label: tCommon("type") } },
     { accessorKey: "ctr", header: "CTR", cell: ({ row }) => <span className="text-primary">{row.original.ctr}</span>, meta: { label: "CTR" } },
     { accessorKey: "roas", header: "ROAS", cell: ({ row }) => <span className="text-white">{row.original.roas}</span>, meta: { label: "ROAS" } },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge variant={row.original.status === "Top Performer" ? "success" : "secondary"}>{row.original.status}</Badge>, meta: { label: "Status" } }
@@ -247,7 +247,8 @@ function mockColumns(t: Translator): ColumnDef<MockCreativeRow>[] {
 }
 
 export function CreativeRankingTable({ clientId, creatives, title = "Top Creatives", detailHrefSuffix = "", currentPage = 1, pageSize = 12 }: CreativeRankingTableProps) {
-  const t = useTranslations("common");
+  const t = useTranslations("creatives");
+  const tCommon = useTranslations("common");
   const hasRealRows = Boolean(creatives);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("all");
@@ -259,6 +260,8 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
   const [minRoas, setMinRoas] = useState("");
   const [minCtr, setMinCtr] = useState("");
   const rows = useMemo(() => creatives ?? [], [creatives]);
+  const columns = useMemo(() => realColumns(t, tCommon, clientId, detailHrefSuffix), [t, tCommon, clientId, detailHrefSuffix]);
+  const sampleColumns = useMemo(() => mockColumns(tCommon), [tCommon]);
   const minScoreValue = numericInput(minScore);
   const minSpendValue = numericInput(minSpend);
   const minRoasValue = numericInput(minRoas);
@@ -288,9 +291,9 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
     .sort((a, b) => sortValue(b, sort) - sortValue(a, sort)), [funnel, minCtrValue, minRoasValue, minScoreValue, minSpendValue, normalizedQuery, rows, sort, status, type]);
   const hasFilters = query || type !== "all" || status !== "ALL" || funnel !== "ALL" || sort !== "spend" || minScore || minSpend || minRoas || minCtr;
   const hasAdvancedFilters = minScore || minSpend || minRoas || minCtr;
-  const typeLabel = type === "all" ? t("all") : type[0].toUpperCase() + type.slice(1);
-  const statusLabel = status === "ALL" ? t("all") : status;
-  const funnelLabel = funnel === "ALL" ? t("all") : funnel;
+  const typeLabel = type === "all" ? tCommon("all") : type[0].toUpperCase() + type.slice(1);
+  const statusLabel = status === "ALL" ? tCommon("all") : status;
+  const funnelLabel = funnel === "ALL" ? tCommon("all") : funnel;
   const sortLabels: Record<SortKey, string> = {
     spend: "Spend",
     score: "Score",
@@ -323,7 +326,7 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
         {hasRealRows ? (
           <>
             <DataTable
-              columns={realColumns(t, clientId, detailHrefSuffix)}
+              columns={columns}
               data={filteredRows}
               pageSize={pageSize}
               initialPageIndex={currentPage - 1}
@@ -334,27 +337,27 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
               }
               toolbarActions={
                 <>
-                  <span className="text-xs text-white/45">{t("countOfTotal", { filtered: formatNumber(filteredRows.length), total: formatNumber(rows.length) })}</span>
-                  <FilterDropdown label={t("type")} activeLabel={typeLabel}>
-                    <FilterChip active={type === "all"} onClick={() => setType("all")}>{t("allWithCount", { count: formatNumber(rows.length) })}</FilterChip>
+                  <span className="text-xs text-white/45">{tCommon("countOfTotal", { filtered: formatNumber(filteredRows.length), total: formatNumber(rows.length) })}</span>
+                  <FilterDropdown label={tCommon("type")} activeLabel={typeLabel}>
+                    <FilterChip active={type === "all"} onClick={() => setType("all")}>{tCommon("allWithCount", { count: formatNumber(rows.length) })}</FilterChip>
                     <FilterChip active={type === "catalog"} onClick={() => setType("catalog")}>Catalog ({formatNumber(typeCounts.catalog ?? 0)})</FilterChip>
                     <FilterChip active={type === "post"} onClick={() => setType("post")}>Post ({formatNumber(typeCounts.post ?? 0)})</FilterChip>
                     <FilterChip active={type === "video"} onClick={() => setType("video")}>Video ({formatNumber(typeCounts.video ?? 0)})</FilterChip>
                     <FilterChip active={type === "image"} onClick={() => setType("image")}>Image ({formatNumber(typeCounts.image ?? 0)})</FilterChip>
                   </FilterDropdown>
                   <FilterDropdown label="Status" activeLabel={statusLabel}>
-                    <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>{t("all")}</FilterChip>
+                    <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>{tCommon("all")}</FilterChip>
                     <FilterChip active={status === "ACTIVE"} onClick={() => setStatus("ACTIVE")}>Active</FilterChip>
                     <FilterChip active={status === "PAUSED"} onClick={() => setStatus("PAUSED")}>Paused</FilterChip>
                     <FilterChip active={status === "UNKNOWN"} onClick={() => setStatus("UNKNOWN")}>Unknown</FilterChip>
                   </FilterDropdown>
                   <FilterDropdown label="Funnel" activeLabel={funnelLabel}>
-                    <FilterChip active={funnel === "ALL"} onClick={() => setFunnel("ALL")}>{t("all")}</FilterChip>
+                    <FilterChip active={funnel === "ALL"} onClick={() => setFunnel("ALL")}>{tCommon("all")}</FilterChip>
                     <FilterChip active={funnel === "TOFU"} onClick={() => setFunnel("TOFU")}>TOFU ({formatNumber(funnelCounts.TOFU ?? 0)})</FilterChip>
                     <FilterChip active={funnel === "MOFU"} onClick={() => setFunnel("MOFU")}>MOFU ({formatNumber(funnelCounts.MOFU ?? 0)})</FilterChip>
                     <FilterChip active={funnel === "BOFU"} onClick={() => setFunnel("BOFU")}>BOFU ({formatNumber(funnelCounts.BOFU ?? 0)})</FilterChip>
                   </FilterDropdown>
-                  <FilterDropdown label={t("sortBy")} activeLabel={sortLabels[sort]}>
+                  <FilterDropdown label={tCommon("sortBy")} activeLabel={sortLabels[sort]}>
                     <FilterChip active={sort === "spend"} onClick={() => setSort("spend")}>Spend</FilterChip>
                     <FilterChip active={sort === "score"} onClick={() => setSort("score")}>Score</FilterChip>
                     <FilterChip active={sort === "roas"} onClick={() => setSort("roas")}>ROAS</FilterChip>
@@ -387,7 +390,7 @@ export function CreativeRankingTable({ clientId, creatives, title = "Top Creativ
             />
           </>
         ) : (
-          <DataTable columns={mockColumns(t)} data={creativeRows} pageSize={pageSize} initialPageIndex={currentPage - 1} emptyLabel={t("noSampleCreatives")} />
+          <DataTable columns={sampleColumns} data={creativeRows} pageSize={pageSize} initialPageIndex={currentPage - 1} emptyLabel={t("noSampleCreatives")} />
         )}
       </CardContent>
     </Card>
