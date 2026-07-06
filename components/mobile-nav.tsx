@@ -12,11 +12,11 @@ export function MobileNav() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-white/70 hover:text-white lg:hidden" aria-label="Navigation öffnen">
+        <Button variant="ghost" size="icon" className="text-foreground/70 hover:text-foreground lg:hidden" aria-label="Navigation öffnen">
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[300px] border-herb-border bg-black p-0">
+      <SheetContent side="left" className="w-[300px] border-herb-border bg-sidebar p-0">
         <SheetTitle className="sr-only">Navigation</SheetTitle>
         <SidebarNav onNavigate={() => setOpen(false)} />
       </SheetContent>

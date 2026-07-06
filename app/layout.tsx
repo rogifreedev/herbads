@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Oswald, Work_Sans } from "next/font/google";
+import { JetBrains_Mono, Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const workSans = Work_Sans({ subsets: ["latin"], variable: "--font-work-sans" });
-const oswald = Oswald({ subsets: ["latin"], variable: "--font-oswald" });
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-plus-jakarta" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
+const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
   title: "Herb Ads",
@@ -17,8 +17,8 @@ export const preferredRegion = "fra1";
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de" className="dark">
-      <body className={`${workSans.variable} ${oswald.variable} ${geistMono.variable}`}>
+    <html lang="de">
+      <body className={`${plusJakartaSans.variable} ${spaceGrotesk.variable} ${jetBrainsMono.variable}`}>
         <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
         <Toaster richColors position="top-right" />
       </body>

@@ -78,9 +78,17 @@ export function ClientSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="hidden min-w-[190px] justify-between border-herb-border bg-herb-surface text-white hover:bg-herb-muted sm:inline-flex">
-          <span className="truncate">{activeClient?.name ?? "Kunde wählen"}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 text-white/45" />
+        <Button variant="outline" className="hidden min-w-[220px] justify-between border-herb-border bg-card text-foreground shadow-[var(--shadow-xs)] hover:bg-secondary sm:inline-flex">
+          <span className="flex min-w-0 items-center gap-2 truncate">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {activeClient?.name.slice(0, 1) ?? "K"}
+            </span>
+            <span className="truncate text-left leading-tight">
+              <span className="block truncate">{activeClient?.name ?? "Kunde wählen"}</span>
+              {activeClient?.adAccountId ? <span className="block truncate font-mono text-[10px] text-muted-foreground">{activeClient.adAccountId}</span> : null}
+            </span>
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">

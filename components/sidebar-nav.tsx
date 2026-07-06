@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +39,10 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl herb-gradient font-heading text-lg font-bold text-white herb-glow">
-            H
-          </div>
+          <Image src="/assets/herb-logo.png" alt="HERB Media" width={42} height={42} className="h-10 w-10 shrink-0 rounded-md object-contain" priority />
           <div className="min-w-0 group-data-[state=collapsed]/sidebar-wrapper:md:hidden">
-            <p className="font-heading text-2xl leading-none">Herb Ads</p>
-            <p className="mt-1 text-xs text-white/55">Creative Intelligence</p>
+            <p className="font-heading text-lg font-semibold leading-none text-foreground">HERB Media</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Creative Intelligence</p>
           </div>
         </div>
       </SidebarHeader>
@@ -60,11 +59,11 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="rounded-xl border border-herb-border bg-herb-surface p-3 group-data-[state=collapsed]/sidebar-wrapper:md:p-2">
+        <div className="rounded-xl border border-herb-border bg-secondary/70 p-3 group-data-[state=collapsed]/sidebar-wrapper:md:p-2">
           <div className="flex items-center justify-between gap-3">
             <div className="group-data-[state=collapsed]/sidebar-wrapper:md:hidden">
-              <p className="text-sm font-medium">Meta Sync</p>
-              <p className="mt-1 text-xs text-white/55">Daily Sync bereit</p>
+              <p className="text-sm font-semibold text-foreground">Meta Sync</p>
+              <p className="mt-1 text-xs text-muted-foreground">Daily Sync bereit</p>
             </div>
             <Badge variant="success">Live</Badge>
           </div>

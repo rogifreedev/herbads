@@ -77,7 +77,7 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <Link href={resolvedHref} prefetch={false} onClick={onNavigate}>
-          {Icon ? <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-white/45")} /> : null}
+          {Icon ? <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-muted-foreground")} /> : null}
           <span className="group-data-[state=collapsed]/sidebar-wrapper:md:hidden">{item.title}</span>
         </Link>
       </SidebarMenuButton>

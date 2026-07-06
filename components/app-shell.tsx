@@ -8,7 +8,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <SidebarNav />
       <SidebarInset>
         <Topbar />
-        <main className="min-h-[calc(100vh-64px)] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto min-h-[calc(100vh-var(--topbar-height))] w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

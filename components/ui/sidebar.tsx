@@ -58,7 +58,7 @@ export function SidebarProvider({ defaultOpen = true, children, className, style
 
 export function Sidebar({ children, className, variant = "sidebar", collapsible = "icon" }: React.HTMLAttributes<HTMLDivElement> & { variant?: "sidebar" | "inset" | "floating"; collapsible?: "icon" | "offcanvas" | "none" }) {
   const { open, openMobile, setOpenMobile } = useSidebar();
-  const desktopWidth = open || collapsible === "none" ? "md:w-[18rem]" : "md:w-[4.75rem]";
+  const desktopWidth = open || collapsible === "none" ? "md:w-[var(--sidebar-width)]" : "md:w-[var(--sidebar-width-icon)]";
 
   return (
     <>
@@ -66,7 +66,7 @@ export function Sidebar({ children, className, variant = "sidebar", collapsible 
         data-sidebar="sidebar"
         data-state={open ? "expanded" : "collapsed"}
         data-variant={variant}
-        className={cn("fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex", desktopWidth, className)}
+        className={cn("fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[var(--shadow-sm)] transition-[width] duration-200 md:flex", desktopWidth, className)}
       >
         {children}
       </aside>
@@ -81,13 +81,13 @@ export function Sidebar({ children, className, variant = "sidebar", collapsible 
 }
 
 export function SidebarInset({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex min-w-0 flex-1 flex-col md:pl-[18rem] group-data-[state=collapsed]/sidebar-wrapper:md:pl-[4.75rem]", className)} {...props} />;
+  return <div className={cn("flex min-w-0 flex-1 flex-col md:pl-[var(--sidebar-width)] group-data-[state=collapsed]/sidebar-wrapper:md:pl-[var(--sidebar-width-icon)]", className)} {...props} />;
 }
 
 export function SidebarTrigger({ className, ...props }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar();
   return (
-    <Button variant="ghost" size="icon" className={cn("h-9 w-9 text-white/70 hover:text-white", className)} onClick={toggleSidebar} {...props}>
+    <Button variant="ghost" size="icon" className={cn("h-9 w-9 text-foreground/60 hover:text-foreground", className)} onClick={toggleSidebar} {...props}>
       <PanelLeft className="h-5 w-5" />
       <span className="sr-only">Sidebar umschalten</span>
     </Button>
@@ -132,7 +132,7 @@ export function SidebarMenuButton({ className, isActive, asChild = false, ...pro
     <Comp
       data-active={isActive}
       className={cn(
-        "flex min-h-9 w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-primary/15 data-[active=true]:text-white group-data-[state=collapsed]/sidebar-wrapper:md:justify-center group-data-[state=collapsed]/sidebar-wrapper:md:px-2",
+        "flex min-h-9 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-sidebar-foreground/72 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground group-data-[state=collapsed]/sidebar-wrapper:md:justify-center group-data-[state=collapsed]/sidebar-wrapper:md:px-2",
         className
       )}
       {...props}
@@ -150,7 +150,7 @@ export function SidebarMenuSubItem({ className, ...props }: React.HTMLAttributes
 
 export function SidebarMenuSubButton({ className, isActive, asChild = false, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { isActive?: boolean; asChild?: boolean }) {
   const Comp = asChild ? Slot : "a";
-  return <Comp data-active={isActive} className={cn("block rounded-lg px-3 py-2 text-sm text-sidebar-foreground/55 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-primary/10 data-[active=true]:text-primary", className)} {...props} />;
+  return <Comp data-active={isActive} className={cn("block rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/58 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary", className)} {...props} />;
 }
 
 export function SidebarRail({ className, ...props }: React.HTMLAttributes<HTMLButtonElement>) {
