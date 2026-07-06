@@ -15,6 +15,7 @@ import { getPageTitle } from "@/lib/routes";
 export function Topbar() {
   const pathname = usePathname();
   const t = useTranslations("topbar");
+  const tRoot = useTranslations();
 
   return (
     <header className="sticky top-0 z-30 flex h-[var(--topbar-height)] items-center justify-between border-b border-herb-border bg-card/90 px-4 shadow-[var(--shadow-xs)] backdrop-blur-xl sm:px-6 lg:px-8">
@@ -22,7 +23,7 @@ export function Topbar() {
         <SidebarTrigger className="-ml-2" />
         <Separator orientation="vertical" className="hidden h-4 sm:block" />
         <div className="min-w-0">
-          <h1 className="truncate font-heading text-xl font-semibold leading-none text-foreground">{getPageTitle(pathname)}</h1>
+          <h1 className="truncate font-heading text-xl font-semibold leading-none text-foreground">{tRoot(getPageTitle(pathname))}</h1>
           <p className="mt-1 hidden text-xs text-muted-foreground sm:block">{t("subtitle")}</p>
         </div>
       </div>

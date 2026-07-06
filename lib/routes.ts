@@ -31,28 +31,28 @@ export function replaceClientInPath(pathname: string, nextClientId: string) {
   return `/clients/${nextClientId}`;
 }
 
-export function getPageTitle(pathname: string) {
-  if (pathname.startsWith("/clients") && pathname.includes("/creatives/landingpages")) return "Landingpages";
-  if (pathname.startsWith("/clients") && pathname.includes("/creatives/batches")) return "Batch Performance";
-  if (pathname.startsWith("/clients") && pathname.includes("/learning")) return "Creative Learning";
-  if (pathname.startsWith("/clients") && pathname.includes("/competitors/iterations")) return "Competitor Iterations";
-  if (pathname.startsWith("/clients") && pathname.includes("/iterations")) return "Iterations";
-  if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool/history")) return "Prediction History";
-  if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool")) return "Prediction Tool";
-  if (pathname.startsWith("/clients") && pathname.includes("/batches/settings")) return "Batch Settings";
-  if (pathname.startsWith("/clients") && pathname.includes("/batches")) return "Batches";
-  if (pathname.startsWith("/clients") && pathname.includes("/adsets/")) return "Ad Set";
-  if (pathname.startsWith("/clients") && pathname.includes("/creatives")) return "Creatives";
-  if (pathname.startsWith("/clients") && pathname.includes("/angles")) return "Creative Angles";
-  if (pathname.startsWith("/clients") && pathname.includes("/ideas")) return "Ad Ideas";
-  if (pathname.startsWith("/clients") && pathname.includes("/competitors")) return "Competitors";
-  if (pathname.startsWith("/clients") && pathname.includes("/meta/settings")) return "META Ads Settings";
-  if (pathname.startsWith("/clients") && pathname.includes("/knowledge")) return "Wissensdatenbank";
-  if (pathname.startsWith("/clients") && pathname.includes("/settings")) return "Kundeneinstellungen";
-  if (pathname.startsWith("/clients/")) return "Kunden-Dashboard";
-  if (pathname === "/clients") return "Kunden";
-  if (pathname.startsWith("/analysis")) return "META Ads";
-  if (pathname.startsWith("/reports")) return "Reports";
-  if (pathname.startsWith("/settings")) return "Einstellungen";
-  return "Dashboard";
+export function getPageTitle(pathname: string): string {
+  if (pathname.startsWith("/clients") && pathname.includes("/creatives/landingpages")) return "nav.landingpages";
+  if (pathname.startsWith("/clients") && pathname.includes("/creatives/batches")) return "nav.batchPerformance";
+  if (pathname.startsWith("/clients") && pathname.includes("/learning")) return "nav.creativeLearning";
+  if (pathname.startsWith("/clients") && pathname.includes("/competitors/iterations")) return "nav.competitorIterations";
+  if (pathname.startsWith("/clients") && pathname.includes("/iterations")) return "nav.iterations";
+  if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool/history")) return "nav.predictionHistory";
+  if (pathname.startsWith("/clients") && pathname.includes("/prediction-tool")) return "nav.predictionTool";
+  if (pathname.startsWith("/clients") && pathname.includes("/batches/settings")) return "nav.batchSettings";
+  if (pathname.startsWith("/clients") && pathname.includes("/batches")) return "nav.batches";
+  if (pathname.startsWith("/clients") && pathname.includes("/adsets/")) return "nav.adSet";
+  if (pathname.startsWith("/clients") && pathname.includes("/creatives")) return "nav.creatives";
+  if (pathname.startsWith("/clients") && pathname.includes("/angles")) return "nav.creativeAngles";
+  if (pathname.startsWith("/clients") && pathname.includes("/ideas")) return "nav.adIdeas";
+  if (pathname.startsWith("/clients") && pathname.includes("/competitors")) return "nav.competitors";
+  if (pathname.startsWith("/clients") && pathname.includes("/meta/settings")) return "nav.metaAdsSettings";
+  if (pathname.startsWith("/clients") && pathname.includes("/knowledge")) return "nav.knowledgeBase";
+  if (pathname.startsWith("/clients") && pathname.includes("/settings")) return "nav.clientSettings";
+  if (pathname.startsWith("/clients/")) return "nav.clientDashboard";
+  if (pathname === "/clients") return "nav.clients";
+  if (pathname.startsWith("/analysis")) return "nav.metaAds";
+  if (pathname.startsWith("/reports")) return "nav.reports";
+  if (pathname.startsWith("/settings")) return "nav.settings";
+  return "nav.dashboard";
 }

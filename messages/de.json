@@ -36,6 +36,18 @@
     "metaSync": "Meta Sync",
     "dailySyncReady": "Daily Sync bereit",
     "live": "Live",
-    "library": "Library"
+    "library": "Library",
+    "landingpages": "Landingpages",
+    "batchPerformance": "Batch Performance",
+    "creativeLearning": "Creative Learning",
+    "competitorIterations": "Competitor Iterations",
+    "predictionHistory": "Prediction History",
+    "batchSettings": "Batch Settings",
+    "adSet": "Ad Set",
+    "creativeAngles": "Creative Angles",
+    "adIdeas": "Ad Ideas",
+    "metaAdsSettings": "META Ads Settings",
+    "clientSettings": "Kundeneinstellungen",
+    "clientDashboard": "Kunden-Dashboard"
   }
 }

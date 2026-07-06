@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { ChartNoAxesCombined, FileText, FolderKanban, LayoutDashboard, Sparkles, Swords, Settings } from "lucide-react";
 
 export type NavItem = {
+  /** Message key within the "nav" namespace. */
   title: string;
   href: string;
   icon?: LucideIcon;
@@ -11,12 +12,12 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   {
-    title: "Dashboard",
+    title: "dashboard",
     href: "/dashboard",
     icon: LayoutDashboard
   },
   {
-    title: "META Ads",
+    title: "metaAds",
     href: "/clients/[clientId]",
     icon: ChartNoAxesCombined,
     activeHrefs: [
@@ -26,56 +27,56 @@ export const navItems: NavItem[] = [
       "/clients/[clientId]/creatives/landingpages"
     ],
     children: [
-      { title: "Creatives", href: "/clients/[clientId]" },
-      { title: "Iterations", href: "/clients/[clientId]/iterations" },
-      { title: "Settings", href: "/clients/[clientId]/meta/settings" }
+      { title: "creatives", href: "/clients/[clientId]" },
+      { title: "iterations", href: "/clients/[clientId]/iterations" },
+      { title: "settings", href: "/clients/[clientId]/meta/settings" }
     ]
   },
   {
-    title: "Competitors",
+    title: "competitors",
     href: "/clients/[clientId]/competitors/creatives",
     icon: Swords,
     children: [
-      { title: "Creatives", href: "/clients/[clientId]/competitors/creatives" },
-      { title: "Iterations", href: "/clients/[clientId]/competitors/iterations" },
-      { title: "Settings", href: "/clients/[clientId]/competitors/settings" }
+      { title: "creatives", href: "/clients/[clientId]/competitors/creatives" },
+      { title: "iterations", href: "/clients/[clientId]/competitors/iterations" },
+      { title: "settings", href: "/clients/[clientId]/competitors/settings" }
     ]
   },
   {
-    title: "Prediction Tool",
+    title: "predictionTool",
     href: "/clients/[clientId]/prediction-tool",
     icon: Sparkles,
     activeHrefs: [
       "/clients/[clientId]/prediction-tool"
     ],
     children: [
-      { title: "Analyse", href: "/clients/[clientId]/prediction-tool" },
-      { title: "History", href: "/clients/[clientId]/prediction-tool/history" }
+      { title: "analysis", href: "/clients/[clientId]/prediction-tool" },
+      { title: "history", href: "/clients/[clientId]/prediction-tool/history" }
     ]
   },
   {
-    title: "Batches",
+    title: "batches",
     href: "/clients/[clientId]/batches",
     icon: FolderKanban,
     children: [
-      { title: "Batches", href: "/clients/[clientId]/batches" },
-      { title: "Settings", href: "/clients/[clientId]/batches/settings" }
+      { title: "batches", href: "/clients/[clientId]/batches" },
+      { title: "settings", href: "/clients/[clientId]/batches/settings" }
     ]
   },
   {
-    title: "Reports",
+    title: "reports",
     href: "/reports",
     icon: FileText
   },
   {
-    title: "Einstellungen",
+    title: "settings",
     href: "/settings",
     icon: Settings,
     children: [
-      { title: "Kunden", href: "/clients" },
-      { title: "Kundenprofil", href: "/clients/[clientId]/settings" },
-      { title: "Wissensdatenbank", href: "/clients/[clientId]/knowledge" },
-      { title: "App Einstellungen", href: "/settings" }
+      { title: "clients", href: "/clients" },
+      { title: "clientProfile", href: "/clients/[clientId]/settings" },
+      { title: "knowledgeBase", href: "/clients/[clientId]/knowledge" },
+      { title: "appSettings", href: "/settings" }
     ]
   },
 ];

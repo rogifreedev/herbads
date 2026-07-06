@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   SidebarMenuButton,
@@ -24,6 +25,7 @@ type SidebarNavItemProps = {
 
 export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavItemProps) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
   const Icon = item.icon;
   const resolvedHref = resolveClientHref(item.href, activeClientId);
   const hasChildren = Boolean(item.children?.length);
@@ -48,7 +50,7 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
           <CollapsibleTrigger asChild>
             <SidebarMenuButton isActive={isActive}>
               {Icon ? <Icon className="h-4 w-4 text-primary" /> : null}
-              <span className="flex-1 text-left group-data-[state=collapsed]/sidebar-wrapper:md:hidden">{item.title}</span>
+              <span className="flex-1 text-left group-data-[state=collapsed]/sidebar-wrapper:md:hidden">{t(item.title)}</span>
               <ChevronDown className={cn("h-4 w-4 transition-transform group-data-[state=collapsed]/sidebar-wrapper:md:hidden", open && "rotate-180")} />
             </SidebarMenuButton>
           </CollapsibleTrigger>
@@ -61,7 +63,7 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
                 return (
                   <SidebarMenuSubItem key={child.title}>
                     <SidebarMenuSubButton asChild isActive={childActive}>
-                      <Link href={childHref} prefetch={false} onClick={onNavigate}>{child.title}</Link>
+                      <Link href={childHref} prefetch={false} onClick={onNavigate}>{t(child.title)}</Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                 );
@@ -78,7 +80,7 @@ export function SidebarNavItem({ item, activeClientId, onNavigate }: SidebarNavI
       <SidebarMenuButton asChild isActive={isActive}>
         <Link href={resolvedHref} prefetch={false} onClick={onNavigate}>
           {Icon ? <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-muted-foreground")} /> : null}
-          <span className="group-data-[state=collapsed]/sidebar-wrapper:md:hidden">{item.title}</span>
+          <span className="group-data-[state=collapsed]/sidebar-wrapper:md:hidden">{t(item.title)}</span>
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
