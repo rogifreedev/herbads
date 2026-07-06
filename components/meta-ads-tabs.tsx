@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-type MetaAdsTab = "overview" | "creatives" | "angles" | "landingpages" | "iterations";
+type MetaAdsTab = "overview" | "creatives" | "batches" | "angles" | "landingpages" | "iterations";
 
 type MetaAdsTabsProps = {
   clientId: string;
@@ -11,6 +11,7 @@ type MetaAdsTabsProps = {
 const tabs: Array<{ id: MetaAdsTab; label: string; href: (clientId: string) => string }> = [
   { id: "overview", label: "Creatives", href: (clientId) => `/clients/${clientId}` },
   { id: "creatives", label: "Library", href: (clientId) => `/clients/${clientId}/creatives` },
+  { id: "batches", label: "Batches", href: (clientId) => `/clients/${clientId}/creatives/batches` },
   { id: "angles", label: "Angles", href: (clientId) => `/clients/${clientId}/angles` },
   { id: "landingpages", label: "Landingpages", href: (clientId) => `/clients/${clientId}/creatives/landingpages` },
   { id: "iterations", label: "Iterations", href: (clientId) => `/clients/${clientId}/iterations` }
