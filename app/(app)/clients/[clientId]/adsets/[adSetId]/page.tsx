@@ -181,7 +181,7 @@ function CreativeCell({ clientId, creative, t }: { clientId: string; creative: M
     <div className="flex min-w-[320px] items-center gap-3">
       {previewSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={previewSrc} alt="" className="h-16 w-12 rounded-lg border border-herb-border object-cover" />
+        <img src={previewSrc} alt="" loading="lazy" decoding="async" className="h-16 w-12 rounded-lg border border-herb-border object-cover" />
       ) : (
         <CreativePlaceholder />
       )}

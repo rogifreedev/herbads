@@ -91,6 +91,11 @@ type CreativeSummaryRow = {
   has_ai_analysis: boolean | null;
 };
 
+type CreativeSummaryPageRow = CreativeSummaryRow & {
+  performance_score: number | string | null;
+  total_count: number | string | null;
+};
+
 type SupabaseQuery = {
   range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
 };
@@ -133,6 +138,20 @@ export type CreativeDetail = CreativeListItem & {
 export type CreativeInsightDateRange = {
   since?: string | null;
   until?: string | null;
+};
+
+export type CreativeLibraryFilters = {
+  page?: number;
+  pageSize?: number;
+  query?: string | null;
+  type?: string | null;
+  status?: string | null;
+  funnel?: string | null;
+  minScore?: number | null;
+  minSpend?: number | null;
+  minRoas?: number | null;
+  minCtr?: number | null;
+  sort?: string | null;
 };
 
 const INSIGHT_SELECT = "ad_id,creative_id,date,spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays";
@@ -425,6 +444,109 @@ const listClientCreativesCached = unstable_cache(
 
 export async function listClientCreatives(clientId: string, dateRange?: CreativeInsightDateRange): Promise<{ creatives: CreativeListItem[]; error: string | null }> {
   return listClientCreativesCached(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
+}
+
+async function listClientCreativesPageUncached(
+  clientId: string,
+  since: string | null,
+  until: string | null,
+  page: number,
+  pageSize: number,
+  query: string | null,
+  type: string | null,
+  status: string | null,
+  funnel: string | null,
+  minScore: number | null,
+  minSpend: number | null,
+  minRoas: number | null,
+  minCtr: number | null,
+  sort: string | null
+) {
+  try {
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase.rpc("get_client_creative_summaries_page", {
+      p_client_id: clientId,
+      p_since: since,
+      p_until: until,
+      p_limit: pageSize,
+      p_offset: (page - 1) * pageSize,
+      p_query: query,
+      p_type: type,
+      p_status: status,
+      p_funnel: funnel,
+      p_min_score: minScore,
+      p_min_spend: minSpend,
+      p_min_roas: minRoas,
+      p_min_ctr: minCtr,
+      p_sort: sort ?? "spend"
+    });
+
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as CreativeSummaryPageRow[];
+    return {
+      creatives: rows.map(mapCreativeSummary),
+      total: numberValue(rows[0]?.total_count),
+      error: null as string | null
+    };
+  } catch (error) {
+    return {
+      creatives: [] as CreativeListItem[],
+      total: 0,
+      error: error instanceof Error ? error.message : "Creatives konnten nicht geladen werden."
+    };
+  }
+}
+
+const listClientCreativesPageCached = unstable_cache(
+  listClientCreativesPageUncached,
+  ["list-client-creatives-page-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.creatives] }
+);
+
+export function listClientCreativesPage(
+  clientId: string,
+  dateRange?: CreativeInsightDateRange,
+  filters: CreativeLibraryFilters = {}
+) {
+  const page = Math.max(1, Math.floor(filters.page ?? 1));
+  const pageSize = Math.max(1, Math.min(100, Math.floor(filters.pageSize ?? 12)));
+  return listClientCreativesPageCached(
+    clientId,
+    dateRange?.since ?? null,
+    dateRange?.until ?? null,
+    page,
+    pageSize,
+    filters.query?.trim() || null,
+    filters.type || null,
+    filters.status || null,
+    filters.funnel || null,
+    filters.minScore ?? null,
+    filters.minSpend ?? null,
+    filters.minRoas ?? null,
+    filters.minCtr ?? null,
+    filters.sort || "spend"
+  );
+}
+
+export function listTopClientCreatives(clientId: string, dateRange?: CreativeInsightDateRange, limit = 12) {
+  return listClientCreativesPage(clientId, dateRange, { page: 1, pageSize: limit, sort: "spend" });
+}
+
+async function listClientCreativeIdsUncached(clientId: string) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase.from("creatives").select("id").eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id);
+}
+
+const listClientCreativeIdsCached = unstable_cache(
+  listClientCreativeIdsUncached,
+  ["list-client-creative-ids-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.creatives] }
+);
+
+export function listClientCreativeIds(clientId: string) {
+  return listClientCreativeIdsCached(clientId);
 }
 
 async function getClientCreativeDetailUncached(clientId: string, creativeId: string, since?: string | null, until?: string | null): Promise<{ creative: CreativeDetail | null; error: string | null }> {

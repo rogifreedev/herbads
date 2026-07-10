@@ -176,7 +176,7 @@ function Preview({ analysis }: { analysis: CreativePredictionAnalysis }) {
     return (
       <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-herb-border bg-black/30">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={analysis.previewFrame.dataUrl} alt="" className="h-full w-full object-cover" />
+        <img src={analysis.previewFrame.dataUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
         {analysis.format === "video" ? (
           <span className="absolute inset-0 flex items-center justify-center bg-black/25">
             <Video className="h-4 w-4 text-white" />

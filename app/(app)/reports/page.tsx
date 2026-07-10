@@ -3,33 +3,26 @@ import { ReportsDataTable, type ReportTableRow } from "@/components/reports-data
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listClients } from "@/lib/clients";
-import { listClientCreatives } from "@/lib/creatives";
+import { getClientReportSummaries } from "@/lib/reports";
 
 export default async function ReportsPage() {
   const t = await getTranslations("reports");
-  const { clients, error } = await listClients();
+  const [{ clients, error }, summaries] = await Promise.all([listClients(), getClientReportSummaries()]);
   const realClients = clients.filter((client) => client.source === "supabase");
-  const clientReports = await Promise.all(
-    realClients.map(async (client) => {
-      const { creatives } = await listClientCreatives(client.id);
-      const analyzed = creatives.filter((creative) => creative.hasAiAnalysis).length;
-      const totalSpend = creatives.reduce((sum, creative) => sum + creative.metrics.spend, 0);
-      const purchases = creatives.reduce((sum, creative) => sum + creative.metrics.purchases, 0);
-      const avgScore = creatives.length > 0 ? Math.round(creatives.reduce((sum, creative) => sum + creative.performanceScore.score, 0) / creatives.length) : null;
-      const topCreative = [...creatives].sort((a, b) => b.performanceScore.score - a.performanceScore.score)[0] ?? null;
-
-      return {
-        clientId: client.id,
-        clientName: client.name,
-        creatives: creatives.length,
-        analyzed,
-        totalSpend,
-        purchases,
-        avgScore,
-        topCreativeName: topCreative?.name ?? null
-      } satisfies ReportTableRow;
-    })
-  );
+  const summaryByClient = new Map(summaries.map((summary) => [summary.clientId, summary]));
+  const clientReports = realClients.map((client) => {
+    const summary = summaryByClient.get(client.id);
+    return {
+      clientId: client.id,
+      clientName: client.name,
+      creatives: summary?.creatives ?? 0,
+      analyzed: summary?.analyzed ?? 0,
+      totalSpend: summary?.totalSpend ?? 0,
+      purchases: summary?.purchases ?? 0,
+      avgScore: summary?.avgScore ?? null,
+      topCreativeName: summary?.topCreativeName ?? null
+    } satisfies ReportTableRow;
+  });
 
   return (
     <div className="space-y-6">

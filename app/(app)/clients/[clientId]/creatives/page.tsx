@@ -10,7 +10,7 @@ import { MetaAdsTabs } from "@/components/meta-ads-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { listClientCreatives } from "@/lib/creatives";
+import { listClientCreativeIds, listClientCreativesPage } from "@/lib/creatives";
 import { formatCurrency, formatDate, formatDecimal, formatNumber } from "@/lib/metrics";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -76,8 +76,36 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
   const tCommon = await getTranslations("common");
   const dateFilters = resolveDateFilters(resolvedSearchParams);
   const activeDateRange = dateFilters.dateError ? undefined : dateFilters;
-  const { creatives, error } = await listClientCreatives(clientId, activeDateRange);
   const rankingPage = integerParam(resolvedSearchParams.rankingPage);
+  const pageSize = 12;
+  const sort = firstParam(resolvedSearchParams.sort) ?? "spend";
+  const serverFilters = {
+    query: firstParam(resolvedSearchParams.q) ?? "",
+    type: firstParam(resolvedSearchParams.type) ?? "all",
+    status: firstParam(resolvedSearchParams.status) ?? "ALL",
+    funnel: firstParam(resolvedSearchParams.funnel) ?? "ALL",
+    sort: (["score", "spend", "roas", "ctr", "purchases", "cpa", "hookRate", "outboundCvr"].includes(sort) ? sort : "spend") as "score" | "spend" | "roas" | "ctr" | "purchases" | "cpa" | "hookRate" | "outboundCvr",
+    minScore: firstParam(resolvedSearchParams.minScore) ?? "",
+    minSpend: firstParam(resolvedSearchParams.minSpend) ?? "",
+    minRoas: firstParam(resolvedSearchParams.minRoas) ?? "",
+    minCtr: firstParam(resolvedSearchParams.minCtr) ?? ""
+  };
+  const [{ creatives, total, error }, creativeIds] = await Promise.all([
+    listClientCreativesPage(clientId, activeDateRange, {
+      page: rankingPage,
+      pageSize,
+      query: serverFilters.query,
+      type: serverFilters.type === "all" ? null : serverFilters.type,
+      status: serverFilters.status === "ALL" ? null : serverFilters.status,
+      funnel: serverFilters.funnel === "ALL" ? null : serverFilters.funnel,
+      sort: serverFilters.sort,
+      minScore: numberParam(resolvedSearchParams.minScore),
+      minSpend: numberParam(resolvedSearchParams.minSpend),
+      minRoas: numberParam(resolvedSearchParams.minRoas),
+      minCtr: numberParam(resolvedSearchParams.minCtr)
+    }),
+    listClientCreativeIds(clientId)
+  ]);
   const detailHrefSuffix = dateFilters.dateError ? "" : dateSearchSuffix(dateFilters);
 
   return (
@@ -90,7 +118,7 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <CreativeDateRangePicker defaultDays={30} />
-            <BulkCreativeAnalysisButton clientId={clientId} creativeIds={creatives.map((creative) => creative.id)} />
+            <BulkCreativeAnalysisButton clientId={clientId} creativeIds={creativeIds} />
           </div>
         </div>
       </div>
@@ -109,6 +137,9 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
         title={t("rankingTitle")}
         detailHrefSuffix={detailHrefSuffix}
         currentPage={rankingPage}
+        pageSize={pageSize}
+        serverTotal={total}
+        serverFilters={serverFilters}
       />
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
@@ -118,12 +149,12 @@ export default async function ClientCreativesPage({ params, searchParams }: { pa
           {creatives.length === 0 ? (
             <EmptyState className="col-span-full" title={t("noneSyncedTitle")} description={t("noneSyncedDescription")} />
           ) : null}
-          {creatives.slice(0, 48).map((creative) => (
+          {creatives.map((creative) => (
             <Link key={creative.id} href={`/clients/${clientId}/creatives/${creative.id}${detailHrefSuffix}`} className="group rounded-2xl border border-herb-border bg-black/30 p-4 transition hover:border-primary/60">
               <div className="aspect-[4/5] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_top,rgba(229,31,118,0.2),transparent_45%),#1f2937]">
                 {creative.thumbnailUrl || creative.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={creative.thumbnailUrl ?? creative.imageUrl ?? ""} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                  <img src={creative.thumbnailUrl ?? creative.imageUrl ?? ""} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                 ) : (
                   <div className="flex h-full items-end p-4">
                     <p className="font-heading text-2xl">{creative.type}</p>

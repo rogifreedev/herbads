@@ -53,6 +53,10 @@ type InsightRow = {
   thruplays: number | null;
 };
 
+type AggregatedInsightRow = InsightRow & {
+  row_count: number | string | null;
+};
+
 type BreakdownMetricRow = InsightRow & {
   breakdown_type: string | null;
   breakdown_value: string | null;
@@ -132,24 +136,27 @@ export function aggregateInsightRows(rows: InsightRow[]): PerformanceMetrics {
 
 async function getClientPerformanceMetricsUncached(clientId: string, since?: string | null, until?: string | null) {
   const supabase = createSupabaseServiceRoleClient();
-  let query = supabase
-    .from("creative_insights_daily")
-    .select("spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays")
-    .eq("client_id", clientId);
-  if (since) query = query.gte("date", since);
-  if (until) query = query.lte("date", until);
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc("get_client_performance_metrics", {
+    p_client_id: clientId,
+    p_since: since ?? null,
+    p_until: until ?? null
+  });
 
   if (error) {
     return { metrics: emptyMetrics, hasData: false, error: error.message };
   }
 
-  return { metrics: aggregateInsightRows(data ?? []), hasData: Boolean(data?.length), error: null };
+  const row = ((data ?? [])[0] ?? null) as AggregatedInsightRow | null;
+  return {
+    metrics: row ? aggregateInsightRows([row]) : emptyMetrics,
+    hasData: toNumber(row?.row_count) > 0,
+    error: null
+  };
 }
 
 export const getClientPerformanceMetrics = unstable_cache(
   getClientPerformanceMetricsUncached,
-  ["client-performance-metrics-v2"],
+  ["client-performance-metrics-v3"],
   { revalidate: 120, tags: [CACHE_TAGS.metrics] }
 );
 
@@ -210,7 +217,7 @@ async function getClientPerformanceBreakdownsUncached(clientId: string, since?: 
 
 export const getClientPerformanceBreakdowns = unstable_cache(
   getClientPerformanceBreakdownsUncached,
-  ["client-performance-breakdowns-v1"],
+  ["client-performance-breakdowns-v2"],
   { revalidate: 120, tags: [CACHE_TAGS.metrics] }
 );
 
@@ -220,20 +227,23 @@ export function getClientPerformanceBreakdownsForRange(clientId: string, dateRan
 
 async function getGlobalPerformanceMetricsUncached() {
   const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase
-    .from("creative_insights_daily")
-    .select("spend,impressions,reach,clicks,link_clicks,outbound_clicks,purchases,purchase_value,engagement,video_3s_views,thruplays");
+  const { data, error } = await supabase.rpc("get_global_performance_metrics");
 
   if (error) {
     return { metrics: emptyMetrics, hasData: false, error: error.message };
   }
 
-  return { metrics: aggregateInsightRows(data ?? []), hasData: Boolean(data?.length), error: null };
+  const row = ((data ?? [])[0] ?? null) as AggregatedInsightRow | null;
+  return {
+    metrics: row ? aggregateInsightRows([row]) : emptyMetrics,
+    hasData: toNumber(row?.row_count) > 0,
+    error: null
+  };
 }
 
 export const getGlobalPerformanceMetrics = unstable_cache(
   getGlobalPerformanceMetricsUncached,
-  ["global-performance-metrics-v1"],
+  ["global-performance-metrics-v2"],
   { revalidate: 120, tags: [CACHE_TAGS.metrics] }
 );
 

@@ -37,9 +37,15 @@ type DataTableProps<TData, TValue> = {
   minWidthClassName?: string;
   toolbarLeft?: React.ReactNode;
   toolbarActions?: React.ReactNode;
+  serverPagination?: {
+    pageIndex: number;
+    pageCount: number;
+    rowCount: number;
+    onPageChange: (pageIndex: number) => void;
+  };
 };
 
-export function DataTable<TData, TValue>({ columns, data, emptyLabel, pageSize = 10, initialPageIndex = 0, minWidthClassName, toolbarLeft, toolbarActions }: DataTableProps<TData, TValue>) {
+export function DataTable<TData, TValue>({ columns, data, emptyLabel, pageSize = 10, initialPageIndex = 0, minWidthClassName, toolbarLeft, toolbarActions, serverPagination }: DataTableProps<TData, TValue>) {
   const t = useTranslations("common");
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -55,6 +61,8 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel, pageSize =
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    manualPagination: Boolean(serverPagination),
+    pageCount: serverPagination?.pageCount,
     initialState: {
       pagination: {
         pageIndex: initialPageIndex,
@@ -64,13 +72,16 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel, pageSize =
     state: {
       sorting,
       columnFilters,
-      columnVisibility
+      columnVisibility,
+      ...(serverPagination
+        ? { pagination: { pageIndex: serverPagination.pageIndex, pageSize } }
+        : {})
     }
   });
 
   React.useEffect(() => {
-    table.setPageIndex(0);
-  }, [data, table]);
+    if (!serverPagination) table.setPageIndex(0);
+  }, [data, serverPagination, table]);
 
   return (
     <div className="space-y-4">
@@ -131,15 +142,15 @@ export function DataTable<TData, TValue>({ columns, data, emptyLabel, pageSize =
         </Table>
       </div>
       <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <span>{t("rowCount", { count: formatNumber(table.getFilteredRowModel().rows.length) })}</span>
+        <span>{t("rowCount", { count: formatNumber(serverPagination?.rowCount ?? table.getFilteredRowModel().rows.length) })}</span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="border-border" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          <Button variant="outline" size="sm" className="border-border" onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.pageIndex - 1) : table.previousPage()} disabled={serverPagination ? serverPagination.pageIndex <= 0 : !table.getCanPreviousPage()}>
             {t("back")}
           </Button>
           <span className="min-w-24 text-center">
-            {t("pageOf", { page: table.getState().pagination.pageIndex + 1, total: Math.max(1, table.getPageCount()) })}
+            {t("pageOf", { page: serverPagination ? serverPagination.pageIndex + 1 : table.getState().pagination.pageIndex + 1, total: Math.max(1, serverPagination?.pageCount ?? table.getPageCount()) })}
           </span>
-          <Button variant="outline" size="sm" className="border-border" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          <Button variant="outline" size="sm" className="border-border" onClick={() => serverPagination ? serverPagination.onPageChange(serverPagination.pageIndex + 1) : table.nextPage()} disabled={serverPagination ? serverPagination.pageIndex >= serverPagination.pageCount - 1 : !table.getCanNextPage()}>
             {t("next")}
           </Button>
         </div>

@@ -463,7 +463,7 @@ function GridCreativeCard({ clientId, creative, t }: { clientId: string; creativ
       <div className="aspect-[4/5] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_top,rgba(229,31,118,0.18),transparent_42%),#1f2937]">
         {creative.thumbnailUrl || creative.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={creative.thumbnailUrl ?? creative.imageUrl ?? ""} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+          <img src={creative.thumbnailUrl ?? creative.imageUrl ?? ""} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
         ) : creative.videoUrl ? (
           <video muted playsInline preload="metadata" className="h-full w-full object-cover">
             <source src={creative.videoUrl} />
