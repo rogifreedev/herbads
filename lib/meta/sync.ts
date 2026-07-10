@@ -850,7 +850,15 @@ export async function syncMetaForClient(clientId: string, options?: MetaSyncOpti
     };
 
     if (job?.id) {
-      await supabase.from("sync_jobs").update({ status: "completed", payload: summary, finished_at: new Date().toISOString() }).eq("id", job.id);
+      await supabase
+        .from("sync_jobs")
+        .update({
+          status: breakdownSummary.errorCount > 0 ? "failed" : "completed",
+          payload: summary,
+          error_message: breakdownSummary.errors.map((item) => `${item.breakdown}: ${item.error}`).join("\n") || null,
+          finished_at: new Date().toISOString()
+        })
+        .eq("id", job.id);
     }
 
     await supabase.from("meta_ad_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
@@ -963,7 +971,15 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
     };
 
     if (job?.id) {
-      await supabase.from("sync_jobs").update({ status: "completed", payload: summary, finished_at: new Date().toISOString() }).eq("id", job.id);
+      await supabase
+        .from("sync_jobs")
+        .update({
+          status: breakdownSummary.errorCount > 0 ? "failed" : "completed",
+          payload: summary,
+          error_message: breakdownSummary.errors.map((item) => `${item.breakdown}: ${item.error}`).join("\n") || null,
+          finished_at: new Date().toISOString()
+        })
+        .eq("id", job.id);
     }
 
     await supabase.from("meta_ad_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
@@ -975,6 +991,94 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
       await supabase
         .from("sync_jobs")
         .update({ status: "failed", error_message: error instanceof Error ? error.message : "Meta Insights Sync fehlgeschlagen", finished_at: new Date().toISOString() })
+        .eq("id", job.id);
+    }
+
+    throw error;
+  }
+}
+
+export async function syncMetaBreakdownsForClient(clientId: string, options?: MetaSyncOptions) {
+  const supabase = createSupabaseServiceRoleClient();
+  const insightDateRange = resolveInsightDateRange(options);
+  const replaceExisting = options?.replaceExisting !== false;
+  const { data: account, error: accountError } = await supabase
+    .from("meta_ad_accounts")
+    .select("id,client_id,meta_account_id")
+    .eq("client_id", clientId)
+    .limit(1)
+    .single();
+
+  if (accountError || !account) {
+    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+  }
+
+  const { data: job } = await supabase
+    .from("sync_jobs")
+    .insert({
+      client_id: clientId,
+      ad_account_id: account.id,
+      job_type: options?.jobType ?? "manual_meta_breakdown_sync",
+      status: "running",
+      payload: { insightDateRange, breakdownsOnly: true, replaceExisting },
+      started_at: new Date().toISOString()
+    })
+    .select("id")
+    .single();
+
+  try {
+    const { data: storedAds } = await supabase
+      .from("meta_ads")
+      .select("id,meta_ad_id,campaign_id,adset_id,creative_id")
+      .eq("ad_account_id", account.id);
+    const adIdMap: StoredAdMap = new Map(((storedAds ?? []) as StoredAd[]).map((ad) => [ad.meta_ad_id, ad]));
+
+    if (adIdMap.size === 0) {
+      throw new Error("Keine gespeicherten Meta Ads gefunden. Bitte zuerst einen vollstaendigen Meta Sync ausfuehren.");
+    }
+
+    const insightRanges = splitDateRange(insightDateRange);
+    const breakdownSummary = await syncMetaDemographicBreakdowns(
+      clientId,
+      account.id,
+      account.meta_account_id,
+      adIdMap,
+      insightRanges,
+      replaceExisting
+    );
+    const summary = {
+      breakdownInsights: breakdownSummary.rowCount,
+      breakdownErrorCount: breakdownSummary.errorCount,
+      breakdownErrors: breakdownSummary.errors,
+      since: insightDateRange.since,
+      until: insightDateRange.until,
+      insightRanges: insightRanges.length,
+      breakdownsOnly: true
+    };
+
+    if (job?.id) {
+      await supabase
+        .from("sync_jobs")
+        .update({
+          status: breakdownSummary.errorCount > 0 ? "failed" : "completed",
+          payload: summary,
+          error_message: breakdownSummary.errors.map((item) => `${item.breakdown}: ${item.error}`).join("\n") || null,
+          finished_at: new Date().toISOString()
+        })
+        .eq("id", job.id);
+    }
+
+    revalidateCacheTags(...META_DATA_CACHE_TAGS);
+    return summary;
+  } catch (error) {
+    if (job?.id) {
+      await supabase
+        .from("sync_jobs")
+        .update({
+          status: "failed",
+          error_message: error instanceof Error ? error.message : "Meta Demografie Sync fehlgeschlagen",
+          finished_at: new Date().toISOString()
+        })
         .eq("id", job.id);
     }
 

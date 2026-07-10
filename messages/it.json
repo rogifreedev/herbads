@@ -651,6 +651,7 @@
     "syncButton": "Sincronizza Meta",
     "syncDescription": "Sync manuale per campagne, ads, creatives e insights nel periodo selezionato.",
     "requestFailed": "Richiesta fallita",
+    "breakdownSyncFailed": "Sincronizzazione demografica non riuscita: {message}",
     "rangeError": "{since} – {until}: {message}",
     "syncCancelled": "Meta Sync annullato.",
     "syncDoneWithErrors": "Meta Sync completato con {failed, plural, one {# periodo con errori} other {# periodi con errori}}. {insights} insights salvati.",

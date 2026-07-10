@@ -104,6 +104,25 @@ export function MetaSyncButton({ clientId }: MetaSyncButtonProps) {
           totals.ads = Math.max(totals.ads, Number(result.summary?.ads ?? 0));
           totals.creatives = Math.max(totals.creatives, Number(result.summary?.creatives ?? 0));
           totals.insights += Number(result.summary?.insights ?? 0);
+
+          const breakdownErrorCount = Number(result.summary?.breakdownErrorCount ?? 0);
+          if (breakdownErrorCount > 0) {
+            failed += 1;
+            const breakdownErrors = Array.isArray(result.summary?.breakdownErrors)
+              ? result.summary.breakdownErrors
+                  .map((item: { breakdown?: unknown; error?: unknown }) => {
+                    const breakdown = typeof item.breakdown === "string" ? item.breakdown : "Meta";
+                    const message = typeof item.error === "string" ? item.error : t("requestFailed");
+                    return `${breakdown}: ${message}`;
+                  })
+                  .join("; ")
+              : t("requestFailed");
+            appendError(t("rangeError", {
+              since: range.since,
+              until: range.until,
+              message: t("breakdownSyncFailed", { message: breakdownErrors })
+            }));
+          }
         }
       } catch (error) {
         failed += 1;
