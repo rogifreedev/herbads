@@ -146,54 +146,24 @@ export async function listFoundBatchPerformance(clientId: string, dateRange?: In
 
     if (foundItems.length === 0) return { batches: [], error: overview.settings?.lastCheckError ?? null };
 
-    const matchIds = {
-      ad: Array.from(new Set(foundItems.filter((item) => item.match.type === "ad").map((item) => item.match.id))),
-      adset: Array.from(new Set(foundItems.filter((item) => item.match.type === "adset").map((item) => item.match.id))),
-      campaign: Array.from(new Set(foundItems.filter((item) => item.match.type === "campaign").map((item) => item.match.id)))
-    };
-
-    const [
-      adInsights,
-      adSetInsights,
-      campaignInsights,
-      adRows,
-      adSetAdRows,
-      campaignAdRows
-    ] = await Promise.all([
-      fetchInsightsByColumn(clientId, "ad_id", matchIds.ad, dateRange),
-      fetchInsightsByColumn(clientId, "adset_id", matchIds.adset, dateRange),
-      fetchInsightsByColumn(clientId, "campaign_id", matchIds.campaign, dateRange),
-      fetchAdsByColumn(clientId, "id", matchIds.ad),
-      fetchAdsByColumn(clientId, "adset_id", matchIds.adset),
-      fetchAdsByColumn(clientId, "campaign_id", matchIds.campaign)
+    const matchIds = Array.from(new Set(foundItems.map((item) => item.match.id)));
+    const [adSetInsights, adSetAdRows] = await Promise.all([
+      fetchInsightsByColumn(clientId, "adset_id", matchIds, dateRange),
+      fetchAdsByColumn(clientId, "adset_id", matchIds)
     ]);
 
-    const insightsByAd = groupByKey(adInsights, (row) => row.ad_id);
     const insightsByAdSet = groupByKey(adSetInsights, (row) => row.adset_id);
-    const insightsByCampaign = groupByKey(campaignInsights, (row) => row.campaign_id);
-    const adsByAd = groupByKey(adRows, (row) => row.id);
     const adsByAdSet = groupByKey(adSetAdRows, (row) => row.adset_id);
-    const adsByCampaign = groupByKey(campaignAdRows, (row) => row.campaign_id);
 
     const batches = foundItems
       .map((item) => {
         const match = item.match;
-        const insights =
-          match.type === "ad"
-            ? insightsByAd.get(match.id) ?? []
-            : match.type === "adset"
-              ? insightsByAdSet.get(match.id) ?? []
-              : insightsByCampaign.get(match.id) ?? [];
-        const ads =
-          match.type === "ad"
-            ? adsByAd.get(match.id) ?? []
-            : match.type === "adset"
-              ? adsByAdSet.get(match.id) ?? []
-              : adsByCampaign.get(match.id) ?? [];
+        const insights = insightsByAdSet.get(match.id) ?? [];
+        const ads = adsByAdSet.get(match.id) ?? [];
         const metrics = insights.length > 0 ? aggregateInsightRows(insights) : emptyMetrics;
         const insightAdCount = uniqueCount(insights.map((row) => row.ad_id));
         const insightCreativeCount = uniqueCount(insights.map((row) => row.creative_id));
-        const adCount = Math.max(ads.length, insightAdCount, match.type === "ad" ? 1 : 0);
+        const adCount = Math.max(ads.length, insightAdCount);
         const creativeCount = Math.max(uniqueCount(ads.map((row) => row.creative_id)), insightCreativeCount);
 
         return {

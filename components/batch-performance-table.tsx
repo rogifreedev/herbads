@@ -35,12 +35,6 @@ function statusVariant(status: BatchPerformanceItem["status"]) {
   return status === "live" ? "success" : "warning";
 }
 
-function matchTypeLabel(type: BatchPerformanceItem["match"]["type"]) {
-  if (type === "adset") return "Ad Set";
-  if (type === "campaign") return "Campaign";
-  return "Ad";
-}
-
 function sortValue(batch: BatchPerformanceItem, sort: SortKey) {
   if (sort === "score") return batch.performanceScore.score;
   if (sort === "roas") return batch.metrics.roas ?? -1;
@@ -102,7 +96,7 @@ function realColumns(t: Translator, tCreatives: Translator): ColumnDef<BatchPerf
         return (
           <div className="min-w-[300px]">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{matchTypeLabel(batch.match.type)}</Badge>
+              <Badge variant="outline">Ad Set</Badge>
               <Badge variant={statusVariant(batch.status)}>{batchStatusLabel(batch.status, t)}</Badge>
             </div>
             {batch.match.href ? (
@@ -269,7 +263,6 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
   const locale = useLocale();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"ALL" | "live" | "found">("ALL");
-  const [type, setType] = useState<"all" | BatchPerformanceItem["match"]["type"]>("all");
   const [sort, setSort] = useState<SortKey>("spend");
   const [minSpend, setMinSpend] = useState("");
   const [minRoas, setMinRoas] = useState("");
@@ -279,17 +272,12 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
   const minSpendValue = numericInput(minSpend);
   const minRoasValue = numericInput(minRoas);
   const minCtrValue = numericInput(minCtr);
-  const typeCounts = useMemo(() => rows.reduce<Record<string, number>>((counts, batch) => {
-    counts[batch.match.type] = (counts[batch.match.type] ?? 0) + 1;
-    return counts;
-  }, {}), [rows]);
   const statusCounts = useMemo(() => rows.reduce<Record<string, number>>((counts, batch) => {
     counts[batch.status] = (counts[batch.status] ?? 0) + 1;
     return counts;
   }, {}), [rows]);
   const filteredRows = useMemo(() => rows
     .filter((batch) => status === "ALL" || batch.status === status)
-    .filter((batch) => type === "all" || batch.match.type === type)
     .filter((batch) => minSpendValue === null || batch.metrics.spend >= minSpendValue)
     .filter((batch) => minRoasValue === null || (batch.metrics.roas ?? -1) >= minRoasValue)
     .filter((batch) => minCtrValue === null || (batch.metrics.ctr ?? -1) >= minCtrValue)
@@ -297,12 +285,11 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
       if (!normalizedQuery) return true;
       return [batch.batchName, batch.path, batch.sourceFolderLabel, batch.match.name, batch.match.status, batch.match.effectiveStatus, batch.match.type].some((value) => value?.toLowerCase().includes(normalizedQuery));
     })
-    .sort((left, right) => sortValue(right, sort) - sortValue(left, sort) || left.batchName.localeCompare(right.batchName, locale)), [locale, minCtrValue, minRoasValue, minSpendValue, normalizedQuery, rows, sort, status, type]);
+    .sort((left, right) => sortValue(right, sort) - sortValue(left, sort) || left.batchName.localeCompare(right.batchName, locale)), [locale, minCtrValue, minRoasValue, minSpendValue, normalizedQuery, rows, sort, status]);
   const columns = useMemo(() => realColumns(t, tCreatives), [t, tCreatives]);
   const hasAdvancedFilters = minSpend || minRoas || minCtr;
-  const hasFilters = query || status !== "ALL" || type !== "all" || sort !== "spend" || hasAdvancedFilters;
+  const hasFilters = query || status !== "ALL" || sort !== "spend" || hasAdvancedFilters;
   const statusLabel = status === "ALL" ? tCommon("all") : batchStatusLabel(status, t);
-  const typeLabel = type === "all" ? tCommon("all") : matchTypeLabel(type);
   const sortLabels: Record<SortKey, string> = {
     spend: "Spend",
     score: "Score",
@@ -317,7 +304,6 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
   function resetFilters() {
     setQuery("");
     setStatus("ALL");
-    setType("all");
     setSort("spend");
     setMinSpend("");
     setMinRoas("");
@@ -346,12 +332,6 @@ export function BatchPerformanceTable({ batches, pageSize = 12 }: { batches: Bat
                 <FilterChip active={status === "ALL"} onClick={() => setStatus("ALL")}>{tCommon("allWithCount", { count: formatNumber(rows.length) })}</FilterChip>
                 <FilterChip active={status === "live"} onClick={() => setStatus("live")}>{t("statusLive")} ({formatNumber(statusCounts.live ?? 0)})</FilterChip>
                 <FilterChip active={status === "found"} onClick={() => setStatus("found")}>{t("statusFound")} ({formatNumber(statusCounts.found ?? 0)})</FilterChip>
-              </FilterDropdown>
-              <FilterDropdown label="Match" activeLabel={typeLabel}>
-                <FilterChip active={type === "all"} onClick={() => setType("all")}>{tCommon("all")}</FilterChip>
-                <FilterChip active={type === "ad"} onClick={() => setType("ad")}>Ad ({formatNumber(typeCounts.ad ?? 0)})</FilterChip>
-                <FilterChip active={type === "adset"} onClick={() => setType("adset")}>Ad Set ({formatNumber(typeCounts.adset ?? 0)})</FilterChip>
-                <FilterChip active={type === "campaign"} onClick={() => setType("campaign")}>Campaign ({formatNumber(typeCounts.campaign ?? 0)})</FilterChip>
               </FilterDropdown>
               <FilterDropdown label={tCommon("sortBy")} activeLabel={sortLabels[sort]}>
                 <FilterChip active={sort === "spend"} onClick={() => setSort("spend")}>Spend</FilterChip>

@@ -44,7 +44,7 @@ export type DriveBatchFolder = {
 
 export type BatchMetaMatch = {
   id: string;
-  type: "ad" | "adset" | "campaign";
+  type: "adset";
   name: string;
   status: string | null;
   effectiveStatus: string | null;
@@ -225,7 +225,7 @@ function adSetDetailHref(clientId: string, adSetId: string) {
 }
 
 function mapStoredItem(row: BatchFolderCheckRow): BatchOverviewItem {
-  const matchType: BatchMetaMatch["type"] | null = row.match_type === "ad" || row.match_type === "adset" || row.match_type === "campaign" ? row.match_type : null;
+  const matchType: BatchMetaMatch["type"] | null = row.match_type === "adset" ? "adset" : null;
   const match = matchType
     ? {
         id: row.match_id ?? "",
@@ -236,7 +236,7 @@ function mapStoredItem(row: BatchFolderCheckRow): BatchOverviewItem {
         href: row.match_href ?? (matchType === "adset" && row.match_id ? adSetDetailHref(row.client_id, row.match_id) : null)
       }
     : null;
-  const status = row.status === "live" || row.status === "found" || row.status === "missing" ? row.status : "missing";
+  const status = match && (row.status === "live" || row.status === "found") ? row.status : "missing";
 
   return {
     id: row.drive_folder_id,
@@ -304,21 +304,9 @@ function isLive(status: string | null, effectiveStatus: string | null) {
   return values.some((value) => LIVE_STATUSES.has(value as string));
 }
 
-function metaTypeLabel(type: BatchMetaMatch["type"]) {
-  if (type === "ad") return "Ad";
-  if (type === "adset") return "Ad Set";
-  return "Campaign";
-}
-
-function metaTypeWeight(type: BatchMetaMatch["type"]) {
-  if (type === "ad") return 0;
-  if (type === "adset") return 1;
-  return 2;
-}
-
 function sortMatches(left: MetaEntity, right: MetaEntity) {
   if (left.live !== right.live) return left.live ? -1 : 1;
-  return metaTypeWeight(left.type) - metaTypeWeight(right.type);
+  return left.name.localeCompare(right.name, "de");
 }
 
 function findMetaMatch(folderName: string, entities: MetaEntity[]) {
@@ -472,29 +460,14 @@ function sortDriveFolders(folders: DriveBatchFolder[]) {
 
 async function listMetaEntities(clientId: string): Promise<{ entities: MetaEntity[]; error: string | null }> {
   const supabase = createSupabaseServiceRoleClient();
-  const [adsResult, adSetsResult, campaignsResult] = await Promise.all([
-    supabase.from("meta_ads").select("id,creative_id,name,status,effective_status").eq("client_id", clientId),
-    supabase.from("meta_ad_sets").select("id,name,status,effective_status").eq("client_id", clientId),
-    supabase.from("meta_campaigns").select("id,name,status,effective_status").eq("client_id", clientId)
-  ]);
+  const { data, error } = await supabase
+    .from("meta_ad_sets")
+    .select("id,name,status,effective_status")
+    .eq("client_id", clientId);
 
-  const error = adsResult.error ?? adSetsResult.error ?? campaignsResult.error;
   if (error) return { entities: [], error: error.message };
 
-  const ads = (adsResult.data ?? [])
-    .filter((row) => row.name)
-    .map((row) => ({
-      id: row.id,
-      type: "ad" as const,
-      name: row.name as string,
-      status: row.status ?? null,
-      effectiveStatus: row.effective_status ?? null,
-      href: row.creative_id ? `/clients/${clientId}/creatives/${row.creative_id}` : null,
-      normalizedName: normalizeName(row.name as string),
-      live: isLive(row.status ?? null, row.effective_status ?? null)
-    }));
-
-  const adSets = (adSetsResult.data ?? [])
+  const adSets = (data ?? [])
     .filter((row) => row.name)
     .map((row) => ({
       id: row.id,
@@ -507,21 +480,8 @@ async function listMetaEntities(clientId: string): Promise<{ entities: MetaEntit
       live: isLive(row.status ?? null, row.effective_status ?? null)
     }));
 
-  const campaigns = (campaignsResult.data ?? [])
-    .filter((row) => row.name)
-    .map((row) => ({
-      id: row.id,
-      type: "campaign" as const,
-      name: row.name as string,
-      status: row.status ?? null,
-      effectiveStatus: row.effective_status ?? null,
-      href: null,
-      normalizedName: normalizeName(row.name as string),
-      live: isLive(row.status ?? null, row.effective_status ?? null)
-    }));
-
   return {
-    entities: [...ads, ...adSets, ...campaigns].filter((entity) => entity.normalizedName),
+    entities: adSets.filter((entity) => entity.normalizedName),
     error: null
   };
 }
@@ -912,5 +872,5 @@ export function isBatchSnapshotStale(value: string | null) {
 }
 
 export function batchMetaMatchLabel(match: BatchMetaMatch) {
-  return `${metaTypeLabel(match.type)}: ${match.name}`;
+  return `Ad Set: ${match.name}`;
 }
