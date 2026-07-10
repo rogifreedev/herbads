@@ -1,6 +1,7 @@
 import "server-only";
 
 import { META_DATA_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
+import { normalizeMetaAccountStatus } from "@/lib/meta/daily-sync";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getOptionalEnv } from "@/lib/env";
 
@@ -174,6 +175,22 @@ type StoredAd = {
 
 type StoredAdMap = Map<string, StoredAd>;
 
+type MetaSyncOptions = {
+  since?: string | null;
+  until?: string | null;
+  includeBreakdowns?: boolean;
+  jobType?: string;
+  replaceExisting?: boolean;
+};
+
+type StoredInsightKey = {
+  id: string;
+  ad_id: string;
+  date: string;
+  breakdown_type?: string;
+  breakdown_value?: string;
+};
+
 function getMetaToken() {
   const token = getOptionalEnv("META_SYSTEM_USER_ACCESS_TOKEN");
   if (!token) throw new Error("META_SYSTEM_USER_ACCESS_TOKEN fehlt.");
@@ -218,6 +235,73 @@ function chunk<T>(items: T[], size: number) {
     chunks.push(items.slice(index, index + size));
   }
   return chunks;
+}
+
+function insightKey(row: { ad_id: string; date: string }) {
+  return `${row.ad_id}:${row.date}`;
+}
+
+function breakdownInsightKey(row: { ad_id: string; date: string; breakdown_type: string; breakdown_value: string }) {
+  return `${row.ad_id}:${row.date}:${row.breakdown_type}:${row.breakdown_value}`;
+}
+
+async function removeStaleInsightRows(
+  table: "creative_insights_daily" | "creative_insight_breakdowns_daily",
+  adAccountId: string,
+  range: { since: string; until: string },
+  desiredKeys: Set<string>,
+  breakdownType?: string
+) {
+  const supabase = createSupabaseServiceRoleClient();
+  const storedRows: StoredInsightKey[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const result = table === "creative_insights_daily"
+      ? await supabase
+          .from("creative_insights_daily")
+          .select("id,ad_id,date")
+          .eq("ad_account_id", adAccountId)
+          .gte("date", range.since)
+          .lte("date", range.until)
+          .range(from, from + pageSize - 1)
+      : await supabase
+          .from("creative_insight_breakdowns_daily")
+          .select("id,ad_id,date,breakdown_type,breakdown_value")
+          .eq("ad_account_id", adAccountId)
+          .eq("breakdown_type", breakdownType ?? "")
+          .gte("date", range.since)
+          .lte("date", range.until)
+          .range(from, from + pageSize - 1);
+
+    const { data, error } = result;
+    if (error) throw new Error(error.message);
+
+    const page = (data ?? []) as unknown as StoredInsightKey[];
+    storedRows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  const staleIds = storedRows
+    .filter((row) => {
+      const key = breakdownType
+        ? breakdownInsightKey({
+            ad_id: row.ad_id,
+            date: row.date,
+            breakdown_type: row.breakdown_type ?? breakdownType,
+            breakdown_value: row.breakdown_value ?? ""
+          })
+        : insightKey(row);
+      return !desiredKeys.has(key);
+    })
+    .map((row) => row.id);
+
+  for (const staleIdChunk of chunk(staleIds, 500)) {
+    const { error } = await supabase.from(table).delete().in("id", staleIdChunk);
+    if (error) throw new Error(error.message);
+  }
+
+  return staleIds.length;
 }
 
 function firstText(items: Array<{ text?: string }> | undefined) {
@@ -493,7 +577,14 @@ function resolveInsightDateRange(input?: { since?: string | null; until?: string
   return { since, until };
 }
 
-async function syncMetaDemographicBreakdowns(clientId: string, adAccountId: string, metaAccountId: string, adIdMap: StoredAdMap, insightRanges: Array<{ since: string; until: string }>) {
+async function syncMetaDemographicBreakdowns(
+  clientId: string,
+  adAccountId: string,
+  metaAccountId: string,
+  adIdMap: StoredAdMap,
+  insightRanges: Array<{ since: string; until: string }>,
+  replaceExisting: boolean
+) {
   const supabase = createSupabaseServiceRoleClient();
   const errors: Array<{ breakdown: string; since: string; until: string; error: string }> = [];
   let rowCount = 0;
@@ -510,13 +601,23 @@ async function syncMetaDemographicBreakdowns(clientId: string, adAccountId: stri
           .map((insight) => mapBreakdownInsightRow(clientId, adAccountId, adIdMap, insight, breakdown))
           .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-        rowCount += breakdownRows.length;
-        if (breakdownRows.length === 0) continue;
-
         for (const breakdownChunk of chunk(breakdownRows, 500)) {
           const { error } = await supabase.from("creative_insight_breakdowns_daily").upsert(breakdownChunk, { onConflict: "ad_id,date,breakdown_type,breakdown_value" });
           if (error) throw new Error(error.message);
         }
+
+        if (replaceExisting) {
+          const desiredKeys = new Set(breakdownRows.map((row) => breakdownInsightKey(row)));
+          await removeStaleInsightRows(
+            "creative_insight_breakdowns_daily",
+            adAccountId,
+            range,
+            desiredKeys,
+            breakdown.type
+          );
+        }
+
+        rowCount += breakdownRows.length;
       } catch (error) {
         errors.push({
           breakdown: breakdown.type,
@@ -531,9 +632,11 @@ async function syncMetaDemographicBreakdowns(clientId: string, adAccountId: stri
   return { rowCount, errorCount: errors.length, errors: errors.slice(0, 10) };
 }
 
-export async function syncMetaForClient(clientId: string, options?: { since?: string | null; until?: string | null }) {
+export async function syncMetaForClient(clientId: string, options?: MetaSyncOptions) {
   const supabase = createSupabaseServiceRoleClient();
   const insightDateRange = resolveInsightDateRange(options);
+  const includeBreakdowns = options?.includeBreakdowns !== false;
+  const replaceExisting = options?.replaceExisting !== false;
   const { data: account, error: accountError } = await supabase
     .from("meta_ad_accounts")
     .select("id,client_id,meta_account_id")
@@ -547,7 +650,14 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
 
   const { data: job } = await supabase
     .from("sync_jobs")
-    .insert({ client_id: clientId, ad_account_id: account.id, job_type: "manual_meta_sync", status: "running", payload: { insightDateRange }, started_at: new Date().toISOString() })
+    .insert({
+      client_id: clientId,
+      ad_account_id: account.id,
+      job_type: options?.jobType ?? "manual_meta_sync",
+      status: "running",
+      payload: { insightDateRange, includeBreakdowns, replaceExisting },
+      started_at: new Date().toISOString()
+    })
     .select("id")
     .single();
 
@@ -559,8 +669,7 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
         name: metaAccount.name ?? null,
         currency: metaAccount.currency ?? null,
         timezone_name: metaAccount.timezone_name ?? null,
-        status: String(metaAccount.account_status ?? "active"),
-        last_synced_at: new Date().toISOString()
+        status: normalizeMetaAccountStatus(metaAccount.account_status)
       })
       .eq("id", account.id);
 
@@ -697,15 +806,33 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
       );
       const insightRows = insights.map((insight) => mapInsightRow(clientId, account.id, adIdMap, insight)).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-      insightRowCount += insightRows.length;
-      if (insightRows.length > 0) {
-        for (const insightChunk of chunk(insightRows, 500)) {
-          await supabase.from("creative_insights_daily").upsert(insightChunk, { onConflict: "ad_id,date" });
-        }
+      for (const insightChunk of chunk(insightRows, 500)) {
+        const { error } = await supabase.from("creative_insights_daily").upsert(insightChunk, { onConflict: "ad_id,date" });
+        if (error) throw new Error(error.message);
       }
+
+      if (replaceExisting) {
+        await removeStaleInsightRows(
+          "creative_insights_daily",
+          account.id,
+          range,
+          new Set(insightRows.map((row) => insightKey(row)))
+        );
+      }
+
+      insightRowCount += insightRows.length;
     }
 
-    const breakdownSummary = await syncMetaDemographicBreakdowns(clientId, account.id, account.meta_account_id, adIdMap, insightRanges);
+    const breakdownSummary = includeBreakdowns
+      ? await syncMetaDemographicBreakdowns(
+          clientId,
+          account.id,
+          account.meta_account_id,
+          adIdMap,
+          insightRanges,
+          replaceExisting
+        )
+      : { rowCount: 0, errorCount: 0, errors: [] };
 
     const summary = {
       campaigns: campaigns.length,
@@ -716,6 +843,7 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
       breakdownInsights: breakdownSummary.rowCount,
       breakdownErrorCount: breakdownSummary.errorCount,
       breakdownErrors: breakdownSummary.errors,
+      breakdownsSkipped: !includeBreakdowns,
       since: insightDateRange.since,
       until: insightDateRange.until,
       insightRanges: insightRanges.length
@@ -724,6 +852,8 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
     if (job?.id) {
       await supabase.from("sync_jobs").update({ status: "completed", payload: summary, finished_at: new Date().toISOString() }).eq("id", job.id);
     }
+
+    await supabase.from("meta_ad_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
 
     revalidateCacheTags(...META_DATA_CACHE_TAGS);
     return summary;
@@ -739,9 +869,11 @@ export async function syncMetaForClient(clientId: string, options?: { since?: st
   }
 }
 
-export async function syncMetaInsightsForClient(clientId: string, options?: { since?: string | null; until?: string | null }) {
+export async function syncMetaInsightsForClient(clientId: string, options?: MetaSyncOptions) {
   const supabase = createSupabaseServiceRoleClient();
   const insightDateRange = resolveInsightDateRange(options);
+  const includeBreakdowns = options?.includeBreakdowns !== false;
+  const replaceExisting = options?.replaceExisting !== false;
   const { data: account, error: accountError } = await supabase
     .from("meta_ad_accounts")
     .select("id,client_id,meta_account_id")
@@ -755,7 +887,14 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
 
   const { data: job } = await supabase
     .from("sync_jobs")
-    .insert({ client_id: clientId, ad_account_id: account.id, job_type: "manual_meta_insights_sync", status: "running", payload: { insightDateRange, insightsOnly: true }, started_at: new Date().toISOString() })
+    .insert({
+      client_id: clientId,
+      ad_account_id: account.id,
+      job_type: options?.jobType ?? "manual_meta_insights_sync",
+      status: "running",
+      payload: { insightDateRange, insightsOnly: true, includeBreakdowns, replaceExisting },
+      started_at: new Date().toISOString()
+    })
     .select("id")
     .single();
 
@@ -779,15 +918,33 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
       );
       const insightRows = insights.map((insight) => mapInsightRow(clientId, account.id, adIdMap, insight)).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-      insightRowCount += insightRows.length;
-      if (insightRows.length > 0) {
-        for (const insightChunk of chunk(insightRows, 500)) {
-          await supabase.from("creative_insights_daily").upsert(insightChunk, { onConflict: "ad_id,date" });
-        }
+      for (const insightChunk of chunk(insightRows, 500)) {
+        const { error } = await supabase.from("creative_insights_daily").upsert(insightChunk, { onConflict: "ad_id,date" });
+        if (error) throw new Error(error.message);
       }
+
+      if (replaceExisting) {
+        await removeStaleInsightRows(
+          "creative_insights_daily",
+          account.id,
+          range,
+          new Set(insightRows.map((row) => insightKey(row)))
+        );
+      }
+
+      insightRowCount += insightRows.length;
     }
 
-    const breakdownSummary = await syncMetaDemographicBreakdowns(clientId, account.id, account.meta_account_id, adIdMap, insightRanges);
+    const breakdownSummary = includeBreakdowns
+      ? await syncMetaDemographicBreakdowns(
+          clientId,
+          account.id,
+          account.meta_account_id,
+          adIdMap,
+          insightRanges,
+          replaceExisting
+        )
+      : { rowCount: 0, errorCount: 0, errors: [] };
 
     const summary = {
       campaigns: 0,
@@ -798,6 +955,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
       breakdownInsights: breakdownSummary.rowCount,
       breakdownErrorCount: breakdownSummary.errorCount,
       breakdownErrors: breakdownSummary.errors,
+      breakdownsSkipped: !includeBreakdowns,
       since: insightDateRange.since,
       until: insightDateRange.until,
       insightRanges: insightRanges.length,
@@ -807,6 +965,8 @@ export async function syncMetaInsightsForClient(clientId: string, options?: { si
     if (job?.id) {
       await supabase.from("sync_jobs").update({ status: "completed", payload: summary, finished_at: new Date().toISOString() }).eq("id", job.id);
     }
+
+    await supabase.from("meta_ad_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
 
     revalidateCacheTags(...META_DATA_CACHE_TAGS);
     return summary;

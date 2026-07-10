@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { IntegrationsDataTable } from "@/components/integrations-data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getOptionalEnv } from "@/lib/env";
+import { DEFAULT_META_DAILY_LOOKBACK_DAYS } from "@/lib/meta/daily-sync";
 
 export default async function SettingsPage() {
   const [t, tCommon] = await Promise.all([getTranslations("settings"), getTranslations("common")]);
@@ -27,7 +28,18 @@ export default async function SettingsPage() {
         <StatusCard label={t("integrationsTitle")} value={`${configuredCount}/${integrations.length}`} />
         <StatusCard label="Node Runtime" value={process.versions.node} />
         {/* "Node Runtime" / "Daily Sync Lookback" stay English as technical terms, consistent with the env integration labels above. */}
-        <StatusCard label="Daily Sync Lookback" value={tCommon("daysPreset", { days: Number(getOptionalEnv("META_DAILY_SYNC_LOOKBACK_DAYS", "7")) || 7 })} />
+        <StatusCard
+          label="Daily Sync Lookback"
+          value={tCommon("daysPreset", {
+            days:
+              Number(
+                getOptionalEnv(
+                  "META_DAILY_SYNC_LOOKBACK_DAYS",
+                  String(DEFAULT_META_DAILY_LOOKBACK_DAYS)
+                )
+              ) || DEFAULT_META_DAILY_LOOKBACK_DAYS
+          })}
+        />
       </section>
       <Card className="border-herb-border bg-herb-surface/90">
         <CardHeader>
