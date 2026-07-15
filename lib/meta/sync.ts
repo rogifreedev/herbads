@@ -1,6 +1,7 @@
 import "server-only";
 
 import { META_DATA_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
+import { MetaApiRequestError, metaRequestLabel, type MetaApiFailure } from "@/lib/meta/api-error";
 import { normalizeMetaAccountStatus } from "@/lib/meta/daily-sync";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getOptionalEnv } from "@/lib/env";
@@ -10,7 +11,15 @@ type JsonRecord = Record<string, unknown>;
 type MetaListResponse<T> = {
   data?: T[];
   paging?: { next?: string };
-  error?: { message?: string };
+  error?: MetaErrorPayload;
+};
+
+type MetaErrorPayload = {
+  message?: string;
+  code?: number;
+  error_subcode?: number;
+  is_transient?: boolean;
+  fbtrace_id?: string;
 };
 
 type MetaAdAccount = {
@@ -206,14 +215,60 @@ async function fetchMeta<T>(pathOrUrl: string): Promise<T> {
   const url = pathOrUrl.startsWith("http")
     ? pathOrUrl
     : `https://graph.facebook.com/${getApiVersion()}/${pathOrUrl}${pathOrUrl.includes("?") ? "&" : "?"}access_token=${token}`;
-  const response = await fetch(url, { cache: "no-store" });
-  const payload = await response.json();
+  const endpoint = metaRequestLabel(url);
+  const configuredAttempts = Number(getOptionalEnv("META_API_REQUEST_ATTEMPTS", "3"));
+  const maxAttempts = Math.min(5, Math.max(1, Math.floor(Number.isFinite(configuredAttempts) ? configuredAttempts : 3)));
 
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message ?? "Meta API Anfrage fehlgeschlagen.");
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(url, { cache: "no-store" });
+    } catch (error) {
+      const requestError = new MetaApiRequestError({
+        endpoint,
+        message: error instanceof Error ? error.message : "Netzwerkfehler bei der Meta API Anfrage.",
+        status: null,
+        code: null,
+        subcode: null,
+        traceId: null,
+        isTransient: true
+      });
+      if (attempt < maxAttempts) {
+        await waitForMetaRetry(attempt);
+        continue;
+      }
+      throw requestError;
+    }
+
+    const payload = await response.json().catch(() => ({})) as { error?: MetaErrorPayload } & T;
+    if (response.ok && !payload.error) return payload as T;
+
+    const failure: MetaApiFailure = {
+      endpoint,
+      message: payload.error?.message ?? `Meta API Anfrage fehlgeschlagen (${response.statusText || "unbekannter Fehler"}).`,
+      status: response.status,
+      code: typeof payload.error?.code === "number" ? payload.error.code : null,
+      subcode: typeof payload.error?.error_subcode === "number" ? payload.error.error_subcode : null,
+      traceId: payload.error?.fbtrace_id ?? null,
+      isTransient: payload.error?.is_transient === true
+    };
+    const requestError = new MetaApiRequestError(failure);
+    if (requestError.retryable && attempt < maxAttempts) {
+      await waitForMetaRetry(attempt, response.headers.get("retry-after"));
+      continue;
+    }
+    throw requestError;
   }
 
-  return payload as T;
+  throw new Error(`Meta API ${endpoint}: Anfrage nach ${maxAttempts} Versuchen fehlgeschlagen.`);
+}
+
+async function waitForMetaRetry(attempt: number, retryAfter: string | null = null) {
+  const retryAfterSeconds = retryAfter ? Number(retryAfter) : Number.NaN;
+  const delayMs = Number.isFinite(retryAfterSeconds)
+    ? Math.min(30_000, Math.max(0, retryAfterSeconds * 1000))
+    : Math.min(8_000, 1000 * 2 ** (attempt - 1));
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 async function fetchMetaList<T>(path: string) {
