@@ -300,6 +300,17 @@ function breakdownInsightKey(row: { ad_id: string; date: string; breakdown_type:
   return `${row.ad_id}:${row.date}:${row.breakdown_type}:${row.breakdown_value}`;
 }
 
+function assertAllInsightAdsAreStored(insights: MetaInsight[], adIdMap: StoredAdMap) {
+  const unknownAdIds = new Set(
+    insights
+      .map((insight) => insight.ad_id)
+      .filter((adId): adId is string => Boolean(adId) && !adIdMap.has(adId as string))
+  );
+  if (unknownAdIds.size > 0) {
+    throw new Error(`${unknownAdIds.size} Meta Insight Ads fehlen lokal. Bitte einen vollstaendigen Meta Sync ausfuehren.`);
+  }
+}
+
 async function removeStaleInsightRows(
   table: "creative_insights_daily" | "creative_insight_breakdowns_daily",
   adAccountId: string,
@@ -859,6 +870,7 @@ export async function syncMetaForClient(clientId: string, options?: MetaSyncOpti
       const insights = await fetchMetaList<MetaInsight>(
         `${account.meta_account_id}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&fields=${INSIGHTS_FIELDS}&limit=100`
       );
+      assertAllInsightAdsAreStored(insights, adIdMap);
       const insightRows = insights.map((insight) => mapInsightRow(clientId, account.id, adIdMap, insight)).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
       for (const insightChunk of chunk(insightRows, 500)) {
@@ -979,6 +991,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
       const insights = await fetchMetaList<MetaInsight>(
         `${account.meta_account_id}/insights?level=ad&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&fields=${INSIGHTS_FIELDS}&limit=100`
       );
+      assertAllInsightAdsAreStored(insights, adIdMap);
       const insightRows = insights.map((insight) => mapInsightRow(clientId, account.id, adIdMap, insight)).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
       for (const insightChunk of chunk(insightRows, 500)) {

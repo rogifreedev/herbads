@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOptionalEnv } from "@/lib/env";
-import { syncMetaInsightsForClient } from "@/lib/meta/sync";
+import { syncMetaForClient } from "@/lib/meta/sync";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,11 +30,11 @@ export async function POST(request: Request) {
     }
     if (!since || !until) throw new Error("Sync-Zeitraum fehlt.");
 
-    const summary = await syncMetaInsightsForClient(clientId, {
+    const summary = await syncMetaForClient(clientId, {
       since,
       until,
       includeBreakdowns: false,
-      jobType: "cron_meta_targeted_insights_sync"
+      jobType: "cron_meta_targeted_sync"
     });
     return NextResponse.json({ summary });
   } catch (error) {
