@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOptionalEnv } from "@/lib/env";
-import { syncMetaForClient } from "@/lib/meta/sync";
+import { getMetaAccountInsightsForClient, syncMetaForClient } from "@/lib/meta/sync";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       includeBreakdowns: false,
       jobType: "cron_meta_targeted_sync"
     });
-    return NextResponse.json({ summary });
+    const accountInsights = await getMetaAccountInsightsForClient(clientId, { since, until });
+    return NextResponse.json({ summary, accountInsights });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gezielter Meta Sync konnte nicht ausgefuehrt werden.";
     return NextResponse.json({ error: message }, { status: message === "Nicht autorisiert." ? 401 : 400 });

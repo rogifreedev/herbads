@@ -162,6 +162,7 @@ const ADSET_FIELDS = "id,name,campaign_id,optimization_goal,billing_event,status
 const AD_FIELDS = "id,name,campaign_id,adset_id,creative{id},status,effective_status,created_time,updated_time";
 const CREATIVE_FIELDS = "id,name,title,body,object_story_spec,asset_feed_spec,call_to_action_type,thumbnail_url,image_url,image_hash,video_id,object_url,url_tags,effective_object_story_id";
 const INSIGHTS_FIELDS = "date_start,date_stop,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,reach,frequency,spend,clicks,inline_link_clicks,outbound_clicks,ctr,cpc,cpm,actions,action_values,video_thruplay_watched_actions";
+const ACCOUNT_INSIGHTS_FIELDS = "date_start,date_stop,impressions,reach,frequency,spend,clicks,ctr,cpc,cpm";
 const BREAKDOWN_INSIGHTS_FIELDS = "date_start,date_stop,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,reach,frequency,spend,clicks,inline_link_clicks,outbound_clicks,ctr,cpc,cpm,actions,action_values";
 const ADIMAGE_FIELDS = "hash,url,permalink_url,width,height";
 const VIDEO_FIELDS = "thumbnails{uri,is_preferred,width,height},picture,source,permalink_url,embed_html";
@@ -1152,4 +1153,37 @@ export async function syncMetaBreakdownsForClient(clientId: string, options?: Me
 
     throw error;
   }
+}
+
+export async function getMetaAccountInsightsForClient(clientId: string, options?: MetaSyncOptions) {
+  const supabase = createSupabaseServiceRoleClient();
+  const insightDateRange = resolveInsightDateRange(options);
+  const { data: account, error } = await supabase
+    .from("meta_ad_accounts")
+    .select("meta_account_id,timezone_name,currency")
+    .eq("client_id", clientId)
+    .limit(1)
+    .single();
+
+  if (error || !account) {
+    throw new Error(error?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+  }
+
+  const timeRange = encodeURIComponent(JSON.stringify(insightDateRange));
+  const insights = await fetchMetaList<MetaInsight>(
+    `${account.meta_account_id}/insights?level=account&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&fields=${ACCOUNT_INSIGHTS_FIELDS}&limit=100`
+  );
+
+  return {
+    timezoneName: account.timezone_name ?? null,
+    currency: account.currency ?? null,
+    rows: insights.map((insight) => ({
+      date: insight.date_start,
+      spend: toNumber(insight.spend),
+      impressions: toInteger(insight.impressions),
+      reach: toInteger(insight.reach),
+      frequency: toNumber(insight.frequency),
+      clicks: toInteger(insight.clicks)
+    }))
+  };
 }
