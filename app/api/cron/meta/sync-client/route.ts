@@ -20,7 +20,7 @@ function assertCronAuth(request: Request) {
 export async function POST(request: Request) {
   try {
     assertCronAuth(request);
-    const body = await request.json() as { clientId?: unknown; since?: unknown; until?: unknown };
+    const body = await request.json() as { clientId?: unknown; since?: unknown; until?: unknown; diagnosticsOnly?: unknown };
     const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
     const since = typeof body.since === "string" ? body.since.trim() : "";
     const until = typeof body.until === "string" ? body.until.trim() : "";
@@ -30,12 +30,14 @@ export async function POST(request: Request) {
     }
     if (!since || !until) throw new Error("Sync-Zeitraum fehlt.");
 
-    const summary = await syncMetaForClient(clientId, {
-      since,
-      until,
-      includeBreakdowns: false,
-      jobType: "cron_meta_targeted_sync"
-    });
+    const summary = body.diagnosticsOnly === true
+      ? null
+      : await syncMetaForClient(clientId, {
+          since,
+          until,
+          includeBreakdowns: false,
+          jobType: "cron_meta_targeted_sync"
+        });
     const accountInsights = await getMetaAccountInsightsForClient(clientId, { since, until });
     return NextResponse.json({ summary, accountInsights });
   } catch (error) {
