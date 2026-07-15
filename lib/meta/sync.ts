@@ -891,6 +891,13 @@ export async function syncMetaForClient(clientId: string, options?: MetaSyncOpti
       insightRowCount += insightRows.length;
     }
 
+    const accountInsightRowCount = await syncMetaAccountInsights(
+      clientId,
+      account.id,
+      account.meta_account_id,
+      insightRanges,
+      replaceExisting
+    );
     const breakdownSummary = includeBreakdowns
       ? await syncMetaDemographicBreakdowns(
           clientId,
@@ -908,6 +915,7 @@ export async function syncMetaForClient(clientId: string, options?: MetaSyncOpti
       ads: ads.length,
       creatives: creatives.length,
       insights: insightRowCount,
+      accountInsights: accountInsightRowCount,
       breakdownInsights: breakdownSummary.rowCount,
       breakdownErrorCount: breakdownSummary.errorCount,
       breakdownErrors: breakdownSummary.errors,
@@ -1012,6 +1020,13 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
       insightRowCount += insightRows.length;
     }
 
+    const accountInsightRowCount = await syncMetaAccountInsights(
+      clientId,
+      account.id,
+      account.meta_account_id,
+      insightRanges,
+      replaceExisting
+    );
     const breakdownSummary = includeBreakdowns
       ? await syncMetaDemographicBreakdowns(
           clientId,
@@ -1029,6 +1044,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
       ads: adIdMap.size,
       creatives: 0,
       insights: insightRowCount,
+      accountInsights: accountInsightRowCount,
       breakdownInsights: breakdownSummary.rowCount,
       breakdownErrorCount: breakdownSummary.errorCount,
       breakdownErrors: breakdownSummary.errors,
@@ -1065,6 +1081,61 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
 
     throw error;
   }
+}
+
+async function syncMetaAccountInsights(
+  clientId: string,
+  adAccountId: string,
+  metaAccountId: string,
+  insightRanges: Array<{ since: string; until: string }>,
+  replaceExisting: boolean
+) {
+  const supabase = createSupabaseServiceRoleClient();
+  let rowCount = 0;
+
+  for (const range of insightRanges) {
+    const timeRange = encodeURIComponent(JSON.stringify(range));
+    const insights = await fetchMetaList<MetaInsight>(
+      `${metaAccountId}/insights?level=account&time_increment=1&use_account_attribution_setting=true&time_range=${timeRange}&fields=${ACCOUNT_INSIGHTS_FIELDS}&limit=100`
+    );
+    const rows = insights.map((insight) => ({
+      client_id: clientId,
+      ad_account_id: adAccountId,
+      date: insight.date_start,
+      spend: toNumber(insight.spend),
+      impressions: toInteger(insight.impressions),
+      reach: toInteger(insight.reach),
+      clicks: toInteger(insight.clicks),
+      frequency: toNumber(insight.frequency)
+    }));
+
+    if (rows.length > 0) {
+      const { error } = await supabase
+        .from("meta_account_insights_daily")
+        .upsert(rows, { onConflict: "ad_account_id,date" });
+      if (error) throw new Error(error.message);
+    }
+
+    if (replaceExisting) {
+      const desiredDates = new Set(rows.map((row) => row.date));
+      const { data: storedRows, error: storedError } = await supabase
+        .from("meta_account_insights_daily")
+        .select("id,date")
+        .eq("ad_account_id", adAccountId)
+        .gte("date", range.since)
+        .lte("date", range.until);
+      if (storedError) throw new Error(storedError.message);
+      const staleIds = (storedRows ?? []).filter((row) => !desiredDates.has(row.date)).map((row) => row.id);
+      if (staleIds.length > 0) {
+        const { error } = await supabase.from("meta_account_insights_daily").delete().in("id", staleIds);
+        if (error) throw new Error(error.message);
+      }
+    }
+
+    rowCount += rows.length;
+  }
+
+  return rowCount;
 }
 
 export async function syncMetaBreakdownsForClient(clientId: string, options?: MetaSyncOptions) {
