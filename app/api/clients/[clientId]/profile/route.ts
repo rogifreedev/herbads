@@ -38,7 +38,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ profile });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Kundenprofil konnte nicht gespeichert werden." },
+      { error: error instanceof Error ? error.message : "Partnerprofil konnte nicht gespeichert werden." },
       { status: 400 }
     );
   }

@@ -319,7 +319,7 @@ function normalizeGeneratedAnalysis(payload: JsonRecord): GeneratedAnalysis {
 }
 
 function profileContext(profile: ProfileRow | null) {
-  if (!profile) return "Kein Kundenprofil gespeichert.";
+  if (!profile) return "Kein Partnerprofil gespeichert.";
 
   return [
     ["Brand", profile.brand_name],
@@ -451,7 +451,7 @@ async function callOpenRouterForAnalysis(input: { creative: CreativeRow; clientN
 
   const model = getOptionalEnv("OPENROUTER_VISION_MODEL", getOptionalEnv("OPENROUTER_TEXT_MODEL", "openai/gpt-5.2"));
   const imageUrl = imageUrlForAnalysis(input.creative);
-  const userText = `Kunde: ${input.clientName}\n\nKundenprofil:\n${input.profile}\n\nCreative Daten:\n${input.creativeData}\n\nRelevante Wissensdatenbank:\n${input.knowledge}\n\nAnalysiere dieses Creative fuer Paid Social. Wenn ein Bild/Thumbnail beigefuegt ist, beziehe visuelle Elemente ein. Antworte exakt mit JSON Keys:\nsummary, creativeType, funnelStage, funnelReason, visualElements, detectedText, hook, targetAudienceFitScore, brandFitScore, clarityScore, scrollstopperScore, ctaScore, risks, hypotheses, recommendations.\n\nWichtig zur Funnel-Klassifikation:\n- funnelStage beschreibt die wahrscheinliche AUSPIEL-/DELIVERY-Stufe, nicht nur die Messaging-Absicht des Creatives.\n- Wenn Messaging und Delivery-Signale widersprechen, klassifiziere nach Delivery-Signalen und erwaehne den Mismatch in funnelReason.\n- Eine BOFU-Message (z. B. "Jetzt bestellen", Rabatt, Versandvorteil) ist nicht automatisch BOFU, wenn Frequency/Reach nach breiter Ausspielung aussehen.\n\nFunnel-Heuristik:\n- TOFU = breite Prospecting-/Awareness-Ausspielung. Typisch: niedrige Frequency (< 1,5), hohe Reach im Vergleich zu Impressions, wenig Wiederkontakt. Auch bei kaufnaher Copy als TOFU klassifizieren, wenn Frequency sehr niedrig ist und keine klaren Retargeting-Signale vorhanden sind.\n- MOFU = Consideration/Nurturing. Typisch: mittlere Frequency (ca. 1,5-3), Social Proof, Produkt-/Sortimentsargumente, Vertrauen, Vorteile, Vergleich, Einwandbehandlung.\n- BOFU = Retargeting/Conversion-nah. Typisch: hoehere Frequency (> 3) oder klare Retargeting-/Warm-Audience-Signale plus Kaufabschluss-Message und passende Conversion-KPIs. Hohe Frequency ohne Conversion ist Fatigue-/Mismatch-Risiko, nicht automatisch BOFU.\n- funnelStage darf nur TOFU, MOFU oder BOFU sein. funnelReason erklaert die Einordnung in 1-2 Saetzen und muss Frequency/Reach einbeziehen, wenn diese Daten vorhanden sind.\n\nRegeln:\n- Scores 0 bis 100.\n- risks, hypotheses, recommendations sind Arrays mit kurzen deutschen Strings.\n- Keine unbelegten Health-Claims erfinden.\n- Beruecksichtige Brand Fit, Zielgruppenfit, Funnel Stage, Frequency, Reach und Performance-Metriken.\n- Antworte ausschliesslich als JSON Objekt.`;
+  const userText = `Partner: ${input.clientName}\n\nPartnerprofil:\n${input.profile}\n\nCreative Daten:\n${input.creativeData}\n\nRelevante Wissensdatenbank:\n${input.knowledge}\n\nAnalysiere dieses Creative fuer Paid Social. Wenn ein Bild/Thumbnail beigefuegt ist, beziehe visuelle Elemente ein. Antworte exakt mit JSON Keys:\nsummary, creativeType, funnelStage, funnelReason, visualElements, detectedText, hook, targetAudienceFitScore, brandFitScore, clarityScore, scrollstopperScore, ctaScore, risks, hypotheses, recommendations.\n\nWichtig zur Funnel-Klassifikation:\n- funnelStage beschreibt die wahrscheinliche AUSPIEL-/DELIVERY-Stufe, nicht nur die Messaging-Absicht des Creatives.\n- Wenn Messaging und Delivery-Signale widersprechen, klassifiziere nach Delivery-Signalen und erwaehne den Mismatch in funnelReason.\n- Eine BOFU-Message (z. B. "Jetzt bestellen", Rabatt, Versandvorteil) ist nicht automatisch BOFU, wenn Frequency/Reach nach breiter Ausspielung aussehen.\n\nFunnel-Heuristik:\n- TOFU = breite Prospecting-/Awareness-Ausspielung. Typisch: niedrige Frequency (< 1,5), hohe Reach im Vergleich zu Impressions, wenig Wiederkontakt. Auch bei kaufnaher Copy als TOFU klassifizieren, wenn Frequency sehr niedrig ist und keine klaren Retargeting-Signale vorhanden sind.\n- MOFU = Consideration/Nurturing. Typisch: mittlere Frequency (ca. 1,5-3), Social Proof, Produkt-/Sortimentsargumente, Vertrauen, Vorteile, Vergleich, Einwandbehandlung.\n- BOFU = Retargeting/Conversion-nah. Typisch: hoehere Frequency (> 3) oder klare Retargeting-/Warm-Audience-Signale plus Kaufabschluss-Message und passende Conversion-KPIs. Hohe Frequency ohne Conversion ist Fatigue-/Mismatch-Risiko, nicht automatisch BOFU.\n- funnelStage darf nur TOFU, MOFU oder BOFU sein. funnelReason erklaert die Einordnung in 1-2 Saetzen und muss Frequency/Reach einbeziehen, wenn diese Daten vorhanden sind.\n\nRegeln:\n- Scores 0 bis 100.\n- risks, hypotheses, recommendations sind Arrays mit kurzen deutschen Strings.\n- Keine unbelegten Health-Claims erfinden.\n- Beruecksichtige Brand Fit, Zielgruppenfit, Funnel Stage, Frequency, Reach und Performance-Metriken.\n- Antworte ausschliesslich als JSON Objekt.`;
   const analysisText = `${userText}\n\nEmotionen:\n- Antworte zusaetzlich mit emotionScores als Objekt mit exakt diesen Keys: curiosity, desire, trust, urgency, joy, fearOfMissingOut.\n- Jeder emotionScores-Wert ist ein Score von 0 bis 100.\n- curiosity = Neugier/Pattern-Interrupt, desire = Appetit/Kaufverlangen, trust = Glaubwuerdigkeit/Sicherheit, urgency = Handlungsdruck, joy = positive Genuss-/Freude-Emotion, fearOfMissingOut = Verlustangst/FOMO.\n- Bewerte Emotionen anhand Copy, Transcript, Visual und Performance-Kontext. Wenn ein Signal fehlt, vergib konservativ niedrigere Werte.`;
   const content = imageUrl
     ? [
@@ -474,7 +474,7 @@ async function callOpenRouterForAnalysis(input: { creative: CreativeRow; clientN
       messages: [
         {
           role: "system",
-          content: "Du bist ein Senior Creative Strategist und Performance-Marketing-Analyst. Bewerte Creatives faktenbasiert anhand Kunde, Wissen, Copy, Visual und Performance."
+          content: "Du bist ein Senior Creative Strategist und Performance-Marketing-Analyst. Bewerte Creatives faktenbasiert anhand Partner, Wissen, Copy, Visual und Performance."
         },
         {
           role: "system",
@@ -547,7 +547,7 @@ export async function analyzeCreative(clientId: string, creativeId: string) {
 
   if (clientError) throw new Error(clientError.message);
   if (creativeError) throw new Error(creativeError.message);
-  if (!client) throw new Error("Kunde wurde nicht gefunden.");
+  if (!client) throw new Error("Partner wurde nicht gefunden.");
   if (!creative) throw new Error("Creative wurde nicht gefunden.");
 
   const creativeRow = creative as CreativeRow;

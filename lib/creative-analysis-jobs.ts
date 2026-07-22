@@ -186,7 +186,7 @@ export async function startCreativeAnalysisJob(clientId: string, creativeIds: st
 
   if (creativesError) throw new Error(creativesError.message);
   const validIds = uniqueCreativeIds.filter((creativeId) => (validCreatives ?? []).some((creative) => creative.id === creativeId));
-  if (validIds.length === 0) throw new Error("Keine gueltigen Creatives fuer diesen Kunden gefunden.");
+  if (validIds.length === 0) throw new Error("Keine gueltigen Creatives fuer diesen Partner gefunden.");
 
   const { data: job, error: jobError } = await supabase
     .from("creative_analysis_jobs")

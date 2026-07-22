@@ -125,11 +125,11 @@ async function callOpenRouterForProfile(clientName: string, context: string) {
         {
           role: "system",
           content:
-            "Du bist ein Senior Performance-Marketing-Stratege. Extrahiere aus Kundenwissen ein sauberes Kundenprofil fuer Creative-Analyse und Ad-Konzeption. Antworte ausschliesslich mit einem validen JSON Objekt. Keine Markdown-Fences, keine Erklaerung. Wenn Informationen nicht sicher im Material stehen, verwende einen leeren String."
+            "Du bist ein Senior Performance-Marketing-Stratege. Extrahiere aus Partnerwissen ein sauberes Partnerprofil fuer Creative-Analyse und Ad-Konzeption. Antworte ausschliesslich mit einem validen JSON Objekt. Keine Markdown-Fences, keine Erklaerung. Wenn Informationen nicht sicher im Material stehen, verwende einen leeren String."
         },
         {
           role: "user",
-          content: `Kunde: ${clientName}\n\nErzeuge exakt diese JSON Keys als Strings:\nbrandName, positioning, toneOfVoice, targetAudience, painPoints, buyingTriggers, usps, offers, forbiddenClaims, brandNoGos, competitors, ctaPreferences.\n\nHinweise:\n- Sprache: Deutsch.\n- Kompakt, aber konkret.\n- Mehrere Punkte innerhalb eines Feldes als kurze Bullet-Zeilen mit "- ".\n- Keine erfundenen Aussagen.\n\nWissensdatenbank:\n${context}`
+          content: `Partner: ${clientName}\n\nErzeuge exakt diese JSON Keys als Strings:\nbrandName, positioning, toneOfVoice, targetAudience, painPoints, buyingTriggers, usps, offers, forbiddenClaims, brandNoGos, competitors, ctaPreferences.\n\nHinweise:\n- Sprache: Deutsch.\n- Kompakt, aber konkret.\n- Mehrere Punkte innerhalb eines Feldes als kurze Bullet-Zeilen mit "- ".\n- Keine erfundenen Aussagen.\n\nWissensdatenbank:\n${context}`
         }
       ]
     })
@@ -137,7 +137,7 @@ async function callOpenRouterForProfile(clientName: string, context: string) {
   const payload = (await response.json()) as OpenRouterChatResponse;
 
   if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message ?? "OpenRouter konnte das Kundenprofil nicht erzeugen.");
+    throw new Error(payload.error?.message ?? "OpenRouter konnte das Partnerprofil nicht erzeugen.");
   }
 
   const content = textFromContent(payload.choices?.[0]?.message?.content);
@@ -151,7 +151,7 @@ export async function generateClientProfileFromKnowledge(clientId: string) {
   const { data: client, error: clientError } = await supabase.from("clients").select("id,name").eq("id", clientId).maybeSingle();
 
   if (clientError) throw new Error(clientError.message);
-  if (!client) throw new Error("Kunde wurde nicht gefunden.");
+  if (!client) throw new Error("Partner wurde nicht gefunden.");
 
   const context = await loadKnowledgeContext(clientId);
   const generatedProfile = await callOpenRouterForProfile(client.name, context);

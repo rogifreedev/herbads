@@ -227,7 +227,7 @@ export async function startMetaBackfill(clientId: string) {
     .limit(1)
     .single();
 
-  if (accountError || !account) throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+  if (accountError || !account) throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Partner gefunden.");
 
   const since = dateYearsAgo(2);
   const until = today();

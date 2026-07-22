@@ -712,7 +712,7 @@ export async function syncMetaForClient(clientId: string, options?: MetaSyncOpti
     .single();
 
   if (accountError || !account) {
-    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Partner gefunden.");
   }
 
   const { data: job } = await supabase
@@ -966,7 +966,7 @@ export async function syncMetaInsightsForClient(clientId: string, options?: Meta
     .single();
 
   if (accountError || !account) {
-    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Partner gefunden.");
   }
 
   const { data: job } = await supabase
@@ -1150,7 +1150,7 @@ export async function syncMetaBreakdownsForClient(clientId: string, options?: Me
     .single();
 
   if (accountError || !account) {
-    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+    throw new Error(accountError?.message ?? "Kein Meta Ad Account fuer diesen Partner gefunden.");
   }
 
   const { data: job } = await supabase
@@ -1237,7 +1237,7 @@ export async function getMetaAccountInsightsForClient(clientId: string, options?
     .single();
 
   if (error || !account) {
-    throw new Error(error?.message ?? "Kein Meta Ad Account fuer diesen Kunden gefunden.");
+    throw new Error(error?.message ?? "Kein Meta Ad Account fuer diesen Partner gefunden.");
   }
 
   const timeRange = encodeURIComponent(JSON.stringify(insightDateRange));

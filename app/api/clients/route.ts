@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ client }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Kunde konnte nicht angelegt werden." },
+      { error: error instanceof Error ? error.message : "Partner konnte nicht angelegt werden." },
       { status: 400 }
     );
   }

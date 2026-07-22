@@ -192,7 +192,7 @@ export async function getClientProfile(clientId: string): Promise<{ profile: Cli
   } catch (error) {
     return {
       profile: { clientId, ...emptyProfile },
-      error: error instanceof Error ? error.message : "Kundenprofil konnte nicht geladen werden."
+      error: error instanceof Error ? error.message : "Partnerprofil konnte nicht geladen werden."
     };
   }
 }
@@ -218,7 +218,7 @@ export async function createClient(input: CreateClientInput) {
   const metaAccountId = normalizeMetaAccountId(input.metaAccountId);
 
   if (!name) {
-    throw new Error("Kundenname ist erforderlich.");
+    throw new Error("Partnername ist erforderlich.");
   }
 
   if (!metaAccountId) {

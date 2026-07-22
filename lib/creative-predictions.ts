@@ -476,7 +476,7 @@ function buildPrompt(input: {
 
   return `Bewerte ein neu hochgeladenes ${input.upload.format === "video" ? "Video" : "Static"} Creative als Prediction Tool fuer Meta Ads.
 
-Marke / Kunde JSON:
+Marke / Partner JSON:
 ${JSON.stringify(input.brandProfile, null, 2)}
 
 Upload Kontext:

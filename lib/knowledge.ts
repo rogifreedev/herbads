@@ -110,14 +110,14 @@ function isUuid(value: string) {
 
 async function ensureClientExists(clientId: string) {
   if (!isUuid(clientId)) {
-    throw new Error("Ungueltige Kunden-ID. Bitte waehle zuerst einen echten Kunden im Dropdown aus.");
+    throw new Error("Ungueltige Partner-ID. Bitte waehle zuerst einen echten Partner im Dropdown aus.");
   }
 
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase.from("clients").select("id").eq("id", clientId).maybeSingle();
 
   if (error) throw error;
-  if (!data) throw new Error("Kunde wurde nicht gefunden. Bitte waehle einen vorhandenen Kunden aus.");
+  if (!data) throw new Error("Partner wurde nicht gefunden. Bitte waehle einen vorhandenen Partner aus.");
 }
 
 async function extractPdfText(buffer: Buffer) {

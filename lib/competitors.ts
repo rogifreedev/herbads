@@ -2061,7 +2061,7 @@ Regeln:
 - Nutze primaryText/headline fuer angle nur, wenn kein Video-Transcript und kein Bildinhalt verfuegbar ist; kennzeichne diese Einschraenkung dann in thesis.
 - Wenn ein Full Transcript vorhanden ist, darfst du das komplette Script in detectedText oder body strukturiert wiedergeben, aber nicht halluzinieren.
 - emotionScores hat Keys curiosity, desire, trust, urgency, joy, fearOfMissingOut mit 0-100.
-- adaptationIdeas sind konkrete Ideen, wie wir das Pattern fuer den Kunden adaptieren koennen, ohne zu kopieren.
+- adaptationIdeas sind konkrete Ideen, wie wir das Pattern fuer den Partner adaptieren koennen, ohne zu kopieren.
 - targetAudience und ageSignal duerfen echte Delivery-Daten nur behaupten, wenn publicAudienceSignals diese Daten enthalten. Sonst als "AI-Inferenz" formulieren.
 - audienceReasoning erklaert knapp, ob die Zielgruppenannahme aus oeffentlichen Demografie-Signalen oder aus Copy/Visual/Offer abgeleitet ist.
 - thesis ist die zentrale These, warum diese Ad funktionieren koennte, mit Bezug auf Hook, Angle, Emotion und Reach/Laufzeit.
@@ -2145,6 +2145,6 @@ export async function getCompetitorIdeaPatterns(clientId: string) {
       reachEstimate: creative.reachEstimate,
       rankingScore: creative.rankingScore,
       adaptationIdeas: creative.analysis?.adaptationIdeas ?? [],
-      copycatRisk: "Pattern adaptieren, nicht kopieren. Hook neu formulieren und an Kundenprofil/Brand Voice anpassen."
+      copycatRisk: "Pattern adaptieren, nicht kopieren. Hook neu formulieren und an Partnerprofil/Brand Voice anpassen."
     }));
 }

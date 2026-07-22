@@ -14,7 +14,7 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Kundenprofil konnte nicht aus der Wissensdatenbank erstellt werden." },
+      { error: error instanceof Error ? error.message : "Partnerprofil konnte nicht aus der Wissensdatenbank erstellt werden." },
       { status: 400 }
     );
   }
