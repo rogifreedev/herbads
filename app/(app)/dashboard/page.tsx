@@ -70,22 +70,8 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+      <section>
         <CreativeRankingTable />
-        <Card className="border-herb-border bg-card">
-          <CardHeader>
-            <CardTitle>{t("creativeHints")}</CardTitle>
-            <CardDescription>{t("creativeHintsDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm text-muted-foreground">
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
-              {t("creativeHintTop")}
-            </div>
-            <div className="rounded-xl border border-herb-border bg-secondary/70 p-4">
-              {t("creativeHintNext")}
-            </div>
-          </CardContent>
-        </Card>
       </section>
     </div>
   );
