@@ -16,6 +16,7 @@ export function Topbar() {
   const pathname = usePathname();
   const t = useTranslations("topbar");
   const tRoot = useTranslations();
+  const showClientSwitcher = pathname !== "/dashboard";
 
   return (
     <header className="sticky top-0 z-30 flex h-[var(--topbar-height)] items-center justify-between border-b border-herb-border bg-card/90 px-4 shadow-[var(--shadow-xs)] backdrop-blur-xl sm:px-6 lg:px-8">
@@ -32,7 +33,7 @@ export function Topbar() {
           <CheckCircle2 className="h-3.5 w-3.5" />
           {t("metaSynced")}
         </div>
-        <ClientSwitcher />
+        {showClientSwitcher ? <ClientSwitcher /> : null}
         <CreateClientDialog trigger="icon" />
         <Button variant="ghost" size="icon" className="hidden text-foreground/65 hover:text-foreground sm:inline-flex" aria-label={t("notifications")}>
           <Bell className="h-5 w-5" />
