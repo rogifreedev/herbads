@@ -24,11 +24,15 @@ export const navItems: NavItem[] = [
       "/clients/[clientId]/creatives",
       "/clients/[clientId]/iterations",
       "/clients/[clientId]/angles",
-      "/clients/[clientId]/creatives/landingpages"
+      "/clients/[clientId]/creatives/landingpages",
+      "/clients/[clientId]/settings",
+      "/clients/[clientId]/knowledge"
     ],
     children: [
       { title: "creatives", href: "/clients/[clientId]" },
       { title: "iterations", href: "/clients/[clientId]/iterations" },
+      { title: "clientProfile", href: "/clients/[clientId]/settings" },
+      { title: "knowledgeBase", href: "/clients/[clientId]/knowledge" },
       { title: "settings", href: "/clients/[clientId]/meta/settings" }
     ]
   },
@@ -71,11 +75,6 @@ export const navItems: NavItem[] = [
   {
     title: "settings",
     href: "/settings",
-    icon: Settings,
-    children: [
-      { title: "clientProfile", href: "/clients/[clientId]/settings" },
-      { title: "knowledgeBase", href: "/clients/[clientId]/knowledge" },
-      { title: "appSettings", href: "/settings" }
-    ]
+    icon: Settings
   },
 ];
