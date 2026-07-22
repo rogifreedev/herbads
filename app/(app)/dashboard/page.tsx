@@ -37,12 +37,10 @@ export default async function DashboardPage() {
             {t("heroDescription")}
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild variant="outline" size="lg" className="border-herb-border">
-              <Link href="/clients">
-                <CalendarDays className="mr-2 h-4 w-4" />
-                {t("last30Days")}
-              </Link>
-            </Button>
+            <div className="inline-flex h-11 items-center rounded-md border border-herb-border px-4 text-sm font-medium text-muted-foreground">
+              <CalendarDays className="mr-2 h-4 w-4" />
+              {t("last30Days")}
+            </div>
             <Button asChild variant="gradient" size="lg">
               <Link href="/reports">
                 <Download className="mr-2 h-4 w-4" />

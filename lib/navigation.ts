@@ -73,7 +73,6 @@ export const navItems: NavItem[] = [
     href: "/settings",
     icon: Settings,
     children: [
-      { title: "clients", href: "/clients" },
       { title: "clientProfile", href: "/clients/[clientId]/settings" },
       { title: "knowledgeBase", href: "/clients/[clientId]/knowledge" },
       { title: "appSettings", href: "/settings" }
