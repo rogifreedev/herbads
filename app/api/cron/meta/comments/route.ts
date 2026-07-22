@@ -28,12 +28,14 @@ function assertCronAuth(request: Request) {
 export async function POST(request: Request) {
   try {
     assertCronAuth(request);
+    const requestedClientId = new URL(request.url).searchParams.get("clientId");
     const supabase = createSupabaseServiceRoleClient();
     const { data, error } = await supabase.from("meta_ad_accounts").select("client_id,status,clients(status)");
     if (error) throw new Error(error.message);
     const clientIds = [...new Set(((data ?? []) as AccountRow[])
       .filter((account) => clientStatus(account.clients) === "active" && (account.status === "active" || account.status === "1"))
-      .map((account) => account.client_id))];
+      .map((account) => account.client_id))]
+      .filter((clientId) => !requestedClientId || clientId === requestedClientId);
     const results = [];
     for (const clientId of clientIds) {
       try {
