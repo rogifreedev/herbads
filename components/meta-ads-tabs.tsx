@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { cn } from "@/lib/utils";
 
-type MetaAdsTab = "overview" | "creatives" | "batches" | "angles" | "landingpages" | "iterations";
+type MetaAdsTab = "overview" | "creatives" | "batches" | "angles" | "landingpages" | "iterations" | "comments";
 
 type MetaAdsTabsProps = {
   clientId: string;
@@ -15,7 +15,8 @@ const tabs: Array<{ id: MetaAdsTab; labelKey: string; href: (clientId: string) =
   { id: "batches", labelKey: "batches", href: (clientId) => `/clients/${clientId}/creatives/batches` },
   { id: "angles", labelKey: "angles", href: (clientId) => `/clients/${clientId}/angles` },
   { id: "landingpages", labelKey: "landingpages", href: (clientId) => `/clients/${clientId}/creatives/landingpages` },
-  { id: "iterations", labelKey: "iterations", href: (clientId) => `/clients/${clientId}/iterations` }
+  { id: "iterations", labelKey: "iterations", href: (clientId) => `/clients/${clientId}/iterations` },
+  { id: "comments", labelKey: "comments", href: (clientId) => `/clients/${clientId}/comments` }
 ];
 
 export async function MetaAdsTabs({ clientId, active }: MetaAdsTabsProps) {

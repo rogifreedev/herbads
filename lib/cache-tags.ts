@@ -15,7 +15,8 @@ export const CACHE_TAGS = {
   landingpages: "landingpages",
   knowledge: "knowledge",
   creativeAnalysis: "creative-analysis",
-  videoTranscripts: "video-transcripts"
+  videoTranscripts: "video-transcripts",
+  comments: "comments"
 } as const;
 
 export const META_DATA_CACHE_TAGS = [
@@ -25,7 +26,8 @@ export const META_DATA_CACHE_TAGS = [
   CACHE_TAGS.adIdeas,
   CACHE_TAGS.iterations,
   CACHE_TAGS.competitors,
-  CACHE_TAGS.landingpages
+  CACHE_TAGS.landingpages,
+  CACHE_TAGS.comments
 ] as const;
 
 export const CREATIVE_ANALYSIS_CACHE_TAGS = [

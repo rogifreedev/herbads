@@ -23,6 +23,7 @@ export const navItems: NavItem[] = [
     activeHrefs: [
       "/clients/[clientId]/creatives",
       "/clients/[clientId]/iterations",
+      "/clients/[clientId]/comments",
       "/clients/[clientId]/angles",
       "/clients/[clientId]/creatives/landingpages",
       "/clients/[clientId]/settings",

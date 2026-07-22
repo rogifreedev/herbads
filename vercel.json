@@ -9,6 +9,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/meta/comments",
+      "schedule": "0 7 * * *"
+    },
+    {
       "path": "/api/cron/creative-analysis/process",
       "schedule": "0 4 * * *"
     },
