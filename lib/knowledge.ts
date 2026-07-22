@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { unstable_cache } from "next/cache";
 import { CACHE_TAGS, KNOWLEDGE_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
@@ -7,7 +8,7 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type JsonRecord = Record<string, unknown>;
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const KNOWLEDGE_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set(["txt", "md", "markdown", "json", "pdf", "docx"]);
 const DOCUMENT_TYPES = new Set(["general", "brand", "audience", "offer", "claims", "competitors"]);
 
@@ -26,13 +27,6 @@ export type KnowledgeDocument = {
   fileName: string | null;
   fileSize: number | null;
   createdAt: string;
-};
-
-type UploadKnowledgeDocumentInput = {
-  clientId: string;
-  title?: string;
-  documentType?: string;
-  file: File;
 };
 
 type EmbeddingResult = {
@@ -190,11 +184,9 @@ async function ensureKnowledgeBucket() {
   const bucket = getOptionalEnv("SUPABASE_KNOWLEDGE_BUCKET", "knowledge-documents");
   const { error: getError } = await supabase.storage.getBucket(bucket);
 
-  if (!getError) return bucket;
-
-  const { error: createError } = await supabase.storage.createBucket(bucket, {
+  const bucketOptions = {
     public: false,
-    fileSizeLimit: MAX_UPLOAD_BYTES,
+    fileSizeLimit: KNOWLEDGE_MAX_UPLOAD_BYTES,
     allowedMimeTypes: [
       "text/plain",
       "text/markdown",
@@ -203,7 +195,15 @@ async function ensureKnowledgeBucket() {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "application/octet-stream"
     ]
-  });
+  };
+
+  if (!getError) {
+    const { error: updateError } = await supabase.storage.updateBucket(bucket, bucketOptions);
+    if (updateError) throw updateError;
+    return bucket;
+  }
+
+  const { error: createError } = await supabase.storage.createBucket(bucket, bucketOptions);
 
   if (createError && !createError.message.toLowerCase().includes("already exists")) {
     throw createError;
@@ -323,31 +323,79 @@ export async function listKnowledgeDocuments(clientId: string): Promise<{ docume
   return listKnowledgeDocumentsCached(clientId);
 }
 
-export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInput) {
-  const supabase = createSupabaseServiceRoleClient();
-  const originalFileName = input.file.name || "knowledge-document.txt";
-  const extension = fileExtension(originalFileName);
-  const title = input.title?.trim() || originalFileName.replace(/\.[^.]+$/, "") || "Wissensdokument";
-  const documentType = normalizeDocumentType(input.documentType);
-  let documentId: string | null = null;
+function validateKnowledgeFile(fileName: string, fileSize: number) {
+  const extension = fileExtension(fileName);
 
   if (!SUPPORTED_EXTENSIONS.has(extension)) {
     throw new Error("Aktuell werden TXT, Markdown, JSON, PDF und DOCX unterstuetzt.");
   }
 
-  if (input.file.size <= 0) {
+  if (!Number.isFinite(fileSize) || fileSize <= 0) {
     throw new Error("Die Datei ist leer.");
   }
 
-  if (input.file.size > MAX_UPLOAD_BYTES) {
-    throw new Error("Die Datei ist zu gross. Maximal erlaubt sind 10 MB.");
+  if (fileSize > KNOWLEDGE_MAX_UPLOAD_BYTES) {
+    throw new Error("Die Datei ist zu gross. Maximal erlaubt sind 50 MB.");
+  }
+
+  return extension;
+}
+
+type PrepareKnowledgeUploadInput = {
+  clientId: string;
+  fileName: string;
+  fileSize: number;
+};
+
+export async function prepareKnowledgeUpload(input: PrepareKnowledgeUploadInput) {
+  validateKnowledgeFile(input.fileName, input.fileSize);
+  await ensureClientExists(input.clientId);
+
+  const supabase = createSupabaseServiceRoleClient();
+  const bucket = await ensureKnowledgeBucket();
+  const storagePath = `${input.clientId}/pending/${randomUUID()}-${cleanStorageName(input.fileName)}`;
+  const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(storagePath);
+
+  if (error || !data) throw error ?? new Error("Upload konnte nicht vorbereitet werden.");
+
+  return { bucket, storagePath, token: data.token };
+}
+
+type ProcessKnowledgeUploadInput = {
+  clientId: string;
+  title?: string;
+  documentType?: string;
+  storagePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType?: string;
+};
+
+export async function processKnowledgeUpload(input: ProcessKnowledgeUploadInput) {
+  const supabase = createSupabaseServiceRoleClient();
+  const originalFileName = input.fileName || "knowledge-document.txt";
+  const extension = validateKnowledgeFile(originalFileName, input.fileSize);
+  const title = input.title?.trim() || originalFileName.replace(/\.[^.]+$/, "") || "Wissensdokument";
+  const documentType = normalizeDocumentType(input.documentType);
+  let documentId: string | null = null;
+  let finalStoragePath: string | null = null;
+  let storageMoved = false;
+
+  if (!input.storagePath.startsWith(`${input.clientId}/pending/`) || input.storagePath.includes("..")) {
+    throw new Error("Ungueltiger Upload-Pfad.");
   }
 
   await ensureClientExists(input.clientId);
 
   try {
     const bucket = await ensureKnowledgeBucket();
-    const buffer = Buffer.from(await input.file.arrayBuffer());
+    const { data: storedFile, error: downloadError } = await supabase.storage.from(bucket).download(input.storagePath);
+    if (downloadError || !storedFile) throw downloadError ?? new Error("Hochgeladene Datei wurde nicht gefunden.");
+
+    validateKnowledgeFile(originalFileName, storedFile.size);
+    if (storedFile.size !== input.fileSize) throw new Error("Die hochgeladene Dateigroesse stimmt nicht ueberein.");
+
+    const buffer = Buffer.from(await storedFile.arrayBuffer());
     const content = await extractTextFromBuffer(buffer, extension);
 
     if (content.length < 20) {
@@ -364,8 +412,8 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
         status: "processing",
         metadata: {
           file_name: originalFileName,
-          file_size: input.file.size,
-          mime_type: input.file.type || null
+          file_size: storedFile.size,
+          mime_type: input.mimeType || null
         }
       })
       .select("id")
@@ -374,13 +422,16 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
     if (insertError || !document) throw insertError ?? new Error("Wissensdokument konnte nicht angelegt werden.");
     documentId = document.id;
 
-    const storagePath = `${input.clientId}/${document.id}/${cleanStorageName(originalFileName)}`;
-    const { error: storageError } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
-      contentType: input.file.type || "text/plain",
-      upsert: true
-    });
+    finalStoragePath = `${input.clientId}/${document.id}/${cleanStorageName(originalFileName)}`;
+    const { error: moveError } = await supabase.storage.from(bucket).move(input.storagePath, finalStoragePath);
+    if (moveError) throw moveError;
+    storageMoved = true;
 
-    if (storageError) throw storageError;
+    const { error: storagePathError } = await supabase
+      .from("client_knowledge_documents")
+      .update({ storage_path: finalStoragePath })
+      .eq("id", document.id);
+    if (storagePathError) throw storagePathError;
 
     const chunks = chunkText(content);
     const embeddingResult = await createEmbeddings(chunks);
@@ -410,8 +461,8 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
 
     const metadata = {
       file_name: originalFileName,
-      file_size: input.file.size,
-      mime_type: input.file.type || null,
+      file_size: storedFile.size,
+      mime_type: input.mimeType || null,
       chunk_count: chunks.length,
       embedding_provider: embeddingResult.provider,
       embedding_model: embeddingResult.model,
@@ -419,7 +470,7 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
     };
     const { data: readyDocument, error: updateError } = await supabase
       .from("client_knowledge_documents")
-      .update({ storage_path: storagePath, status: "ready", metadata })
+      .update({ storage_path: finalStoragePath, status: "ready", metadata })
       .eq("id", document.id)
       .select("id,client_id,title,document_type,source_type,status,storage_path,error_message,metadata,created_at")
       .single();
@@ -429,6 +480,11 @@ export async function uploadKnowledgeDocument(input: UploadKnowledgeDocumentInpu
     revalidateCacheTags(...KNOWLEDGE_CACHE_TAGS);
     return mapKnowledgeDocument(readyDocument);
   } catch (error) {
+    if (!storageMoved) {
+      const bucket = getOptionalEnv("SUPABASE_KNOWLEDGE_BUCKET", "knowledge-documents");
+      await supabase.storage.from(bucket).remove([input.storagePath]);
+    }
+
     if (documentId) {
       await supabase
         .from("client_knowledge_documents")

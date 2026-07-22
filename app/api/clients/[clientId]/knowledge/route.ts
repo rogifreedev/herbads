@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { uploadKnowledgeDocument } from "@/lib/knowledge";
+import { prepareKnowledgeUpload, processKnowledgeUpload } from "@/lib/knowledge";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type RouteContext = {
   params: Promise<{ clientId: string }>;
@@ -10,18 +11,27 @@ type RouteContext = {
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { clientId } = await context.params;
-    const formData = await request.formData();
-    const file = formData.get("file");
+    const input = await request.json() as Record<string, unknown>;
 
-    if (!file || typeof file === "string") {
-      throw new Error("Bitte waehle eine Datei aus.");
+    if (input.action === "prepare") {
+      const upload = await prepareKnowledgeUpload({
+        clientId,
+        fileName: String(input.fileName ?? ""),
+        fileSize: Number(input.fileSize)
+      });
+      return NextResponse.json(upload);
     }
 
-    const document = await uploadKnowledgeDocument({
+    if (input.action !== "process") throw new Error("Ungueltige Upload-Aktion.");
+
+    const document = await processKnowledgeUpload({
       clientId,
-      file,
-      title: typeof formData.get("title") === "string" ? String(formData.get("title")) : undefined,
-      documentType: typeof formData.get("documentType") === "string" ? String(formData.get("documentType")) : undefined
+      storagePath: String(input.storagePath ?? ""),
+      fileName: String(input.fileName ?? ""),
+      fileSize: Number(input.fileSize),
+      mimeType: typeof input.mimeType === "string" ? input.mimeType : undefined,
+      title: typeof input.title === "string" ? input.title : undefined,
+      documentType: typeof input.documentType === "string" ? input.documentType : undefined
     });
 
     return NextResponse.json({ document }, { status: 201 });

@@ -562,6 +562,7 @@
     "noDocumentsDescription": "Carica TXT, Markdown, JSON, PDF o DOCX. I file vengono salvati, suddivisi in chunk di conoscenza e opzionalmente indicizzati con embedding.",
     "chunkCount": "{count, plural, one {# chunk} other {# chunk}}",
     "uploadError": "Impossibile caricare il documento di conoscenza.",
+    "fileTooLarge": "Il file è troppo grande. La dimensione massima consentita è 50 MB.",
     "uploadSuccess": "Documento di conoscenza salvato e indicizzato.",
     "uploadTitle": "Carica documento",
     "titleLabel": "Titolo",
@@ -576,7 +577,7 @@
     "fileLabel": "File",
     "uploading": "Indicizzazione…",
     "uploadButton": "Carica",
-    "supportNote": "Supporta TXT, Markdown, JSON, PDF e DOCX fino a 10 MB. Se `OPENROUTER_API_KEY` o `OPENAI_API_KEY` è impostata, i chunk vengono incorporati con embedding per la Vector Search."
+    "supportNote": "Supporta TXT, Markdown, JSON, PDF e DOCX fino a 50 MB. Se `OPENROUTER_API_KEY` o `OPENAI_API_KEY` è impostata, i chunk vengono incorporati con embedding per la Vector Search."
   },
   "learning": {
     "subtitle": "Pattern vincenti basati sui dati, segnali di fatigue, nuove opportunità di hook/angle e prediction score per le Ad Ideas.",

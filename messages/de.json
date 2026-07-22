@@ -562,6 +562,7 @@
     "noDocumentsDescription": "Lade TXT, Markdown, JSON, PDF oder DOCX hoch. Die Dateien werden gespeichert, in Wissens-Chunks zerlegt und optional mit Embeddings indexiert.",
     "chunkCount": "{count, plural, one {# Chunk} other {# Chunks}}",
     "uploadError": "Wissensdokument konnte nicht hochgeladen werden.",
+    "fileTooLarge": "Die Datei ist zu groß. Maximal erlaubt sind 50 MB.",
     "uploadSuccess": "Wissensdokument gespeichert und indexiert.",
     "uploadTitle": "Dokument hochladen",
     "titleLabel": "Titel",
@@ -576,7 +577,7 @@
     "fileLabel": "Datei",
     "uploading": "Indexiert…",
     "uploadButton": "Hochladen",
-    "supportNote": "Unterstützt TXT, Markdown, JSON, PDF und DOCX bis 10 MB. Wenn `OPENROUTER_API_KEY` oder `OPENAI_API_KEY` gesetzt ist, werden Chunks für Vector Search eingebettet."
+    "supportNote": "Unterstützt TXT, Markdown, JSON, PDF und DOCX bis 50 MB. Wenn `OPENROUTER_API_KEY` oder `OPENAI_API_KEY` gesetzt ist, werden Chunks für Vector Search eingebettet."
   },
   "learning": {
     "subtitle": "Datenbasierte Gewinner-Muster, Fatigue-Signale, neue Hook-/Angle-Chancen und Prediction Scores für Ad Ideas.",

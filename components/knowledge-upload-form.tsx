@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 type KnowledgeUploadFormProps = {
   clientId: string;
@@ -21,23 +24,62 @@ export function KnowledgeUploadForm({ clientId }: KnowledgeUploadFormProps) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
+    const formData = new FormData(event.currentTarget);
+    const file = formData.get("file");
 
-    const response = await fetch(`/api/clients/${clientId}/knowledge`, {
-      method: "POST",
-      body: new FormData(event.currentTarget)
-    });
-    const result = await response.json();
-    setLoading(false);
-
-    if (!response.ok) {
-      toast.error(result.error ?? t("uploadError"));
+    if (!(file instanceof File)) {
+      toast.error(t("uploadError"));
       return;
     }
 
-    toast.success(t("uploadSuccess"));
-    formRef.current?.reset();
-    router.refresh();
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error(t("fileTooLarge"));
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const prepareResponse = await fetch(`/api/clients/${clientId}/knowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "prepare", fileName: file.name, fileSize: file.size })
+      });
+      const prepared = await prepareResponse.json();
+
+      if (!prepareResponse.ok) throw new Error(prepared.error ?? t("uploadError"));
+
+      const supabase = createSupabaseBrowserClient();
+      const { error: uploadError } = await supabase.storage
+        .from(prepared.bucket)
+        .uploadToSignedUrl(prepared.storagePath, prepared.token, file, { contentType: file.type || "application/octet-stream" });
+      if (uploadError) throw uploadError;
+
+      const processResponse = await fetch(`/api/clients/${clientId}/knowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "process",
+          storagePath: prepared.storagePath,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          title: String(formData.get("title") ?? ""),
+          documentType: String(formData.get("documentType") ?? "general")
+        })
+      });
+      const result = await processResponse.json();
+
+      if (!processResponse.ok) throw new Error(result.error ?? t("uploadError"));
+
+      toast.success(t("uploadSuccess"));
+      formRef.current?.reset();
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("uploadError"));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
