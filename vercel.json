@@ -21,6 +21,10 @@
       "schedule": "30 4 * * *"
     },
     {
+      "path": "/api/cron/competitors/daily-crawl",
+      "schedule": "30 1 * * *"
+    },
+    {
       "path": "/api/cron/iterations/weekly-generate",
       "schedule": "0 5 * * 1"
     },

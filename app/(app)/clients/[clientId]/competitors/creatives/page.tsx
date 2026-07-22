@@ -4,6 +4,7 @@ import { CompetitorBulkAnalyzeButton } from "@/components/competitor-intelligenc
 import { CompetitorIntelligenceControls, type CompetitorIntelligenceTab } from "@/components/competitor-intelligence-controls";
 import { CompetitorCreativesTable } from "@/components/competitor-creatives-table";
 import { CompetitorSectionNav } from "@/components/competitor-section-nav";
+import { CreativeDateRangePicker } from "@/components/creative-date-range-picker";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import type { CreativeEmotionScores } from "@/lib/creative-ai";
 import type { Translator } from "@/lib/i18n-types";
 import { displayLandingUrl, normalizeLandingUrl } from "@/lib/landingpage-utils";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/metrics";
+import { resolveInsightDateFilters } from "@/lib/date-filters";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -82,11 +84,14 @@ export default async function CompetitorCreativesPage({
 }) {
   const [{ clientId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const t = await getTranslations("competitors");
+  const tCommon = await getTranslations("common");
   const overview = await getCompetitorOverview(clientId);
+  const dateFilters = resolveInsightDateFilters(resolvedSearchParams, 30);
   const activeTab = resolveTab(firstParam(resolvedSearchParams.tab));
   const selectedCompetitorId = resolveCompetitorId(firstParam(resolvedSearchParams.competitor), overview.competitors);
   const selectedCompetitor = selectedCompetitorId ? overview.competitors.find((competitor) => competitor.id === selectedCompetitorId) ?? null : null;
-  const filteredCreatives = selectedCompetitorId ? overview.creatives.filter((creative) => creative.competitorId === selectedCompetitorId) : overview.creatives;
+  const competitorCreatives = selectedCompetitorId ? overview.creatives.filter((creative) => creative.competitorId === selectedCompetitorId) : overview.creatives;
+  const filteredCreatives = dateFilters.dateError ? [] : competitorCreatives.filter((creative) => creativeWasActiveInRange(creative, dateFilters.since, dateFilters.until));
   const groups = groupCreativesByCompetitor(overview.competitors, filteredCreatives);
   const overviewMetrics = buildOverviewMetrics(filteredCreatives);
   const angleRows = buildAngleRows(filteredCreatives);
@@ -102,7 +107,10 @@ export default async function CompetitorCreativesPage({
             {t("intelligenceSubtitle")}
           </p>
         </div>
-        <CompetitorSectionNav clientId={clientId} active="creatives" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <CreativeDateRangePicker defaultDays={30} />
+          <CompetitorSectionNav clientId={clientId} active="creatives" />
+        </div>
       </div>
 
       {overview.error ? (
@@ -110,6 +118,7 @@ export default async function CompetitorCreativesPage({
           <AlertDescription>{overview.error}</AlertDescription>
         </Alert>
       ) : null}
+      {dateFilters.dateError ? <Alert variant="warning"><AlertDescription>{tCommon("dateRangeError")}</AlertDescription></Alert> : null}
 
       <CompetitorIntelligenceControls
         activeTab={activeTab}
@@ -506,6 +515,14 @@ function resolveTab(value: string | undefined): CompetitorIntelligenceTab {
 function resolveCompetitorId(value: string | undefined, competitors: Competitor[]) {
   if (!value) return null;
   return competitors.some((competitor) => competitor.id === value) ? value : null;
+}
+
+function creativeWasActiveInRange(creative: CompetitorCreative, since: string | null, until: string | null) {
+  const startedAt = (creative.startedAt ?? creative.createdAt).slice(0, 10);
+  const endedAt = creative.endedAt?.slice(0, 10) ?? null;
+  if (since && endedAt && endedAt < since) return false;
+  if (until && startedAt > until) return false;
+  return true;
 }
 
 function groupCreativesByCompetitor(competitors: Competitor[], creatives: CompetitorCreative[]): CompetitorCreativeGroup[] {
