@@ -464,22 +464,28 @@ async function listClientCreativesPageUncached(
 ) {
   try {
     const supabase = createSupabaseServiceRoleClient();
-    const { data, error } = await supabase.rpc("get_client_conversion_creative_summaries_page", {
-      p_client_id: clientId,
-      p_since: since,
-      p_until: until,
-      p_limit: pageSize,
-      p_offset: (page - 1) * pageSize,
-      p_query: query,
-      p_type: type,
-      p_status: status,
-      p_funnel: funnel,
-      p_min_score: minScore,
-      p_min_spend: minSpend,
-      p_min_roas: minRoas,
-      p_min_ctr: minCtr,
-      p_sort: sort ?? "spend"
-    });
+    const rpcParams = {
+        p_client_id: clientId,
+        p_since: since,
+        p_until: until,
+        p_limit: pageSize,
+        p_offset: (page - 1) * pageSize,
+        p_query: query,
+        p_type: type,
+        p_status: status,
+        p_funnel: funnel,
+        p_min_score: minScore,
+        p_min_spend: minSpend,
+        p_min_roas: minRoas,
+        p_min_ctr: minCtr,
+        p_sort: sort ?? "spend"
+      };
+    let { data, error } = await supabase.rpc("get_client_conversion_creative_summaries_page", rpcParams);
+
+    if (error && /statement timeout|canceling statement/i.test(error.message)) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      ({ data, error } = await supabase.rpc("get_client_conversion_creative_summaries_page", rpcParams));
+    }
 
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as CreativeSummaryPageRow[];
@@ -499,7 +505,7 @@ async function listClientCreativesPageUncached(
 
 const listClientCreativesPageCached = unstable_cache(
   listClientCreativesPageUncached,
-  ["list-client-conversion-creatives-page-v1"],
+  ["list-client-conversion-creatives-page-v2"],
   { revalidate: 120, tags: [CACHE_TAGS.creatives] }
 );
 
@@ -534,14 +540,18 @@ export function listTopClientCreatives(clientId: string, dateRange?: CreativeIns
 
 async function listClientCreativeIdsUncached(clientId: string) {
   const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase.rpc("get_client_conversion_creative_ids", { p_client_id: clientId });
+  let { data, error } = await supabase.rpc("get_client_conversion_creative_ids", { p_client_id: clientId });
+  if (error && /statement timeout|canceling statement/i.test(error.message)) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    ({ data, error } = await supabase.rpc("get_client_conversion_creative_ids", { p_client_id: clientId }));
+  }
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: { id: string }) => row.id);
 }
 
 const listClientCreativeIdsCached = unstable_cache(
   listClientCreativeIdsUncached,
-  ["list-client-conversion-creative-ids-v1"],
+  ["list-client-conversion-creative-ids-v2"],
   { revalidate: 120, tags: [CACHE_TAGS.creatives] }
 );
 
