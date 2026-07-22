@@ -3,14 +3,17 @@ import { CalendarDays, Download } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClientPerformanceCard } from "@/components/client-performance-card";
 import { CreativeRankingTable } from "@/components/creative-ranking-table";
 import { MetricCard } from "@/components/metric-card";
 import { Separator } from "@/components/ui/separator";
-import { formatCurrency, formatDecimal, formatNumber, formatPercent, getGlobalPerformanceMetrics } from "@/lib/metrics";
+import { resolveInsightDateFilters } from "@/lib/date-filters";
+import { formatCurrency, formatDecimal, formatNumber, formatPercent, getAgencyPerformanceOverviewForRange } from "@/lib/metrics";
 
 export default async function DashboardPage() {
   const [t, tCommon] = await Promise.all([getTranslations("dashboard"), getTranslations("common")]);
-  const { metrics, hasData } = await getGlobalPerformanceMetrics();
+  const dateRange = resolveInsightDateFilters({}, 30);
+  const { metrics, clients, hasData } = await getAgencyPerformanceOverviewForRange(dateRange);
   const metricCards = hasData
     ? [
         { label: "Ad Spend", value: formatCurrency(metrics.spend), change: `${formatNumber(metrics.impressions)} Impr.`, tone: "neutral" as const },
@@ -68,6 +71,36 @@ export default async function DashboardPage() {
         {metricCards.map((metric) => (
           <MetricCard key={metric.label} {...metric} />
         ))}
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-heading text-2xl font-semibold text-foreground">{t("partnerPerformanceTitle")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("partnerPerformanceDescription")}</p>
+        </div>
+        {clients.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {clients.map((client) => (
+              <ClientPerformanceCard
+                key={client.clientId}
+                {...client}
+                labels={{
+                  period: t("period30Days"),
+                  noData: tCommon("noData"),
+                  spend: "Spend",
+                  roas: "ROAS",
+                  conversions: t("conversions"),
+                  impressions: "Impressions",
+                  ctr: "CTR",
+                  revenue: t("revenue"),
+                  open: t("openPartnerDashboard", { name: client.clientName })
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("noActivePartners")}</p>
+        )}
       </section>
 
       <section>

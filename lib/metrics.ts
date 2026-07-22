@@ -57,6 +57,18 @@ type AggregatedInsightRow = InsightRow & {
   row_count: number | string | null;
 };
 
+type ClientAggregatedInsightRow = AggregatedInsightRow & {
+  client_id: string;
+  client_name: string;
+};
+
+export type ClientPerformanceSummary = {
+  clientId: string;
+  clientName: string;
+  metrics: PerformanceMetrics;
+  hasData: boolean;
+};
+
 type BreakdownMetricRow = InsightRow & {
   breakdown_type: string | null;
   breakdown_value: string | null;
@@ -223,6 +235,49 @@ export const getClientPerformanceBreakdowns = unstable_cache(
 
 export function getClientPerformanceBreakdownsForRange(clientId: string, dateRange?: InsightDateRange) {
   return getClientPerformanceBreakdowns(clientId, dateRange?.since ?? null, dateRange?.until ?? null);
+}
+
+function insightRowHasData(row: InsightRow) {
+  return toNumber(row.spend) > 0 || toNumber(row.impressions) > 0 || toNumber(row.purchases) > 0 || toNumber(row.purchase_value) > 0;
+}
+
+async function getAgencyPerformanceOverviewUncached(since?: string | null, until?: string | null) {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase.rpc("get_clients_performance_metrics", {
+    p_since: since ?? null,
+    p_until: until ?? null
+  });
+
+  if (error) {
+    return { metrics: emptyMetrics, clients: [] as ClientPerformanceSummary[], hasData: false, error: error.message };
+  }
+
+  const rows = (data ?? []) as ClientAggregatedInsightRow[];
+  const clients = rows
+    .map((row) => ({
+      clientId: row.client_id,
+      clientName: row.client_name,
+      metrics: aggregateInsightRows([row]),
+      hasData: insightRowHasData(row)
+    }))
+    .sort((left, right) => right.metrics.spend - left.metrics.spend || left.clientName.localeCompare(right.clientName, "de"));
+
+  return {
+    metrics: aggregateInsightRows(rows),
+    clients,
+    hasData: rows.some(insightRowHasData),
+    error: null
+  };
+}
+
+const getAgencyPerformanceOverview = unstable_cache(
+  getAgencyPerformanceOverviewUncached,
+  ["agency-performance-overview-v1"],
+  { revalidate: 120, tags: [CACHE_TAGS.clients, CACHE_TAGS.metrics] }
+);
+
+export function getAgencyPerformanceOverviewForRange(dateRange?: InsightDateRange) {
+  return getAgencyPerformanceOverview(dateRange?.since ?? null, dateRange?.until ?? null);
 }
 
 async function getGlobalPerformanceMetricsUncached() {
