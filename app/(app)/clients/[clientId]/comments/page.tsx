@@ -24,7 +24,7 @@ export default async function CommentsPage({ params }: { params: Promise<{ clien
 
       <MetaAdsTabs clientId={clientId} active="comments" />
       {overview.error ? <Alert variant="warning"><AlertDescription>{overview.error}</AlertDescription></Alert> : null}
-      {overview.sync.failedStories ? <Alert variant="warning"><AlertDescription>{t("failedStories", { count: overview.sync.failedStories })}</AlertDescription></Alert> : null}
+      {overview.sync.failedStories ? <Alert variant="warning"><AlertDescription>{t("failedStories", { count: overview.sync.failedStories, error: overview.sync.lastError ?? t("unknownMetaError") })}</AlertDescription></Alert> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label={t("totalComments")} value={overview.totals.comments} />

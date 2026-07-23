@@ -18,6 +18,7 @@ type AdRow = {
 };
 type StorySource = {
   storyId: string;
+  pageId: string;
   adAccountId: string;
   adId: string;
   creativeId: string | null;
@@ -62,7 +63,7 @@ export type MetaCommentListItem = {
 export type MetaCommentsOverview = {
   comments: MetaCommentListItem[];
   totals: { comments: number; candidates: number; analyzed: number; pending: number };
-  sync: { stories: number; failedStories: number; lastSyncedAt: string | null };
+  sync: { stories: number; failedStories: number; lastSyncedAt: string | null; lastError: string | null };
   error: string | null;
 };
 
@@ -94,9 +95,9 @@ function metaToken() {
   return token;
 }
 
-async function fetchMetaPage(url: URL | string): Promise<MetaPage> {
+async function fetchMetaPage(url: URL | string, accessToken = metaToken()): Promise<MetaPage> {
   const requestUrl = typeof url === "string" ? new URL(url) : url;
-  if (!requestUrl.searchParams.has("access_token")) requestUrl.searchParams.set("access_token", metaToken());
+  if (!requestUrl.searchParams.has("access_token")) requestUrl.searchParams.set("access_token", accessToken);
   const response = await fetch(requestUrl, { cache: "no-store" });
   const payload = await response.json().catch(() => ({})) as MetaPage & { error?: { message?: string } };
   if (!response.ok || payload.error) throw new Error(payload.error?.message ?? `Meta Kommentare konnten nicht geladen werden (${response.status}).`);
@@ -114,7 +115,7 @@ function flattenComments(comments: MetaComment[]) {
   return flattened;
 }
 
-async function fetchStoryComments(storyId: string, since: string | null) {
+async function fetchStoryComments(storyId: string, since: string | null, accessToken: string) {
   const version = getOptionalEnv("META_API_VERSION", "v20.0");
   const url = new URL(`https://graph.facebook.com/${version}/${storyId}/comments`);
   url.searchParams.set("fields", "id,message,created_time,from{id,name},like_count,comment_count,parent{id},comments.limit(100){id,message,created_time,from{id,name},like_count,comment_count,parent{id}}");
@@ -131,7 +132,7 @@ async function fetchStoryComments(storyId: string, since: string | null) {
   let page = 0;
   const maxPages = Math.max(1, Number(getOptionalEnv("META_COMMENTS_MAX_PAGES_PER_STORY", "20")) || 20);
   while (next && page < maxPages) {
-    const payload = await fetchMetaPage(next);
+    const payload = await fetchMetaPage(next, accessToken);
     comments.push(...flattenComments(payload.data ?? []));
     next = payload.paging?.next ?? null;
     page += 1;
@@ -151,9 +152,9 @@ function storyCommentsRelativeUrl(storyId: string, since: string | null) {
   return `${version}/${storyId}/comments?${params.toString()}`;
 }
 
-async function fetchStoryCommentsBatch(items: Array<{ source: StorySource; since: string | null }>) {
+async function fetchStoryCommentsBatch(items: Array<{ source: StorySource; since: string | null }>, accessToken: string) {
   const body = new URLSearchParams({
-    access_token: metaToken(),
+    access_token: accessToken,
     include_headers: "false",
     batch: JSON.stringify(items.map((item) => ({ method: "GET", relative_url: storyCommentsRelativeUrl(item.source.storyId, item.since) })))
   });
@@ -173,13 +174,26 @@ async function fetchStoryCommentsBatch(items: Array<{ source: StorySource; since
     let page = 1;
     const maxPages = Math.max(1, Number(getOptionalEnv("META_COMMENTS_MAX_PAGES_PER_STORY", "20")) || 20);
     while (next && page < maxPages) {
-      const nextPage = await fetchMetaPage(next);
+      const nextPage = await fetchMetaPage(next, accessToken);
       comments.push(...flattenComments(nextPage.data ?? []));
       next = nextPage.paging?.next ?? null;
       page += 1;
     }
     return { source, comments };
   }));
+}
+
+async function resolvePageAccessToken(pageId: string) {
+  const version = getOptionalEnv("META_API_VERSION", "v20.0");
+  const url = new URL(`https://graph.facebook.com/${version}/${pageId}`);
+  url.searchParams.set("fields", "access_token");
+  url.searchParams.set("access_token", metaToken());
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as { access_token?: string; error?: { message?: string } };
+  if (!response.ok || payload.error || !payload.access_token) {
+    throw new Error(payload.error?.message ?? `Kein Page Access Token fuer Seite ${pageId} verfuegbar.`);
+  }
+  return payload.access_token;
 }
 
 async function loadStorySources(clientId: string) {
@@ -199,7 +213,9 @@ async function loadStorySources(clientId: string) {
       ? creative.raw.effective_object_story_id.trim()
       : "";
     if (!storyId || sources.has(storyId)) continue;
-    sources.set(storyId, { storyId, adAccountId: ad.ad_account_id, adId: ad.id, creativeId: ad.creative_id });
+    const pageId = storyId.split("_")[0];
+    if (!pageId) continue;
+    sources.set(storyId, { storyId, pageId, adAccountId: ad.ad_account_id, adId: ad.id, creativeId: ad.creative_id });
   }
   return [...sources.values()];
 }
@@ -293,6 +309,15 @@ export async function syncMetaCommentsForClient(clientId: string) {
   });
   const configuredLimit = Number(getOptionalEnv("META_COMMENTS_MAX_STORIES_PER_RUN", "1000"));
   const selected = sorted.slice(0, Math.max(1, Number.isFinite(configuredLimit) ? Math.floor(configuredLimit) : 1000));
+  const pageTokens = new Map<string, string>();
+  const pageTokenErrors = new Map<string, Error>();
+  for (const pageId of new Set(selected.map((source) => source.pageId))) {
+    try {
+      pageTokens.set(pageId, await resolvePageAccessToken(pageId));
+    } catch (error) {
+      pageTokenErrors.set(pageId, error instanceof Error ? error : new Error("Page Access Token konnte nicht geladen werden."));
+    }
+  }
   const collectedRows: Array<JsonRecord & { meta_comment_id: string; comment_created_at: string | null }> = [];
   const stateRows: JsonRecord[] = [];
   let fetched = 0;
@@ -344,18 +369,28 @@ export async function syncMetaCommentsForClient(clientId: string) {
     });
   }
 
-  for (let offset = 0; offset < selected.length; offset += 50) {
-    const startedAt = new Date().toISOString();
-    const chunk = selected.slice(offset, offset + 50).map((source) => ({ source, since: stateByStory.get(source.storyId)?.last_synced_at ?? null }));
-    try {
-      const results = await fetchStoryCommentsBatch(chunk);
-      for (const result of results) await collect(result.source, result.comments, startedAt);
-    } catch {
-      const fallback = await Promise.allSettled(chunk.map(async (item) => ({ source: item.source, comments: await fetchStoryComments(item.source.storyId, item.since) })));
-      for (let index = 0; index < fallback.length; index += 1) {
-        const result = fallback[index];
-        if (result.status === "fulfilled") await collect(result.value.source, result.value.comments, startedAt);
-        else collectFailure(chunk[index].source, result.reason);
+  for (const pageId of new Set(selected.map((source) => source.pageId))) {
+    const pageSources = selected.filter((source) => source.pageId === pageId);
+    const accessToken = pageTokens.get(pageId);
+    const tokenError = pageTokenErrors.get(pageId);
+    if (!accessToken) {
+      for (const source of pageSources) collectFailure(source, tokenError ?? new Error("Page Access Token fehlt."));
+      continue;
+    }
+
+    for (let offset = 0; offset < pageSources.length; offset += 50) {
+      const startedAt = new Date().toISOString();
+      const chunk = pageSources.slice(offset, offset + 50).map((source) => ({ source, since: stateByStory.get(source.storyId)?.last_synced_at ?? null }));
+      try {
+        const results = await fetchStoryCommentsBatch(chunk, accessToken);
+        for (const result of results) await collect(result.source, result.comments, startedAt);
+      } catch {
+        const fallback = await Promise.allSettled(chunk.map(async (item) => ({ source: item.source, comments: await fetchStoryComments(item.source.storyId, item.since, accessToken) })));
+        for (let index = 0; index < fallback.length; index += 1) {
+          const result = fallback[index];
+          if (result.status === "fulfilled") await collect(result.value.source, result.value.comments, startedAt);
+          else collectFailure(chunk[index].source, result.reason);
+        }
       }
     }
   }
@@ -392,9 +427,9 @@ async function getMetaCommentsOverviewUncached(clientId: string): Promise<MetaCo
   const supabase = createSupabaseServiceRoleClient();
   const [{ data: rows, error }, { data: states, error: syncError }] = await Promise.all([
     supabase.from("meta_comments").select("*").eq("client_id", clientId).order("is_wording_candidate", { ascending: false }).order("wording_score", { ascending: false, nullsFirst: false }).order("comment_created_at", { ascending: false }).limit(1000),
-    supabase.from("meta_comment_sync_state").select("status,last_synced_at").eq("client_id", clientId)
+    supabase.from("meta_comment_sync_state").select("status,last_synced_at,error_message").eq("client_id", clientId)
   ]);
-  if (error || syncError) return { comments: [], totals: { comments: 0, candidates: 0, analyzed: 0, pending: 0 }, sync: { stories: 0, failedStories: 0, lastSyncedAt: null }, error: error?.message ?? syncError?.message ?? null };
+  if (error || syncError) return { comments: [], totals: { comments: 0, candidates: 0, analyzed: 0, pending: 0 }, sync: { stories: 0, failedStories: 0, lastSyncedAt: null, lastError: null }, error: error?.message ?? syncError?.message ?? null };
 
   const adIds = [...new Set((rows ?? []).map((row) => row.ad_id).filter(Boolean))];
   const creativeIds = [...new Set((rows ?? []).map((row) => row.creative_id).filter(Boolean))];
@@ -435,7 +470,8 @@ async function getMetaCommentsOverviewUncached(clientId: string): Promise<MetaCo
     sync: {
       stories: syncRows.length,
       failedStories: syncRows.filter((item) => item.status === "failed").length,
-      lastSyncedAt: syncRows.map((item) => item.last_synced_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null
+      lastSyncedAt: syncRows.map((item) => item.last_synced_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+      lastError: syncRows.find((item) => item.status === "failed" && item.error_message)?.error_message ?? null
     },
     error: null
   };
