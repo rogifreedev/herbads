@@ -46,3 +46,7 @@ export const KNOWLEDGE_CACHE_TAGS = [CACHE_TAGS.knowledge, CACHE_TAGS.competitor
 export function revalidateCacheTags(...tags: string[]) {
   for (const tag of tags) revalidateTag(tag, "max");
 }
+
+export function expireCacheTags(...tags: string[]) {
+  for (const tag of tags) revalidateTag(tag, { expire: 0 });
+}

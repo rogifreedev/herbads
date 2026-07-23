@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink, Search } from "lucide-react";
+import { ExternalLink, HelpCircle, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { MetaCommentListItem } from "@/lib/meta-comments";
 
@@ -33,14 +34,16 @@ export function MetaCommentsTable({ clientId, comments }: { clientId: string; co
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-herb-border">
-        <Table className="min-w-[1120px]">
+        <Table className="min-w-[1480px]">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[90px]">{t("score")}</TableHead>
-              <TableHead className="w-[330px]">{t("comment")}</TableHead>
+              <TableHead className="w-[80px]">{t("score")}</TableHead>
+              <TableHead className="w-[90px] text-center">{t("comment")}</TableHead>
               <TableHead className="w-[310px]">{t("creativeWording")}</TableHead>
-              <TableHead>{t("source")}</TableHead>
-              <TableHead className="w-[130px]">{t("engagement")}</TableHead>
+              <TableHead className="w-[270px]">{t("reason")}</TableHead>
+              <TableHead className="w-[220px]">{t("themes")}</TableHead>
+              <TableHead className="w-[230px]">{t("source")}</TableHead>
+              <TableHead className="w-[150px]">{t("engagement")}</TableHead>
               <TableHead className="w-[130px]">{t("date")}</TableHead>
             </TableRow>
           </TableHeader>
@@ -50,14 +53,29 @@ export function MetaCommentsTable({ clientId, comments }: { clientId: string; co
                 <TableCell>
                   {comment.wordingScore === null ? <Badge variant="secondary">{t("pending")}</Badge> : <Badge variant={comment.isWordingCandidate ? "success" : "secondary"}>{comment.wordingScore}</Badge>}
                 </TableCell>
-                <TableCell>
-                  <p className="whitespace-pre-wrap leading-6 text-white">{comment.message}</p>
-                  {comment.commenterName ? <p className="mt-2 text-xs text-white/45">{comment.commenterName}</p> : null}
+                <TableCell className="text-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/45 transition hover:border-primary/50 hover:text-primary"
+                        aria-label={t("showComment")}
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-96 max-w-[calc(100vw-2rem)]">
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-white">{comment.message}</p>
+                      {comment.commenterName ? <p className="mt-3 border-t border-white/10 pt-3 text-xs text-white/45">{comment.commenterName}</p> : null}
+                    </PopoverContent>
+                  </Popover>
                 </TableCell>
                 <TableCell>
                   {comment.suggestedWording ? <p className="font-medium leading-6 text-white">{comment.suggestedWording}</p> : <span className="text-white/35">-</span>}
-                  {comment.wordingReason ? <p className="mt-2 text-xs leading-5 text-white/55">{comment.wordingReason}</p> : null}
-                  {comment.themes.length ? <div className="mt-2 flex flex-wrap gap-1">{comment.themes.map((theme) => <Badge key={theme} variant="outline">{theme}</Badge>)}</div> : null}
+                </TableCell>
+                <TableCell className="text-sm leading-6 text-white/60">{comment.wordingReason ?? <span className="text-white/35">-</span>}</TableCell>
+                <TableCell>
+                  {comment.themes.length ? <div className="flex flex-wrap gap-1">{comment.themes.map((theme) => <Badge key={theme} variant="outline">{theme}</Badge>)}</div> : <span className="text-white/35">-</span>}
                 </TableCell>
                 <TableCell>
                   {comment.creativeId ? <Link href={`/clients/${clientId}/creatives/${comment.creativeId}`} className="group inline-flex max-w-[240px] items-center gap-2 text-primary hover:text-white"><span className="truncate">{comment.adName ?? comment.creativeName ?? t("openCreative")}</span><ExternalLink className="h-3.5 w-3.5 shrink-0" /></Link> : <span className="text-white/35">-</span>}
@@ -65,7 +83,7 @@ export function MetaCommentsTable({ clientId, comments }: { clientId: string; co
                 <TableCell className="text-white/60">{t("engagementValue", { likes: comment.likeCount, replies: comment.replyCount })}</TableCell>
                 <TableCell className="text-white/60">{comment.commentCreatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(comment.commentCreatedAt)) : "-"}</TableCell>
               </TableRow>
-            )) : <TableRow><TableCell colSpan={6} className="py-12 text-center text-white/50">{mode === "candidates" ? t("noCandidates") : t("noComments")}</TableCell></TableRow>}
+            )) : <TableRow><TableCell colSpan={8} className="py-12 text-center text-white/50">{mode === "candidates" ? t("noCandidates") : t("noComments")}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>

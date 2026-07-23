@@ -1,8 +1,10 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
-import { CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
+import { CACHE_TAGS, expireCacheTags } from "@/lib/cache-tags";
+import { isLikelyLowValueProductQuestion } from "@/lib/comment-candidate-filter";
 import { getOptionalEnv } from "@/lib/env";
+import { commentFetchSince, latestCommentWatermark } from "@/lib/meta-comment-sync-watermark";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type JsonRecord = Record<string, unknown>;
@@ -23,7 +25,11 @@ type StorySource = {
   adId: string;
   creativeId: string | null;
 };
-type SyncStateRow = { object_story_id: string; last_synced_at: string | null };
+type SyncStateRow = {
+  object_story_id: string;
+  last_synced_at: string | null;
+  last_comment_created_at: string | null;
+};
 type MetaComment = {
   id?: string;
   message?: string;
@@ -254,8 +260,8 @@ async function analyzePendingComments(clientId: string) {
         temperature: 0.2,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: "Du analysierst Kundenkommentare fuer Performance Creatives. Antworte ausschliesslich als valides JSON. Markiere nur Formulierungen, echte Einwaende, Nutzenargumente oder Woerter der Zielgruppe, die als Inspiration taugen. Erfinde keine Aussagen und uebernimm keine personenbezogenen Daten." },
-          { role: "user", content: `Bewerte jeden Kommentar. Ergebnis: {\"results\":[{\"id\":\"...\",\"score\":0-100,\"candidate\":true|false,\"reason\":\"kurz\",\"suggestedWording\":\"creative-taugliche Formulierung oder leer\",\"themes\":[\"...\"]}]}. Candidate erst ab substanziellem Insight, nicht fuer Spam, reine Emojis, Tags, Supportfragen ohne Sprachwert oder Beleidigungen. Kommentare:\n${JSON.stringify(batch.map((item) => ({ id: item.id, text: item.message })))}` }
+          { role: "system", content: "Du analysierst Kundenkommentare fuer Performance Creatives. Antworte ausschliesslich als valides JSON. Markiere nur Formulierungen, echte Einwaende, Nutzenargumente oder Woerter der Zielgruppe, die als Inspiration taugen. Reine Produkt-, Preis-, Versand-, Verfuegbarkeits-, Bestell-, Anwendungs- und Supportfragen sind normalerweise keine Wording-Kandidaten. Eine Frage darf nur dann Kandidat sein, wenn sie einen klaren, wiederverwendbaren Einwand oder ein konkretes Zielgruppenbeduerfnis in markanter Kundensprache enthaelt. Erfinde keine Aussagen und uebernimm keine personenbezogenen Daten." },
+          { role: "user", content: `Bewerte jeden Kommentar. Ergebnis: {\"results\":[{\"id\":\"...\",\"score\":0-100,\"candidate\":true|false,\"reason\":\"kurz\",\"suggestedWording\":\"creative-taugliche Formulierung oder leer\",\"themes\":[\"...\"]}]}. Candidate erst ab substanziellem Marketing-Insight. Setze candidate=false fuer Spam, reine Emojis, Tags, Beleidigungen sowie reine Produkt-, Preis-, Versand-, Verfuegbarkeits-, Bestell-, Anwendungs- oder Supportfragen. Bei Fragen gilt candidate=true nur fuer einen expliziten, wiederverwendbaren Einwand oder ein Zielgruppenbeduerfnis; erklaere diesen Ausnahmefall in reason. Kommentare:\n${JSON.stringify(batch.map((item) => ({ id: item.id, text: item.message })))}` }
         ]
       })
     });
@@ -273,7 +279,7 @@ async function analyzePendingComments(clientId: string) {
       const result = byId.get(item.id);
       if (!result) return null;
       const score = Math.max(0, Math.min(100, Math.round(Number(result.score) || 0)));
-      const isCandidate = result.candidate === true && score >= 60;
+      const isCandidate = result.candidate === true && score >= 60 && !isLikelyLowValueProductQuestion(item.message);
       const themes = Array.isArray(result.themes) ? result.themes.filter((value): value is string => typeof value === "string").slice(0, 8) : [];
       const { error: updateError } = await supabase.from("meta_comments").update({
         ai_status: "analyzed",
@@ -300,7 +306,7 @@ export async function syncMetaCommentsForClient(clientId: string) {
   const sources = await loadStorySources(clientId);
   const { data: states, error: stateError } = await supabase
     .from("meta_comment_sync_state")
-    .select("object_story_id,last_synced_at")
+    .select("object_story_id,last_synced_at,last_comment_created_at")
     .eq("client_id", clientId);
   if (stateError) throw new Error(stateError.message);
   const sourceStoryIds = new Set(sources.map((source) => source.storyId));
@@ -356,7 +362,10 @@ export async function syncMetaCommentsForClient(clientId: string) {
     }));
     fetched += rows.length;
     collectedRows.push(...rows);
-    const latestComment = rows.map((row) => row.comment_created_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
+    const latestComment = latestCommentWatermark(
+      stateByStory.get(source.storyId)?.last_comment_created_at,
+      rows.map((row) => row.comment_created_at)
+    );
     stateRows.push({
           client_id: clientId,
           ad_account_id: source.adAccountId,
@@ -396,7 +405,7 @@ export async function syncMetaCommentsForClient(clientId: string) {
     for (let offset = 0; offset < pageSources.length; offset += 50) {
       chunks.push(pageSources.slice(offset, offset + 50).map((source) => ({
         source,
-        since: stateByStory.get(source.storyId)?.last_synced_at ?? null
+        since: commentFetchSince(stateByStory.get(source.storyId))
       })));
     }
     const concurrency = Math.max(1, Number(getOptionalEnv("META_COMMENTS_BATCH_CONCURRENCY", "4")) || 4);
@@ -435,7 +444,7 @@ export async function syncMetaCommentsForClient(clientId: string) {
     const { error } = await supabase.from("meta_comment_sync_state").upsert(stateRows.slice(offset, offset + 500), { onConflict: "client_id,object_story_id" });
     if (error) throw new Error(error.message);
   }
-  revalidateCacheTags(CACHE_TAGS.comments);
+  expireCacheTags(CACHE_TAGS.comments);
   let ai = { analyzed: 0, candidates: 0 };
   let aiError: string | null = null;
   try {
@@ -443,8 +452,10 @@ export async function syncMetaCommentsForClient(clientId: string) {
   } catch (error) {
     aiError = error instanceof Error ? error.message : "AI Kommentaranalyse fehlgeschlagen.";
   }
-  revalidateCacheTags(CACHE_TAGS.comments);
-  return { stories: selected.length, availableStories: sources.length, fetched, inserted, failedStories, ...ai, aiError };
+  expireCacheTags(CACHE_TAGS.comments);
+  const result = { stories: selected.length, availableStories: sources.length, fetched, inserted, failedStories, ...ai, aiError };
+  console.info("[meta-comments] sync completed", { clientId, ...result });
+  return result;
 }
 
 async function getMetaCommentsOverviewUncached(clientId: string): Promise<MetaCommentsOverview> {
@@ -463,25 +474,28 @@ async function getMetaCommentsOverviewUncached(clientId: string): Promise<MetaCo
   ]);
   const adNames = new Map((ads ?? []).map((item) => [item.id, item.name]));
   const creativeNames = new Map((creatives ?? []).map((item) => [item.id, item.name]));
-  const comments = (rows ?? []).map((row): MetaCommentListItem => ({
-    id: row.id,
-    metaCommentId: row.meta_comment_id,
-    message: row.message,
-    commenterName: row.commenter_name,
-    likeCount: Number(row.like_count ?? 0),
-    replyCount: Number(row.reply_count ?? 0),
-    commentCreatedAt: row.comment_created_at,
-    aiStatus: row.ai_status,
-    isWordingCandidate: row.is_wording_candidate,
-    wordingScore: row.wording_score === null ? null : Number(row.wording_score),
-    wordingReason: row.wording_reason,
-    suggestedWording: row.suggested_wording,
-    themes: Array.isArray(row.themes) ? row.themes : [],
-    adId: row.ad_id,
-    adName: row.ad_id ? adNames.get(row.ad_id) ?? null : null,
-    creativeId: row.creative_id,
-    creativeName: row.creative_id ? creativeNames.get(row.creative_id) ?? null : null
-  }));
+  const comments = (rows ?? []).map((row): MetaCommentListItem => {
+    const isWordingCandidate = Boolean(row.is_wording_candidate) && !isLikelyLowValueProductQuestion(row.message);
+    return {
+      id: row.id,
+      metaCommentId: row.meta_comment_id,
+      message: row.message,
+      commenterName: row.commenter_name,
+      likeCount: Number(row.like_count ?? 0),
+      replyCount: Number(row.reply_count ?? 0),
+      commentCreatedAt: row.comment_created_at,
+      aiStatus: row.ai_status,
+      isWordingCandidate,
+      wordingScore: row.wording_score === null ? null : Number(row.wording_score),
+      wordingReason: row.wording_reason,
+      suggestedWording: row.suggested_wording,
+      themes: Array.isArray(row.themes) ? row.themes : [],
+      adId: row.ad_id,
+      adName: row.ad_id ? adNames.get(row.ad_id) ?? null : null,
+      creativeId: row.creative_id,
+      creativeName: row.creative_id ? creativeNames.get(row.creative_id) ?? null : null
+    };
+  });
   const syncRows = states ?? [];
   return {
     comments,
