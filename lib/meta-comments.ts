@@ -269,9 +269,9 @@ async function analyzePendingComments(clientId: string) {
     }));
     const analyzedAt = new Date().toISOString();
 
-    for (const item of batch) {
+    const updates = batch.map(async (item) => {
       const result = byId.get(item.id);
-      if (!result) continue;
+      if (!result) return null;
       const score = Math.max(0, Math.min(100, Math.round(Number(result.score) || 0)));
       const isCandidate = result.candidate === true && score >= 60;
       const themes = Array.isArray(result.themes) ? result.themes.filter((value): value is string => typeof value === "string").slice(0, 8) : [];
@@ -286,9 +286,11 @@ async function analyzePendingComments(clientId: string) {
         analyzed_at: analyzedAt
       }).eq("id", item.id);
       if (updateError) throw new Error(updateError.message);
-      analyzed += 1;
-      if (isCandidate) candidates += 1;
-    }
+      return isCandidate;
+    });
+    const updateResults = await Promise.all(updates);
+    analyzed += updateResults.filter((result) => result !== null).length;
+    candidates += updateResults.filter((result) => result === true).length;
   }
   return { analyzed, candidates };
 }
@@ -412,6 +414,7 @@ export async function syncMetaCommentsForClient(clientId: string) {
     const { error } = await supabase.from("meta_comment_sync_state").upsert(stateRows.slice(offset, offset + 500), { onConflict: "client_id,object_story_id" });
     if (error) throw new Error(error.message);
   }
+  revalidateCacheTags(CACHE_TAGS.comments);
   let ai = { analyzed: 0, candidates: 0 };
   let aiError: string | null = null;
   try {
