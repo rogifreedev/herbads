@@ -303,6 +303,18 @@ export async function syncMetaCommentsForClient(clientId: string) {
     .select("object_story_id,last_synced_at")
     .eq("client_id", clientId);
   if (stateError) throw new Error(stateError.message);
+  const sourceStoryIds = new Set(sources.map((source) => source.storyId));
+  const staleStoryIds = ((states ?? []) as SyncStateRow[])
+    .map((state) => state.object_story_id)
+    .filter((storyId) => !sourceStoryIds.has(storyId));
+  for (let offset = 0; offset < staleStoryIds.length; offset += 500) {
+    const { error } = await supabase
+      .from("meta_comment_sync_state")
+      .delete()
+      .eq("client_id", clientId)
+      .in("object_story_id", staleStoryIds.slice(offset, offset + 500));
+    if (error) throw new Error(error.message);
+  }
   const stateByStory = new Map(((states ?? []) as SyncStateRow[]).map((state) => [state.object_story_id, state]));
   const sorted = sources.sort((left, right) => {
     const leftTime = stateByStory.get(left.storyId)?.last_synced_at ?? "";
@@ -380,20 +392,29 @@ export async function syncMetaCommentsForClient(clientId: string) {
       continue;
     }
 
+    const chunks: Array<Array<{ source: StorySource; since: string | null }>> = [];
     for (let offset = 0; offset < pageSources.length; offset += 50) {
-      const startedAt = new Date().toISOString();
-      const chunk = pageSources.slice(offset, offset + 50).map((source) => ({ source, since: stateByStory.get(source.storyId)?.last_synced_at ?? null }));
-      try {
-        const results = await fetchStoryCommentsBatch(chunk, accessToken);
-        for (const result of results) await collect(result.source, result.comments, startedAt);
-      } catch {
-        const fallback = await Promise.allSettled(chunk.map(async (item) => ({ source: item.source, comments: await fetchStoryComments(item.source.storyId, item.since, accessToken) })));
-        for (let index = 0; index < fallback.length; index += 1) {
-          const result = fallback[index];
-          if (result.status === "fulfilled") await collect(result.value.source, result.value.comments, startedAt);
-          else collectFailure(chunk[index].source, result.reason);
+      chunks.push(pageSources.slice(offset, offset + 50).map((source) => ({
+        source,
+        since: stateByStory.get(source.storyId)?.last_synced_at ?? null
+      })));
+    }
+    const concurrency = Math.max(1, Number(getOptionalEnv("META_COMMENTS_BATCH_CONCURRENCY", "4")) || 4);
+    for (let offset = 0; offset < chunks.length; offset += concurrency) {
+      await Promise.all(chunks.slice(offset, offset + concurrency).map(async (chunk) => {
+        const startedAt = new Date().toISOString();
+        try {
+          const results = await fetchStoryCommentsBatch(chunk, accessToken);
+          for (const result of results) await collect(result.source, result.comments, startedAt);
+        } catch {
+          const fallback = await Promise.allSettled(chunk.map(async (item) => ({ source: item.source, comments: await fetchStoryComments(item.source.storyId, item.since, accessToken) })));
+          for (let index = 0; index < fallback.length; index += 1) {
+            const result = fallback[index];
+            if (result.status === "fulfilled") await collect(result.value.source, result.value.comments, startedAt);
+            else collectFailure(chunk[index].source, result.reason);
+          }
         }
-      }
+      }));
     }
   }
 
