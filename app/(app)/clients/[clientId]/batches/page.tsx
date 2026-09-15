@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Settings } from "lucide-react";
+import { ExternalLink, Settings, UploadCloud } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import { BatchCheckButton } from "@/components/batch-check-button";
@@ -101,7 +101,7 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
                   action={<BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} />}
                 />
               ) : (
-                <BatchTable rows={overview.items} />
+                <BatchTable rows={overview.items} clientId={clientId} />
               )}
             </CardContent>
           </Card>
@@ -129,8 +129,9 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
+function BatchTable({ rows, clientId }: { rows: BatchOverviewItem[]; clientId: string }) {
   const t = useTranslations("batches");
+  const tLaunch = useTranslations("batchLaunch");
   const locale = useLocale();
   const statusLabels: Record<BatchOverviewItem["status"], string> = {
     live: t("statusLive"),
@@ -150,6 +151,7 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
             <TableHead>{t("driveModified")}</TableHead>
             <TableHead>{t("checkedColumn")}</TableHead>
             <TableHead>Drive</TableHead>
+            <TableHead>Meta</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -197,6 +199,9 @@ function BatchTable({ rows }: { rows: BatchOverviewItem[] }) {
                 ) : (
                   <span className="text-white/45">-</span>
                 )}
+              </TableCell>
+              <TableCell>
+                {row.status === "missing" ? <Button asChild variant="outline" size="sm"><Link href={`/clients/${clientId}/batches/create?folderId=${encodeURIComponent(row.id)}`}><UploadCloud className="mr-2 h-4 w-4" />{tLaunch("create")}</Link></Button> : null}
               </TableCell>
             </TableRow>
           ))}

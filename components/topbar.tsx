@@ -19,7 +19,7 @@ export function Topbar() {
   const showClientSwitcher = pathname !== "/dashboard";
 
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--topbar-height)] items-center justify-between border-b border-herb-border bg-card/90 px-4 shadow-[var(--shadow-xs)] backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex min-h-[var(--topbar-height)] flex-wrap items-center justify-between gap-2 border-b border-herb-border bg-card/90 px-4 py-2 shadow-[var(--shadow-xs)] backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-3">
         <SidebarTrigger className="-ml-2" />
         <Separator orientation="vertical" className="hidden h-4 sm:block" />
@@ -28,7 +28,7 @@ export function Topbar() {
           <p className="mt-1 hidden text-xs text-muted-foreground sm:block">{t("subtitle")}</p>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 md:flex">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {t("metaSynced")}
