@@ -1,11 +1,7 @@
-import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { GoogleLoginButton } from "@/components/google-login-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Translator } from "@/lib/i18n-types";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
 
 function errorMessage(t: Translator, error: string | string[] | undefined) {
   const value = Array.isArray(error) ? error[0] : error;
@@ -15,13 +11,7 @@ function errorMessage(t: Translator, error: string | string[] | undefined) {
 }
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const [supabase, resolvedSearchParams, t] = await Promise.all([createSupabaseServerClient(), searchParams, getTranslations("auth")]);
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (user?.email?.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
-    redirect("/dashboard");
-  }
-
+  const [resolvedSearchParams, t] = await Promise.all([searchParams, getTranslations("auth")]);
   const message = errorMessage(t, resolvedSearchParams.error);
 
   return (

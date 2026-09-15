@@ -1,14 +1,11 @@
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { APP_SESSION_COOKIE_NAME, APP_SESSION_MAX_AGE, createAppSessionCookie, verifyAppSessionCookie } from "@/lib/auth-session";
 
 const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
 
-type AuthUser = {
-  email?: string;
-};
-
 function isPublicPath(pathname: string) {
-  return pathname === "/login" || pathname.startsWith("/auth/");
+  return pathname.startsWith("/auth/");
 }
 
 function isCronPath(pathname: string) {
@@ -26,6 +23,7 @@ function unauthorizedResponse(request: NextRequest, status = 401) {
 
   const url = request.nextUrl.clone();
   url.pathname = "/login";
+  url.search = "";
   url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   return NextResponse.redirect(url);
 }
@@ -34,70 +32,12 @@ function getSupabasePublicKey() {
   return process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 }
 
-function getProjectRef() {
-  return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split(".")[0];
-}
-
-function getAuthCookieValue(request: NextRequest) {
-  const name = `sb-${getProjectRef()}-auth-token`;
-  const singleCookie = request.cookies.get(name)?.value;
-  if (singleCookie) return singleCookie;
-
-  const chunks: string[] = [];
-  for (let index = 0; index < 10; index += 1) {
-    const chunk = request.cookies.get(`${name}.${index}`)?.value;
-    if (!chunk) break;
-    chunks.push(chunk);
+function authorizedResponse(request: NextRequest) {
+  if (request.nextUrl.pathname === "/login") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return chunks.length > 0 ? chunks.join("") : null;
-}
-
-function decodeBase64Url(value: string) {
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function parseSessionCookie(value: string | null) {
-  if (!value) return null;
-
-  try {
-    const raw = value.startsWith("base64-") ? decodeBase64Url(value.slice("base64-".length)) : decodeURIComponent(value);
-    const session = JSON.parse(raw) as { access_token?: unknown; expires_at?: unknown; user?: { email?: unknown } };
-    const accessToken = typeof session.access_token === "string" ? session.access_token : null;
-    const expiresAt = Number(session.expires_at ?? 0);
-
-    if (!accessToken) return null;
-    if (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt * 1000 < Date.now()) return null;
-
-    return { accessToken };
-  } catch {
-    return null;
-  }
-}
-
-async function getUserFromAuthCookie(request: NextRequest): Promise<AuthUser | null> {
-  const session = parseSessionCookie(getAuthCookieValue(request));
-  if (!session) return null;
-
-  try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL!}/auth/v1/user`, {
-      headers: {
-        apikey: getSupabasePublicKey(),
-        authorization: `Bearer ${session.accessToken}`
-      },
-      cache: "no-store"
-    });
-
-    if (!response.ok) return null;
-    const user = await response.json() as AuthUser;
-    return user;
-  } catch {
-    return null;
-  }
+  return NextResponse.next({ request: { headers: request.headers } });
 }
 
 export async function updateSession(request: NextRequest) {
@@ -109,31 +49,47 @@ export async function updateSession(request: NextRequest) {
     });
   }
 
+  const cookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
+
+  function finalizeResponse(response: NextResponse) {
+    // Redirects must carry refreshes and deletions too, or the browser keeps the stale session.
+    cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, { ...options, path: "/" }));
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
+
   const appSession = await verifyAppSessionCookie(request.cookies.get(APP_SESSION_COOKIE_NAME)?.value);
   if (isAllowedEmail(appSession?.email)) {
-    return NextResponse.next({
-      request: {
-        headers: request.headers
+    return finalizeResponse(authorizedResponse(request));
+  }
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    getSupabasePublicKey(),
+    {
+      global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) },
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(newCookies) {
+          // Server Components must see the same refreshed session as the browser.
+          newCookies.forEach(({ name, value }) => request.cookies.set(name, value));
+          cookiesToSet.push(...newCookies);
+        }
       }
-    });
-  }
-
-  const supabaseResponse = NextResponse.next({
-    request: {
-      headers: request.headers
     }
-  });
+  );
+  const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
-  const user = await getUserFromAuthCookie(request);
-
-  if (!user) {
-    return unauthorizedResponse(request);
+  if (!user || !isAllowedEmail(user.email)) {
+    const response = request.nextUrl.pathname === "/login"
+      ? NextResponse.next({ request: { headers: request.headers } })
+      : unauthorizedResponse(request, user ? 403 : 401);
+    return finalizeResponse(response);
   }
 
-  if (!isAllowedEmail(user.email)) {
-    return unauthorizedResponse(request, 403);
-  }
-
+  const supabaseResponse = authorizedResponse(request);
   supabaseResponse.cookies.set(APP_SESSION_COOKIE_NAME, await createAppSessionCookie(user.email!), {
     path: "/",
     httpOnly: true,
@@ -142,5 +98,5 @@ export async function updateSession(request: NextRequest) {
     maxAge: APP_SESSION_MAX_AGE
   });
 
-  return supabaseResponse;
+  return finalizeResponse(supabaseResponse);
 }
