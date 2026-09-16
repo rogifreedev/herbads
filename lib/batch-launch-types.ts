@@ -16,6 +16,7 @@ export type BatchAdGroup = {
   id: string;
   name: string;
   primaryText?: string;
+  matchMethod?: "visual";
   feedFileId: string | null;
   storyFileId: string | null;
 };
@@ -74,6 +75,7 @@ export type BatchLaunchContext = {
   suggestions: BatchCopySuggestion[];
   files: BatchMediaFile[];
   groups: BatchAdGroup[];
+  matchingUnavailable?: boolean;
   ignoredFiles: string[];
   recentJobs: BatchLaunchJob[];
   metaConfigured: boolean;

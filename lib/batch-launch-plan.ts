@@ -67,18 +67,32 @@ export function mediaPlacement(width: number | null, height: number | null): Bat
   return "unknown";
 }
 
-function motifKey(file: BatchMediaFile) {
-  // Keep motif/version numbers and non-format folders, so unrelated numbered exports cannot pair.
-  return file.path
-    .replace(/\.[^.\/]+$/, "")
+function normalizeMediaPath(path: string) {
+  return path
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(
-      /(?:^|[\s_\-/])(1\s*[:x]\s*1|4\s*[:x]\s*5|9\s*[:x]\s*16|1080\s*x\s*(?:1080|1350|1920))(?=$|[\s_\-/])/g,
-      " "
+    .split("/")
+    .map((part) =>
+      part
+        .replace(
+          /(?<![\p{L}\p{N}])(?:1[\s_:x\u00d7-]+1|4[\s_:x\u00d7-]+5|9[\s_:x\u00d7-]+16|1080\s*[x\u00d7]\s*(?:1080|1350|1920))(?![\p{L}\p{N}])/gu,
+          " "
+        )
+        .replace(/(?<![\p{L}\p{N}])(?:feed|stories|story|reels|square|portrait)(?![\p{L}\p{N}])/gu, " ")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
     )
-    .replace(/(?:^|[\s_\-/])(feed|stories|story|reels|square|portrait)(?=$|[\s_\-/])/g, " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+    .filter(Boolean)
+    .join("/");
+}
+
+export function batchMediaScope(file: BatchMediaFile) {
+  return normalizeMediaPath(file.path.split("/").slice(0, -1).join("/"));
+}
+
+function motifKey(file: BatchMediaFile) {
+  // Keep motif/version numbers and non-format folders; never infer pairs from export order.
+  return normalizeMediaPath(file.path.replace(/\.[^.\/]+$/, ""));
 }
 
 export function groupBatchMedia(files: BatchMediaFile[]): BatchAdGroup[] {

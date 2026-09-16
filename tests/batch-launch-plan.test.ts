@@ -26,6 +26,35 @@ describe("batch adset names", () => {
 });
 
 describe("batch media matching", () => {
+  it.each([
+    ["Feed/Motif 1 (1x1).png", "Stories/Motif 1 [9x16].png"],
+    ["1_1/Motif 1.jpg", "9_16/Motif 1.png"],
+    ["1\u00d71/Motif 1.jpg", "9\u00d716/Motif 1.png"],
+    ["Motif 1 - 1080x1080.png", "Motif 1 - 1080x1920.png"]
+  ])("matches format labels and export punctuation: %s", (feedPath, storyPath) => {
+    const groups = groupBatchMedia([
+      { ...feed, path: feedPath },
+      { ...story, path: storyPath }
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ feedFileId: "feed", storyFileId: "story" });
+  });
+  it("preserves export numbers and folder boundaries", () => {
+    for (const number of ["11", "45", "916"]) {
+      expect(
+        groupBatchMedia([
+          { ...feed, path: `${number}.png` },
+          { ...story, path: "9.png" }
+        ])
+      ).toHaveLength(2);
+    }
+    expect(
+      groupBatchMedia([
+        { ...feed, path: "DE/Ad/1.png" },
+        { ...story, path: "DE Ad/1.png" }
+      ])
+    ).toHaveLength(2);
+  });
   it("pairs motif variants across format folders into exactly one ad", () => {
     expect(groupBatchMedia([feed, story])).toEqual([
       { id: "feed", name: "Motif_1_1x1", feedFileId: "feed", storyFileId: "story" }

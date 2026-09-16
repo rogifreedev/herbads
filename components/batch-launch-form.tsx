@@ -101,6 +101,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const [copy, setCopy] = useState<BatchLaunchCopy>(emptyCopy);
   const [suggestionId, setSuggestionId] = useState("");
   const [groups, setGroups] = useState<BatchAdGroup[]>([]);
+  const [reviewedMatching, setReviewedMatching] = useState("");
   const [presetId, setPresetId] = useState("");
   const [presetName, setPresetName] = useState("");
   const [dailyBudget, setDailyBudget] = useState("");
@@ -125,6 +126,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         setContext(data);
         setName(batchAdsetName(data.folder.name));
         setGroups(data.groups);
+        setReviewedMatching("");
         setCampaignId("");
         setTemplateId("");
         setActivate(false);
@@ -215,6 +217,9 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   ).sort((a, b) => (displayNames.of(a) ?? a).localeCompare(displayNames.of(b) ?? b, locale));
   const locked = saving || autoRun || Boolean(job);
   const favoriteIds = context?.favoriteTemplateIds ?? [];
+  const visualMatches = groups.filter((group) => group.matchMethod === "visual");
+  const matchingKey = JSON.stringify(visualMatches.map((group) => [group.feedFileId, group.storyFileId]));
+  const unreviewedMatching = visualMatches.length > 0 && reviewedMatching !== matchingKey;
 
   function chooseTemplate(id: string, replaceSettings = false) {
     setTemplateId(id);
@@ -304,9 +309,10 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
     setGroups((current) =>
       current
         .map((group) => {
-          if (group.id === groupId) return { ...group, [slot]: fileId || null };
+          if (group.id === groupId) return { ...group, [slot]: fileId || null, matchMethod: undefined };
           return {
             ...group,
+            matchMethod: group.feedFileId === fileId || group.storyFileId === fileId ? undefined : group.matchMethod,
             feedFileId: group.feedFileId === fileId ? null : group.feedFileId,
             storyFileId: group.storyFileId === fileId ? null : group.storyFileId
           };
@@ -316,7 +322,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   }
 
   async function create() {
-    if (!context) return;
+    if (!context || unreviewedMatching) return;
     setSaving(true);
     setConfirmActivation(false);
     setError(null);
@@ -848,6 +854,25 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                 </div>
               </section>
               <section className="space-y-4">
+                {context.matchingUnavailable ? (
+                  <Alert>
+                    <AlertDescription>{t("matchingUnavailable")}</AlertDescription>
+                  </Alert>
+                ) : null}
+                {visualMatches.length ? (
+                  <Alert>
+                    <AlertDescription>{t("visualMatchReview")}</AlertDescription>
+                    <label className="mt-3 flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={!unreviewedMatching}
+                        onChange={(event) => setReviewedMatching(event.target.checked ? matchingKey : "")}
+                      />
+                      {t("matchingReviewed")}
+                    </label>
+                  </Alert>
+                ) : null}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="font-heading text-xl">{t("ads", { count: groups.length })}</h3>
                   <Button variant="outline" size="sm" onClick={() => setGroups(context.groups)}>
@@ -876,7 +901,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                             )
                           }
                         />
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Badge variant="outline">
                             {kind === "video" ? (
                               <Film className="mr-1 h-3 w-3" />
@@ -885,6 +910,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                             )}
                             {group.feedFileId && group.storyFileId ? t("matched") : t("single")}
                           </Badge>
+                          {group.matchMethod === "visual" ? <Badge variant="outline">{t("visualMatch")}</Badge> : null}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -1062,6 +1088,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                 size="lg"
                 disabled={
                   saving ||
+                  unreviewedMatching ||
                   !context.metaConfigured ||
                   !campaignId ||
                   !templateId ||

@@ -1,10 +1,10 @@
 import "server-only";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { listBatchMedia } from "@/lib/batch-launch-drive";
+import { matchBatchMedia } from "@/lib/batch-media-matching";
 import {
   batchAdsetName,
   buildAdSetPayload,
-  groupBatchMedia,
   validateCopy,
   validateGroups,
   validatePreset,
@@ -267,6 +267,7 @@ export async function getBatchLaunchContext(
   }));
   const account = accounts.find((item) => item.id === (requestedAccountId || accounts[0]?.id));
   if (!account) throw new Error("Kein passendes Werbekonto gefunden.");
+  const matchingPromise = matchBatchMedia(media.files);
   const [presets, suggestions, jobs, favoriteTemplateIds] = await Promise.all([
     getLaunchPresets(clientId, account.id),
     copySuggestions(account.id),
@@ -327,7 +328,7 @@ export async function getBatchLaunchContext(
     presets,
     suggestions,
     ...media,
-    groups: groupBatchMedia(media.files),
+    ...(await matchingPromise),
     recentJobs: (jobs.data as BatchLaunchJobRow[]).map(mapLaunchJob),
     metaConfigured
   };

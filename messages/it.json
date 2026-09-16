@@ -1,5 +1,9 @@
 {
   "batchLaunch": {
+    "visualMatch": "Suggerimento visivo",
+    "matchingReviewed": "Coppie di formato verificate",
+    "visualMatchReview": "Verificare le coppie abbinate visivamente prima della creazione. I motivi ambigui rimangono separati.",
+    "matchingUnavailable": "Il confronto visivo non è stato completato. Verificare le varianti di formato dei motivi singoli prima della creazione.",
     "activationStopNotice": "L'attivazione diretta è stata richiesta. Interrompere o chiudere non annulla un passaggio Meta già in corso. In caso di dubbio controlla lo stato su Meta.",
     "searchTemplate": "Cerca gruppo di inserzioni o campagna",
     "favoriteAdsets": "Gruppi di inserzioni preferiti",

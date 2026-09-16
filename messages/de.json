@@ -1,5 +1,9 @@
 {
   "batchLaunch": {
+    "visualMatch": "Visueller Vorschlag",
+    "matchingReviewed": "Formatpaare geprüft",
+    "visualMatchReview": "Visuell zugeordnete Formatpaare vor dem Erstellen prüfen. Nicht eindeutige Motive bleiben einzeln.",
+    "matchingUnavailable": "Der visuelle Abgleich war nicht vollständig möglich. Einzelmotive vor dem Erstellen auf passende Formatvarianten prüfen.",
     "activationStopNotice": "Direkte Aktivierung ist beauftragt. Anhalten oder Schließen bricht einen bereits laufenden Meta-Schritt nicht ab. Bei Unsicherheit den Status in Meta prüfen.",
     "searchTemplate": "Adset oder Kampagne suchen",
     "favoriteAdsets": "Favorisierte Adsets",

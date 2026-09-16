@@ -174,6 +174,7 @@ async function main() {
       failOnce = true,
       steps = 0;
     let creationRequests = 0;
+    let visualFixture = false;
     const favorites = { "account-a": [], "account-b": [] };
     await page.route("**/api/clients/test-client/batches/**", async (route) => {
       const request = route.request();
@@ -194,6 +195,7 @@ async function main() {
       else if (url.pathname.endsWith("/launch") && request.method() === "GET") {
         accountId = url.searchParams.get("accountId") || "account-a";
         result = fixture(accountId, accountId === "account-a" ? saved : [], job ? [job] : [], favorites[accountId]);
+        if (visualFixture) result.groups = result.groups.map((group) => ({ ...group, matchMethod: "visual" }));
       } else if (url.pathname.endsWith("/launch")) {
         submitted = request.postDataJSON();
         creationRequests++;
@@ -331,6 +333,8 @@ async function main() {
     await page.locator("#launch-preset").selectOption("preset-1");
     await page.getByRole("button", { name: "Formatpaar trennen", exact: true }).click();
     await page.getByRole("heading", { name: "Anzeigen (2)", exact: true }).waitFor();
+    await page.locator('select[id$="-storyFileId"]').first().selectOption("story");
+    await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
     await page.getByRole("button", { name: "Zuordnung zurücksetzen", exact: true }).click();
     await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
     await page.getByText("Eigener Primaertext (optional)", { exact: true }).click();
@@ -409,11 +413,14 @@ async function main() {
     assert.equal(submitted.activate, false, "Default remains paused");
     job = null;
     steps = 0;
+    visualFixture = true;
     await page.goto(url, { waitUntil: "networkidle" });
     assert.equal(await page.locator('#launch-campaign option[value="791"]').count(), 0);
     assert(await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).isDisabled());
     await page.locator("#launch-campaign").selectOption("790");
     await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).check();
+    assert(await page.getByRole("button", { name: "Erstellen und aktivieren", exact: true }).isDisabled());
+    await page.getByRole("checkbox", { name: "Formatpaare geprüft", exact: true }).check();
     await page.getByRole("button", { name: "Erstellen und aktivieren", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
@@ -439,7 +446,7 @@ async function main() {
     assert.equal(creationRequests, 2);
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, persistent account favorites, cross-campaign templates, CBO, pairing, resume, paused default and explicit activation confirmation"
+      "PASS active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, persistent account favorites, cross-campaign templates, CBO, manual pair merging, visual match review, resume, paused default and explicit activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {
