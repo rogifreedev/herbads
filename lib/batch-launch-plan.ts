@@ -8,6 +8,16 @@ import type {
 } from "@/lib/batch-launch-types";
 import type { BatchTemplate } from "@/lib/batch-launch-types";
 
+export function batchAdsetName(folderName: string, date = new Date()) {
+  const day = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(date);
+  return `${day}_${folderName.trim()}`;
+}
+
 export function settingsFromAdset(template: BatchTemplate | undefined, currency: string) {
   const targeting = template?.raw.targeting as
     | { geo_locations?: { countries?: string[] }; locales?: number[] }

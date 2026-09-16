@@ -77,7 +77,7 @@ function fixture(accountId = "account-a", presets = [], jobs = [], favoriteTempl
         lifetimeBudget: 0
       }
     ],
-    templates: ["789", "790"].map((id) => ({
+    templates: ["789", "790", "791"].map((id) => ({
       id: `9${id}`,
       campaignId: id,
       name: "Website Purchases",
@@ -237,9 +237,39 @@ async function main() {
     const url = `${origin}/clients/test-client/batches/create?folderId=folder`;
     await page.goto(url, { waitUntil: "networkidle", timeout: 90000 });
     await page.getByRole("heading", { name: "Batch auf Meta erstellen" }).waitFor();
+    const expectedName = `${new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date())}_Batch 01 - Herbstkampagne`;
+    assert.equal(await page.locator("#launch-name").inputValue(), expectedName);
+    assert(await page.locator("#launch-name").evaluate((input) => input.readOnly));
+    assert.deepEqual(
+      await page.locator("#launch-campaign option").evaluateAll((options) => options.map((option) => option.value)),
+      ["", "789", "790"]
+    );
     await page.locator("#launch-campaign").selectOption("789");
-    assert.equal(await page.locator("#launch-template").inputValue(), "9789");
+    assert.match(await page.locator("#launch-template").innerText(), /Website Purchases.*Sales - Deutschland/);
     assert.equal(await page.locator("#launch-budget").inputValue(), "65.00");
+    const search = page.getByRole("combobox", { name: "Adset oder Kampagne suchen", exact: true });
+    assert.equal(await search.count(), 0, "Search belongs inside the dropdown");
+    await page.locator("#launch-template").click();
+    await search.waitFor();
+    assert(await search.evaluate((input) => input === document.activeElement));
+    await search.fill("not-a-template");
+    await page.getByRole("status").filter({ hasText: "Keine Ergebnisse." }).waitFor();
+    assert.equal(await page.getByRole("listbox").getByRole("option").count(), 0);
+    await search.fill("website");
+    assert.equal(await page.getByRole("listbox").getByRole("option").count(), 3);
+    await search.fill("Paused campaign");
+    assert.equal(
+      await page.getByRole("listbox").getByRole("option").count(),
+      1,
+      "Paused campaign source templates remain searchable"
+    );
+    await search.press("Enter");
+    assert.match(await page.locator("#launch-template").innerText(), /Paused campaign/);
+    assert.equal(await page.locator("#launch-campaign").inputValue(), "789");
+    await page.locator("#launch-template").click();
+    assert.equal(await search.inputValue(), "", "Opening resets the previous search");
+    await search.fill("9789");
+    await page.getByRole("listbox").getByRole("option").click();
     await page.getByRole("button", { name: "Adset favorisieren", exact: true }).click();
     await page.getByRole("button", { name: "Adset aus Favoriten entfernen", exact: true }).waitFor();
     await page.reload({ waitUntil: "networkidle" });
@@ -263,7 +293,10 @@ async function main() {
         document.querySelector("#launch-account")?.value === "account-b" &&
         document.querySelectorAll("#launch-preset option").length === 1
     );
-    assert.equal(await page.locator('#launch-template optgroup[label="Favorisierte Adsets"] option').count(), 0);
+    await page.locator("#launch-template").click();
+    assert.equal(await page.getByRole("group", { name: "Favorisierte Adsets", exact: true }).count(), 0);
+    await search.press("Escape");
+    await page.waitForFunction(() => document.activeElement?.id === "launch-template");
     await page.locator("#launch-account").selectOption("account-a");
     await page.locator('#launch-preset option[value="preset-1"]').waitFor({ state: "attached" });
     await page.locator("#launch-preset").selectOption("preset-1");
@@ -271,7 +304,13 @@ async function main() {
     await page.locator("#launch-campaign").selectOption("790");
     assert(await page.locator("#launch-budget").isDisabled());
     await page.locator("#launch-campaign").selectOption("789");
-    await page.locator("#launch-template").selectOption("9790");
+    await page.locator("#launch-template").click();
+    assert.equal(
+      await page.getByRole("group", { name: "Favorisierte Adsets", exact: true }).getByRole("option").count(),
+      1
+    );
+    await search.fill("CBO");
+    await search.press("Enter");
     assert.equal(
       await page.locator("#launch-campaign").inputValue(),
       "789",
@@ -279,7 +318,16 @@ async function main() {
     );
     assert.equal(await page.locator("#launch-budget").inputValue(), "45.00");
     assert.equal(await page.locator("#launch-preset").inputValue(), "");
-    await page.locator("#launch-template").selectOption("9789");
+    await page.locator("#launch-template").click();
+    await search.fill("Website");
+    await search.press("ArrowDown");
+    await search.press("ArrowUp");
+    await search.press("Enter");
+    assert.match(
+      await page.locator("#launch-template").innerText(),
+      /Sales - Deutschland/,
+      "Keyboard selection follows favorites-first order"
+    );
     await page.locator("#launch-preset").selectOption("preset-1");
     await page.getByRole("button", { name: "Formatpaar trennen", exact: true }).click();
     await page.getByRole("heading", { name: "Anzeigen (2)", exact: true }).waitFor();
@@ -323,10 +371,30 @@ async function main() {
       );
       assert.equal(measurements.missingImages, 0, "Media previews render");
       if (width === 390) await page.screenshot({ path: path.join(output, "mobile.png"), fullPage: true });
+      await page.locator("#launch-template").click();
+      const popup = page.getByRole("dialog", { name: "Referenz-Adset", exact: true });
+      await popup.waitFor();
+      await page.waitForTimeout(150);
+      const popupBounds = await popup.evaluate((element) => ({
+        left: element.getBoundingClientRect().left,
+        right: element.getBoundingClientRect().right,
+        width: innerWidth,
+        content: element.scrollWidth,
+        container: element.clientWidth
+      }));
+      assert(
+        popupBounds.left >= 0 &&
+          popupBounds.right <= popupBounds.width &&
+          popupBounds.content <= popupBounds.container + 1,
+        `Dropdown overflow at ${width}: ${JSON.stringify(popupBounds)}`
+      );
+      await page.screenshot({ path: path.join(output, `dropdown-${width}.png`) });
+      await search.press("Escape");
     }
     await page.getByRole("button", { name: "Pausiert auf Meta erstellen", exact: true }).click();
     await page.getByText("Test-Unterbrechung", { exact: true }).waitFor();
     assert.equal(submitted.groups.length, 1);
+    assert.equal(submitted.name, expectedName);
     assert.equal(submitted.groups[0].storyFileId, "story");
     assert.equal(submitted.groups[0].primaryText, "Individueller Text nur fuer dieses Motiv.");
     assert(!("spend" in submitted.copy), "Suggestion statistics must not leak into text payload");
@@ -342,7 +410,7 @@ async function main() {
     job = null;
     steps = 0;
     await page.goto(url, { waitUntil: "networkidle" });
-    await page.locator("#launch-campaign").selectOption("791");
+    assert.equal(await page.locator('#launch-campaign option[value="791"]').count(), 0);
     assert(await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).isDisabled());
     await page.locator("#launch-campaign").selectOption("790");
     await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).check();
@@ -371,7 +439,7 @@ async function main() {
     assert.equal(creationRequests, 2);
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS desktop/mobile, presets, persistent account favorites, cross-campaign templates, CBO, pairing, resume, paused default and explicit activation confirmation"
+      "PASS active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, persistent account favorites, cross-campaign templates, CBO, pairing, resume, paused default and explicit activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {

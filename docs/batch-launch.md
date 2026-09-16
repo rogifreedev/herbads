@@ -1,7 +1,8 @@
 # Batch Check: Create on Meta
 
 The action on a missing Drive batch opens `/clients/[clientId]/batches/create?folderId=...`.
-One batch creates one adset in an existing campaign. Every selected motif becomes one ad.
+One batch creates one adset in an active existing campaign. The destination picker hides inactive campaigns, and creation rechecks the live status. Every selected motif becomes one ad.
+New adset names are generated as `DD.MM.YYYY_<Drive batch name>` using the current date in `Europe/Berlin`, enforced server-side. Resumed jobs keep their original name.
 The adset and every ad are initially created with `status: PAUSED`. Paused is the default final state. Users may explicitly choose activation and confirm the account, campaign and budget in a separate dialog. Only after all media, creatives and ads exist are the new ads enabled and, last, their new adset. The existing campaign is never modified or activated.
 
 ## Configuration
@@ -15,6 +16,8 @@ The adset and every ad are initially created with `status: PAUSED`. Paused is th
 Account presets store daily budget, countries and language IDs. Existing active/paused adsets from any campaign in the same ad account can be selected as templates and favorited. Selecting a template or explicitly reapplying it copies its daily budget, countries and language IDs and clears the selected account preset; selecting an account preset then overrides those three settings. Changing the destination campaign preserves a manually selected source template.
 
 Adset budget is omitted for campaigns with campaign-level budgets. Other settings, including pixel, conversion event, age, placements, bidding and DSA identity, come from the selected source adset. Geographic details and exclusions are retained when the source countries are unchanged. Country overrides replace geography explicitly. Unsupported app, catalog, messaging and dynamic-creative templates fail validation before creation. Expired schedules, source status and source name are not copied.
+
+The reference-adset dropdown searches names, Meta IDs and source campaign names directly inside the popup. Favorites appear first. Templates from paused campaigns remain available even though destination campaigns must be active.
 
 ## Media and Text
 

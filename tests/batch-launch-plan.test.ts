@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  batchAdsetName,
   budgetMinorUnits,
   buildAdSetPayload,
   buildCreativePayload,
@@ -12,6 +13,17 @@ import {
 } from "@/lib/batch-launch-plan";
 import type { BatchAdGroup, BatchLaunchCopy } from "@/lib/batch-launch-types";
 import { campaign, copy, feed, media, settings, story, template } from "./batch-launch-fixtures";
+
+describe("batch adset names", () => {
+  it("prefixes the batch name with the German date and an underscore", () => {
+    expect(batchAdsetName(" 01_Batch ", new Date("2026-09-16T10:00:00Z"))).toBe("16.09.2026_01_Batch");
+  });
+  it("uses the Berlin day across midnight, year boundaries and daylight saving time", () => {
+    expect(batchAdsetName("Batch", new Date("2026-09-15T22:30:00Z"))).toBe("16.09.2026_Batch");
+    expect(batchAdsetName("Batch", new Date("2026-12-31T23:30:00Z"))).toBe("01.01.2027_Batch");
+    expect(batchAdsetName("Batch", new Date("2026-12-31T22:30:00Z"))).toBe("31.12.2026_Batch");
+  });
+});
 
 describe("batch media matching", () => {
   it("pairs motif variants across format folders into exactly one ad", () => {

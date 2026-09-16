@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { BatchTemplateSelect } from "@/components/batch-template-select";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { COUNTRY_CODES, groupBatchMedia, settingsFromAdset } from "@/lib/batch-launch-plan";
+import { COUNTRY_CODES, batchAdsetName, groupBatchMedia, settingsFromAdset } from "@/lib/batch-launch-plan";
 import type {
   BatchAdGroup,
   BatchLaunchContext,
@@ -95,7 +96,6 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const [name, setName] = useState("");
   const [campaignId, setCampaignId] = useState("");
   const [templateId, setTemplateId] = useState("");
-  const [templateSearch, setTemplateSearch] = useState("");
   const [activate, setActivate] = useState(false);
   const [confirmActivation, setConfirmActivation] = useState(false);
   const [copy, setCopy] = useState<BatchLaunchCopy>(emptyCopy);
@@ -123,11 +123,10 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
       .then((data) => {
         if (controller.signal.aborted) return;
         setContext(data);
-        setName(data.folder.name);
+        setName(batchAdsetName(data.folder.name));
         setGroups(data.groups);
         setCampaignId("");
         setTemplateId("");
-        setTemplateSearch("");
         setActivate(false);
         setConfirmActivation(false);
         setPresetId("");
@@ -216,13 +215,6 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   ).sort((a, b) => (displayNames.of(a) ?? a).localeCompare(displayNames.of(b) ?? b, locale));
   const locked = saving || autoRun || Boolean(job);
   const favoriteIds = context?.favoriteTemplateIds ?? [];
-  const visibleTemplates = (context?.templates ?? []).filter(
-    (item) =>
-      item.id === templateId ||
-      `${item.name} ${item.id} ${context?.campaigns.find((campaign) => campaign.id === item.campaignId)?.name ?? ""}`
-        .toLowerCase()
-        .includes(templateSearch.toLowerCase())
-  );
 
   function chooseTemplate(id: string, replaceSettings = false) {
     setTemplateId(id);
@@ -525,12 +517,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
             <fieldset disabled={locked} className="min-w-0 space-y-6 disabled:opacity-60">
               <section className="grid min-w-0 gap-4 border-b border-border pb-6 md:grid-cols-2">
                 <Field label={t("adsetName")} id="launch-name">
-                  <Input
-                    id="launch-name"
-                    value={name}
-                    maxLength={200}
-                    onChange={(event) => setName(event.target.value)}
-                  />
+                  <Input id="launch-name" value={name} readOnly />
                 </Field>
                 <Field label={t("campaign")} id="launch-campaign">
                   <select
@@ -552,45 +539,29 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                     }}
                   >
                     <option value="">{t("choose")}</option>
-                    {context.campaigns.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
+                    {context.campaigns
+                      .filter((item) => item.status === "ACTIVE")
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
                   </select>
                 </Field>
                 <div className="min-w-0 space-y-2 md:col-span-2">
                   <Label className="block" htmlFor="launch-template">
                     {t("templateAdset")}
                   </Label>
-                  <Input
-                    aria-label={t("searchTemplate")}
-                    placeholder={t("searchTemplate")}
-                    value={templateSearch}
-                    onChange={(event) => setTemplateSearch(event.target.value)}
-                  />
                   <div className="flex min-w-0 items-center gap-2">
-                    <select
+                    <BatchTemplateSelect
                       id="launch-template"
-                      className={selectClass}
+                      templates={context.templates}
+                      campaigns={context.campaigns}
+                      favoriteIds={favoriteIds}
                       value={templateId}
-                      onChange={(event) => chooseTemplate(event.target.value, true)}
-                    >
-                      <option value="">{t("choose")}</option>
-                      {[true, false].map((favorites) => (
-                        <optgroup key={String(favorites)} label={t(favorites ? "favoriteAdsets" : "otherAdsets")}>
-                          {visibleTemplates
-                            .filter((item) => favoriteIds.includes(item.id) === favorites)
-                            .map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} ·{" "}
-                                {context.campaigns.find((campaign) => campaign.id === item.campaignId)?.name ??
-                                  item.campaignId}
-                              </option>
-                            ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                      disabled={locked}
+                      onChange={(id) => chooseTemplate(id, true)}
+                    />
                     <Button
                       variant="outline"
                       size="icon"

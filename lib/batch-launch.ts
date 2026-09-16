@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { listBatchMedia } from "@/lib/batch-launch-drive";
 import {
+  batchAdsetName,
   buildAdSetPayload,
   groupBatchMedia,
   validateCopy,
@@ -336,7 +337,8 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   if (!input || !/^\d+$/.test(input.campaignId) || !/^\d+$/.test(input.templateId))
     throw new Error("Kampagne oder Vorlagen-Adset fehlt.");
   const account = await launchAccount(clientId, input.accountId);
-  await launchFolder(clientId, input.folderId);
+  const folder = await launchFolder(clientId, input.folderId);
+  input = { ...input, name: batchAdsetName(folder.name) };
   validateCopy(input.copy);
   const [media, rawCampaign, template] = await Promise.all([
     listBatchMedia(input.folderId),
@@ -346,8 +348,8 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   const metaId = account.meta_account_id.replace(/^act_/, "");
   if (String(rawCampaign.account_id) !== metaId || String(template.account_id) !== metaId)
     throw new Error("Kampagne oder Vorlage gehoert nicht zum Werbekonto.");
-  if (!["ACTIVE", "PAUSED"].includes(String(rawCampaign.status)))
-    throw new Error("Die Kampagne ist nicht mehr verfuegbar.");
+  if (rawCampaign.status !== "ACTIVE")
+    throw new Error("Die Kampagne ist nicht mehr aktiv. Bitte eine aktive Kampagne auswaehlen.");
   const files = validateGroups(input.groups, media.files);
   const campaign = mapBatchCampaign(rawCampaign);
   validateLaunchActivation(input.activate, campaign, input.activationBudget);
