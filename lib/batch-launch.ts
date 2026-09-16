@@ -1,7 +1,6 @@
 import "server-only";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { listBatchMedia } from "@/lib/batch-launch-drive";
-import { matchBatchMedia } from "@/lib/batch-media-matching";
 import {
   batchAdsetName,
   buildAdSetPayload,
@@ -20,7 +19,8 @@ import {
 } from "@/lib/meta/batch-launch";
 import type {
   BatchCopySuggestion,
-  BatchLaunchContext,
+  BatchLaunchAccountContext,
+  BatchLaunchMedia,
   BatchLaunchInput,
   BatchLaunchJob,
   BatchLaunchPreset,
@@ -96,6 +96,10 @@ async function launchFolder(clientId: string, folderId: string) {
 
 export async function getLaunchPresets(clientId: string, accountId: string): Promise<BatchLaunchPreset[]> {
   await launchAccount(clientId, accountId);
+  return readLaunchPresets(accountId);
+}
+
+async function readLaunchPresets(accountId: string): Promise<BatchLaunchPreset[]> {
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("batch_launch_presets")
     .select("id,name,settings")
@@ -137,6 +141,10 @@ export async function deleteLaunchPreset(clientId: string, accountId: string, id
 
 export async function getTemplateFavorites(clientId: string, accountId: string): Promise<string[]> {
   await launchAccount(clientId, accountId);
+  return readTemplateFavorites(accountId);
+}
+
+async function readTemplateFavorites(accountId: string): Promise<string[]> {
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("batch_adset_favorites")
     .select("meta_adset_id")
@@ -249,14 +257,11 @@ export async function getBatchLaunchContext(
   clientId: string,
   folderId: string,
   requestedAccountId?: string
-): Promise<BatchLaunchContext> {
+): Promise<BatchLaunchAccountContext> {
   const db = createSupabaseServiceRoleClient();
-  const folderPromise = launchFolder(clientId, folderId);
-  const [folder, accountResult, media] = await Promise.all([
-    folderPromise,
-    db.from("meta_ad_accounts").select("id,meta_account_id,name,currency").eq("client_id", clientId).order("name"),
-    // Only read Drive after validating the folder belongs to the partner.
-    folderPromise.then(() => listBatchMedia(folderId))
+  const [folder, accountResult] = await Promise.all([
+    launchFolder(clientId, folderId),
+    db.from("meta_ad_accounts").select("id,meta_account_id,name,currency").eq("client_id", clientId).order("name")
   ]);
   if (accountResult.error) throw new Error(accountResult.error.message);
   const accounts = (accountResult.data ?? []).map((row) => ({
@@ -267,9 +272,9 @@ export async function getBatchLaunchContext(
   }));
   const account = accounts.find((item) => item.id === (requestedAccountId || accounts[0]?.id));
   if (!account) throw new Error("Kein passendes Werbekonto gefunden.");
-  const matchingPromise = matchBatchMedia(media.files);
-  const [presets, suggestions, jobs, favoriteTemplateIds] = await Promise.all([
-    getLaunchPresets(clientId, account.id),
+  // The account is already scoped to this client. Keep Drive and live Meta off the initial render path.
+  const [presets, suggestions, jobs, favoriteTemplateIds, options] = await Promise.all([
+    readLaunchPresets(account.id),
     copySuggestions(account.id),
     db
       .from("batch_launch_jobs")
@@ -279,59 +284,72 @@ export async function getBatchLaunchContext(
       .eq("drive_folder_id", folderId)
       .order("created_at", { ascending: false })
       .limit(20),
-    getTemplateFavorites(clientId, account.id)
+    readTemplateFavorites(account.id),
+    storedBatchOptions(account.id)
   ]);
   if (jobs.error) throw new Error(jobs.error.message);
   const metaConfigured = Boolean(process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim());
-  let campaigns: BatchLaunchContext["campaigns"] = [];
-  let templates: BatchLaunchContext["templates"] = [];
-  if (metaConfigured) ({ campaigns, templates } = await getLiveBatchOptions(account.metaAccountId));
-  else {
-    const [cs, ts] = await Promise.all([
-      db
-        .from("meta_campaigns")
-        .select("meta_campaign_id,name,objective,status,raw")
-        .eq("ad_account_id", account.id)
-        .in("status", ["ACTIVE", "PAUSED"])
-        .limit(1000),
-      db
-        .from("meta_ad_sets")
-        .select("meta_adset_id,name,raw")
-        .eq("ad_account_id", account.id)
-        .in("status", ["ACTIVE", "PAUSED"])
-        .limit(1000)
-    ]);
-    if (cs.error || ts.error) throw new Error(cs.error?.message ?? ts.error?.message);
-    campaigns = (cs.data ?? []).map((row) =>
-      mapBatchCampaign({
-        ...row.raw,
-        id: row.meta_campaign_id,
-        name: row.name,
-        objective: row.objective,
-        status: row.status
-      })
-    );
-    templates = (ts.data ?? []).map((row) => ({
-      id: row.meta_adset_id,
-      name: row.name,
-      campaignId: row.raw?.campaign_id ?? "",
-      raw: row.raw ?? {}
-    }));
-  }
   return {
     folder,
     accounts,
     accountId: account.id,
-    campaigns,
-    templates,
+    ...options,
     favoriteTemplateIds,
     presets,
     suggestions,
-    ...media,
-    ...(await matchingPromise),
     recentJobs: (jobs.data as BatchLaunchJobRow[]).map(mapLaunchJob),
     metaConfigured
   };
+}
+
+async function storedBatchOptions(accountId: string) {
+  const db = createSupabaseServiceRoleClient();
+  const [cs, ts] = await Promise.all([
+    db
+      .from("meta_campaigns")
+      .select("meta_campaign_id,name,objective,status,raw")
+      .eq("ad_account_id", accountId)
+      .in("status", ["ACTIVE", "PAUSED"])
+      .limit(1000),
+    db
+      .from("meta_ad_sets")
+      .select("meta_adset_id,name,raw")
+      .eq("ad_account_id", accountId)
+      .in("status", ["ACTIVE", "PAUSED"])
+      .limit(1000)
+  ]);
+  if (cs.error || ts.error) throw new Error(cs.error?.message ?? ts.error?.message);
+  const campaigns = (cs.data ?? []).map((row) =>
+    mapBatchCampaign({
+      ...row.raw,
+      id: row.meta_campaign_id,
+      name: row.name,
+      objective: row.objective,
+      status: row.status
+    })
+  );
+  const templates = (ts.data ?? []).map((row) => ({
+    id: row.meta_adset_id,
+    name: row.name,
+    campaignId: row.raw?.campaign_id ?? "",
+    raw: row.raw ?? {}
+  }));
+  return { campaigns, templates };
+}
+
+export async function getBatchLaunchMedia(clientId: string, folderId: string): Promise<BatchLaunchMedia> {
+  await launchFolder(clientId, folderId);
+  const media = await listBatchMedia(folderId);
+  const { matchBatchMedia } = await import("@/lib/batch-media-matching");
+  return { ...media, ...(await matchBatchMedia(media.files)) };
+}
+
+export async function getBatchLaunchOptions(clientId: string, accountId: string) {
+  // Validate ownership on every request, including cache hits.
+  const account = await launchAccount(clientId, accountId);
+  return process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim()
+    ? getLiveBatchOptions(account.meta_account_id)
+    : storedBatchOptions(accountId);
 }
 
 export async function createBatchLaunch(clientId: string, input: BatchLaunchInput) {

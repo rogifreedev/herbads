@@ -64,7 +64,7 @@ export type BatchTemplate = {
   raw: Record<string, unknown>;
 };
 
-export type BatchLaunchContext = {
+export type BatchLaunchAccountContext = {
   folder: { id: string; name: string };
   accounts: { id: string; metaAccountId: string; name: string; currency: string }[];
   accountId: string;
@@ -73,13 +73,19 @@ export type BatchLaunchContext = {
   favoriteTemplateIds: string[];
   presets: BatchLaunchPreset[];
   suggestions: BatchCopySuggestion[];
+  recentJobs: BatchLaunchJob[];
+  metaConfigured: boolean;
+};
+
+export type BatchLaunchMedia = {
   files: BatchMediaFile[];
   groups: BatchAdGroup[];
   matchingUnavailable?: boolean;
   ignoredFiles: string[];
-  recentJobs: BatchLaunchJob[];
-  metaConfigured: boolean;
 };
+
+export type BatchLaunchOptions = Pick<BatchLaunchAccountContext, "campaigns" | "templates">;
+export type BatchLaunchContext = BatchLaunchAccountContext & BatchLaunchMedia;
 
 export type BatchLaunchInput = {
   activate?: boolean;

@@ -1,5 +1,9 @@
 {
   "batchLaunch": {
+    "mediaLoading": "Drive-Medien werden geladen und Formatpaare abgeglichen",
+    "optionsLoading": "Kampagnen und Adsets werden mit Meta aktualisiert",
+    "optionsError": "Meta-Aktualisierung fehlgeschlagen. Gespeicherte Einstellungen sind weiterhin sichtbar.",
+    "selectionUnavailable": "Die ausgewählte Kampagne ist nicht mehr aktiv oder das Referenz-Adset ist nicht mehr verfügbar. Bitte neu auswählen.",
     "visualMatch": "Visueller Vorschlag",
     "matchingReviewed": "Formatpaare geprüft",
     "visualMatchReview": "Visuell zugeordnete Formatpaare vor dem Erstellen prüfen. Nicht eindeutige Motive bleiben einzeln.",

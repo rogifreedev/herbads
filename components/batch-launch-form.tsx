@@ -39,7 +39,9 @@ import {
 import { COUNTRY_CODES, batchAdsetName, groupBatchMedia, settingsFromAdset } from "@/lib/batch-launch-plan";
 import type {
   BatchAdGroup,
-  BatchLaunchContext,
+  BatchLaunchAccountContext,
+  BatchLaunchMedia,
+  BatchLaunchOptions,
   BatchLaunchCopy,
   BatchLaunchJob,
   BatchLaunchPreset,
@@ -87,7 +89,26 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const t = useTranslations("batchLaunch");
   const locale = useLocale();
   const endpoint = `/api/clients/${clientId}/batches`;
-  const [context, setContext] = useState<BatchLaunchContext | null>(null);
+  const [accountContext, setContext] = useState<BatchLaunchAccountContext | null>(null);
+  const [mediaState, setMediaState] = useState<{ folderId: string; data?: BatchLaunchMedia; error?: string } | null>(
+    null
+  );
+  const [mediaRevision, setMediaRevision] = useState(0);
+  const [optionsState, setOptionsState] = useState<{ accountId: string; error?: string } | null>(null);
+  const [optionsRevision, setOptionsRevision] = useState(0);
+  const media = mediaState?.folderId === folderId ? mediaState.data : undefined;
+  const mediaError = mediaState?.folderId === folderId ? mediaState.error : undefined;
+  const context =
+    accountContext?.folder.id === folderId
+      ? {
+          ...accountContext,
+          ...(media ?? { files: [], groups: [], ignoredFiles: [] })
+        }
+      : null;
+  const optionsAccountId = accountContext?.metaConfigured ? accountContext.accountId : "";
+  const optionsLoading = Boolean(optionsAccountId && optionsState?.accountId !== optionsAccountId);
+  const optionsError = optionsState?.accountId === optionsAccountId ? optionsState?.error : undefined;
+  const sourcesReady = Boolean(media && !optionsLoading && !optionsError);
   const [accountId, setAccountId] = useState("");
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +138,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
 
   useEffect(() => {
     const controller = new AbortController();
-    jsonRequest<BatchLaunchContext>(
+    jsonRequest<BatchLaunchAccountContext>(
       `${endpoint}/launch?folderId=${encodeURIComponent(folderId)}${accountId ? `&accountId=${accountId}` : ""}`,
       { signal: controller.signal }
     )
@@ -125,8 +146,6 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         if (controller.signal.aborted) return;
         setContext(data);
         setName(batchAdsetName(data.folder.name));
-        setGroups(data.groups);
-        setReviewedMatching("");
         setCampaignId("");
         setTemplateId("");
         setActivate(false);
@@ -148,6 +167,46 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
       });
     return () => controller.abort();
   }, [endpoint, folderId, accountId, revision, t]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    jsonRequest<BatchLaunchMedia>(`${endpoint}/launch/media?folderId=${encodeURIComponent(folderId)}`, {
+      signal: controller.signal
+    })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setMediaState({ folderId, data });
+        setGroups(data.groups);
+        setReviewedMatching("");
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted)
+          setMediaState({ folderId, error: failure instanceof Error ? failure.message : t("loadError") });
+      });
+    return () => controller.abort();
+  }, [endpoint, folderId, mediaRevision, t]);
+
+  useEffect(() => {
+    if (!optionsAccountId) return;
+    const controller = new AbortController();
+    jsonRequest<BatchLaunchOptions>(`${endpoint}/launch/options?accountId=${encodeURIComponent(optionsAccountId)}`, {
+      signal: controller.signal
+    })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        // Refresh picker data only, never overwrite the user's copy, settings or media assignments.
+        setContext((current) => (current?.accountId === optionsAccountId ? { ...current, ...data } : current));
+        setOptionsState({ accountId: optionsAccountId });
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted)
+          setOptionsState({
+            accountId: optionsAccountId,
+            error: failure instanceof Error ? failure.message : t("loadError")
+          });
+      });
+    return () => controller.abort();
+  }, [endpoint, optionsAccountId, optionsRevision, t]);
 
   useEffect(() => {
     if (!context?.metaConfigured || languageSearch.trim().length < 2) return;
@@ -200,7 +259,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   }, [autoRun, jobId, endpoint, t]);
 
   const account = context?.accounts.find((item) => item.id === context.accountId);
-  const campaign = context?.campaigns.find((item) => item.id === campaignId);
+  const campaign = context?.campaigns.find((item) => item.id === campaignId && item.status === "ACTIVE");
   const template = context?.templates.find((item) => item.id === templateId);
   const campaignBudget = Boolean(campaign?.dailyBudget || campaign?.lifetimeBudget);
   const currencyDigits =
@@ -245,7 +304,11 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId: context.accountId, templateId, favorite: !favoriteIds.includes(templateId) })
       });
-      setContext({ ...context, favoriteTemplateIds: result.favoriteTemplateIds });
+      setContext((current) =>
+        current?.accountId === context.accountId
+          ? { ...current, favoriteTemplateIds: result.favoriteTemplateIds }
+          : current
+      );
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : t("favoriteError"));
     } finally {
@@ -276,7 +339,9 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
           preset: { id: asNew ? "" : presetId, name: presetName, dailyBudget, countries, locales }
         })
       });
-      setContext({ ...context, presets: result.presets });
+      setContext((current) =>
+        current?.accountId === context.accountId ? { ...current, presets: result.presets } : current
+      );
       setPresetId(result.presets.find((item) => item.name === presetName.trim())?.id ?? "");
       toast.success(t("saved"));
     } catch (failure) {
@@ -295,7 +360,9 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId: context.accountId, id: presetId })
       });
-      setContext({ ...context, presets: result.presets });
+      setContext((current) =>
+        current?.accountId === context.accountId ? { ...current, presets: result.presets } : current
+      );
       setPresetId("");
       setPresetName("");
     } catch (failure) {
@@ -322,7 +389,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   }
 
   async function create() {
-    if (!context || unreviewedMatching) return;
+    if (!context || !sourcesReady || !campaign || !template || unreviewedMatching) return;
     setSaving(true);
     setConfirmActivation(false);
     setError(null);
@@ -416,6 +483,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                 setAutoRun(false);
                 setLoading(true);
                 setContext(null);
+                setOptionsState(null);
                 setError(null);
                 setAccountId(event.target.value);
               }}
@@ -521,6 +589,35 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
           ) : null}
           {!job ? (
             <fieldset disabled={locked} className="min-w-0 space-y-6 disabled:opacity-60">
+              {optionsLoading ? (
+                <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t("optionsLoading")}
+                </p>
+              ) : optionsError ? (
+                <Alert variant="warning">
+                  <AlertDescription>
+                    {t("optionsError")} {optionsError}
+                  </AlertDescription>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      setOptionsState(null);
+                      setOptionsRevision((value) => value + 1);
+                    }}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    {t("retry")}
+                  </Button>
+                </Alert>
+              ) : null}
+              {!optionsLoading && !optionsError && ((campaignId && !campaign) || (templateId && !template)) ? (
+                <Alert variant="warning">
+                  <AlertDescription>{t("selectionUnavailable")}</AlertDescription>
+                </Alert>
+              ) : null}
               <section className="grid min-w-0 gap-4 border-b border-border pb-6 md:grid-cols-2">
                 <Field label={t("adsetName")} id="launch-name">
                   <Input id="launch-name" value={name} readOnly />
@@ -854,186 +951,217 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                 </div>
               </section>
               <section className="space-y-4">
-                {context.matchingUnavailable ? (
-                  <Alert>
-                    <AlertDescription>{t("matchingUnavailable")}</AlertDescription>
-                  </Alert>
-                ) : null}
-                {visualMatches.length ? (
-                  <Alert>
-                    <AlertDescription>{t("visualMatchReview")}</AlertDescription>
-                    <label className="mt-3 flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-primary"
-                        checked={!unreviewedMatching}
-                        onChange={(event) => setReviewedMatching(event.target.checked ? matchingKey : "")}
-                      />
-                      {t("matchingReviewed")}
-                    </label>
-                  </Alert>
-                ) : null}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="font-heading text-xl">{t("ads", { count: groups.length })}</h3>
-                  <Button variant="outline" size="sm" onClick={() => setGroups(context.groups)}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    {t("resetMatching")}
-                  </Button>
-                </div>
-                {groups.map((group) => {
-                  const kind = context.files.find((file) => file.id === (group.feedFileId ?? group.storyFileId))?.kind;
-                  return (
-                    <div
-                      key={group.id}
-                      className="grid min-w-0 gap-4 rounded-lg border border-border p-4 lg:grid-cols-[minmax(180px,1fr)_minmax(0,2fr)]"
-                    >
-                      <div className="min-w-0 space-y-3">
-                        <Label htmlFor={`ad-${group.id}`}>{t("adName")}</Label>
-                        <Input
-                          id={`ad-${group.id}`}
-                          maxLength={200}
-                          value={group.name}
-                          onChange={(event) =>
-                            setGroups(
-                              groups.map((item) =>
-                                item.id === group.id ? { ...item, name: event.target.value } : item
-                              )
-                            )
-                          }
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">
-                            {kind === "video" ? (
-                              <Film className="mr-1 h-3 w-3" />
-                            ) : (
-                              <ImageIcon className="mr-1 h-3 w-3" />
-                            )}
-                            {group.feedFileId && group.storyFileId ? t("matched") : t("single")}
-                          </Badge>
-                          {group.matchMethod === "visual" ? <Badge variant="outline">{t("visualMatch")}</Badge> : null}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title={t("exclude")}
-                            aria-label={t("exclude")}
-                            onClick={() => setGroups(groups.filter((item) => item.id !== group.id))}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          {group.feedFileId && group.storyFileId ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              title={t("unpair")}
-                              aria-label={t("unpair")}
-                              onClick={() =>
+                {!media ? (
+                  mediaError ? (
+                    <Alert variant="warning">
+                      <AlertDescription>{mediaError}</AlertDescription>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          setMediaState(null);
+                          setMediaRevision((value) => value + 1);
+                        }}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        {t("retry")}
+                      </Button>
+                    </Alert>
+                  ) : (
+                    <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("mediaLoading")}
+                    </p>
+                  )
+                ) : (
+                  <>
+                    {context.matchingUnavailable ? (
+                      <Alert>
+                        <AlertDescription>{t("matchingUnavailable")}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    {visualMatches.length ? (
+                      <Alert>
+                        <AlertDescription>{t("visualMatchReview")}</AlertDescription>
+                        <label className="mt-3 flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={!unreviewedMatching}
+                            onChange={(event) => setReviewedMatching(event.target.checked ? matchingKey : "")}
+                          />
+                          {t("matchingReviewed")}
+                        </label>
+                      </Alert>
+                    ) : null}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="font-heading text-xl">{t("ads", { count: groups.length })}</h3>
+                      <Button variant="outline" size="sm" onClick={() => setGroups(context.groups)}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        {t("resetMatching")}
+                      </Button>
+                    </div>
+                    {groups.map((group) => {
+                      const kind = context.files.find(
+                        (file) => file.id === (group.feedFileId ?? group.storyFileId)
+                      )?.kind;
+                      return (
+                        <div
+                          key={group.id}
+                          className="grid min-w-0 gap-4 rounded-lg border border-border p-4 lg:grid-cols-[minmax(180px,1fr)_minmax(0,2fr)]"
+                        >
+                          <div className="min-w-0 space-y-3">
+                            <Label htmlFor={`ad-${group.id}`}>{t("adName")}</Label>
+                            <Input
+                              id={`ad-${group.id}`}
+                              maxLength={200}
+                              value={group.name}
+                              onChange={(event) =>
                                 setGroups(
-                                  groups.flatMap((item) =>
-                                    item.id !== group.id
-                                      ? [item]
-                                      : separateFiles(
-                                          context.files.filter(
-                                            (file) => file.id === group.feedFileId || file.id === group.storyFileId
-                                          )
-                                        ).map((item) => ({ ...item, primaryText: group.primaryText }))
+                                  groups.map((item) =>
+                                    item.id === group.id ? { ...item, name: event.target.value } : item
                                   )
                                 )
                               }
-                            >
-                              <Unlink className="h-4 w-4" />
-                            </Button>
-                          ) : null}
-                        </div>
-                        <details>
-                          <summary className="cursor-pointer text-xs text-muted-foreground">
-                            {t("individualText")}
-                          </summary>
-                          <Textarea
-                            className="mt-2"
-                            aria-label={`${t("primaryText")}: ${group.name}`}
-                            rows={4}
-                            maxLength={10000}
-                            placeholder={copy.primaryText}
-                            value={group.primaryText ?? ""}
-                            onChange={(event) =>
-                              setGroups(
-                                groups.map((item) =>
-                                  item.id === group.id ? { ...item, primaryText: event.target.value } : item
-                                )
-                              )
-                            }
-                          />
-                        </details>
-                      </div>
-                      <div className="grid min-w-0 grid-cols-2 gap-3">
-                        {(["feedFileId", "storyFileId"] as const).map((slot) => (
-                          <div key={slot} className="min-w-0 space-y-2">
-                            <Label htmlFor={`${group.id}-${slot}`}>
-                              {slot === "feedFileId" ? t("feed") : t("story")}
-                            </Label>
-                            <MediaPreview
-                              file={context.files.find((file) => file.id === group[slot])}
-                              empty={t("noVariant")}
                             />
-                            <select
-                              id={`${group.id}-${slot}`}
-                              className={selectClass}
-                              value={group[slot] ?? ""}
-                              onChange={(event) => assignFile(group.id, slot, event.target.value)}
-                            >
-                              <option value="">{t("noVariant")}</option>
-                              {context.files
-                                .filter(
-                                  (file) =>
-                                    file.kind === kind &&
-                                    (file.id === group[slot] ||
-                                      (slot === "storyFileId"
-                                        ? file.placement === "story"
-                                        : file.placement !== "story"))
-                                )
-                                .map((file) => (
-                                  <option key={file.id} value={file.id}>
-                                    {file.path}
-                                  </option>
-                                ))}
-                            </select>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">
+                                {kind === "video" ? (
+                                  <Film className="mr-1 h-3 w-3" />
+                                ) : (
+                                  <ImageIcon className="mr-1 h-3 w-3" />
+                                )}
+                                {group.feedFileId && group.storyFileId ? t("matched") : t("single")}
+                              </Badge>
+                              {group.matchMethod === "visual" ? (
+                                <Badge variant="outline">{t("visualMatch")}</Badge>
+                              ) : null}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                title={t("exclude")}
+                                aria-label={t("exclude")}
+                                onClick={() => setGroups(groups.filter((item) => item.id !== group.id))}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                              {group.feedFileId && group.storyFileId ? (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  title={t("unpair")}
+                                  aria-label={t("unpair")}
+                                  onClick={() =>
+                                    setGroups(
+                                      groups.flatMap((item) =>
+                                        item.id !== group.id
+                                          ? [item]
+                                          : separateFiles(
+                                              context.files.filter(
+                                                (file) => file.id === group.feedFileId || file.id === group.storyFileId
+                                              )
+                                            ).map((item) => ({ ...item, primaryText: group.primaryText }))
+                                      )
+                                    )
+                                  }
+                                >
+                                  <Unlink className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                            </div>
+                            <details>
+                              <summary className="cursor-pointer text-xs text-muted-foreground">
+                                {t("individualText")}
+                              </summary>
+                              <Textarea
+                                className="mt-2"
+                                aria-label={`${t("primaryText")}: ${group.name}`}
+                                rows={4}
+                                maxLength={10000}
+                                placeholder={copy.primaryText}
+                                value={group.primaryText ?? ""}
+                                onChange={(event) =>
+                                  setGroups(
+                                    groups.map((item) =>
+                                      item.id === group.id ? { ...item, primaryText: event.target.value } : item
+                                    )
+                                  )
+                                }
+                              />
+                            </details>
                           </div>
-                        ))}
+                          <div className="grid min-w-0 grid-cols-2 gap-3">
+                            {(["feedFileId", "storyFileId"] as const).map((slot) => (
+                              <div key={slot} className="min-w-0 space-y-2">
+                                <Label htmlFor={`${group.id}-${slot}`}>
+                                  {slot === "feedFileId" ? t("feed") : t("story")}
+                                </Label>
+                                <MediaPreview
+                                  file={context.files.find((file) => file.id === group[slot])}
+                                  empty={t("noVariant")}
+                                />
+                                <select
+                                  id={`${group.id}-${slot}`}
+                                  className={selectClass}
+                                  value={group[slot] ?? ""}
+                                  onChange={(event) => assignFile(group.id, slot, event.target.value)}
+                                >
+                                  <option value="">{t("noVariant")}</option>
+                                  {context.files
+                                    .filter(
+                                      (file) =>
+                                        file.kind === kind &&
+                                        (file.id === group[slot] ||
+                                          (slot === "storyFileId"
+                                            ? file.placement === "story"
+                                            : file.placement !== "story"))
+                                    )
+                                    .map((file) => (
+                                      <option key={file.id} value={file.id}>
+                                        {file.path}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {unused.length ? (
+                      <div className="space-y-2">
+                        <h4 className="text-sm text-muted-foreground">{t("unused", { count: unused.length })}</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {unused.map((file) => (
+                            <Button
+                              key={file.id}
+                              variant="outline"
+                              size="sm"
+                              className="max-w-full"
+                              onClick={() => setGroups([...groups, ...separateFiles([file])])}
+                            >
+                              <Plus className="mr-2 h-3 w-3 shrink-0" />
+                              <span className="truncate">{file.path}</span>
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {unused.length ? (
-                  <div className="space-y-2">
-                    <h4 className="text-sm text-muted-foreground">{t("unused", { count: unused.length })}</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {unused.map((file) => (
-                        <Button
-                          key={file.id}
-                          variant="outline"
-                          size="sm"
-                          className="max-w-full"
-                          onClick={() => setGroups([...groups, ...separateFiles([file])])}
-                        >
-                          <Plus className="mr-2 h-3 w-3 shrink-0" />
-                          <span className="truncate">{file.path}</span>
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {context.ignoredFiles.length ? (
-                  <details className="text-sm text-muted-foreground">
-                    <summary>{t("ignored", { count: context.ignoredFiles.length })}</summary>
-                    <ul className="mt-2 space-y-1">
-                      {context.ignoredFiles.map((path) => (
-                        <li className="break-words" key={path}>
-                          {path}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
+                    ) : null}
+                    {context.ignoredFiles.length ? (
+                      <details className="text-sm text-muted-foreground">
+                        <summary>{t("ignored", { count: context.ignoredFiles.length })}</summary>
+                        <ul className="mt-2 space-y-1">
+                          {context.ignoredFiles.map((path) => (
+                            <li className="break-words" key={path}>
+                              {path}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                  </>
+                )}
               </section>
             </fieldset>
           ) : null}
@@ -1088,10 +1216,11 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                 size="lg"
                 disabled={
                   saving ||
+                  !sourcesReady ||
                   unreviewedMatching ||
                   !context.metaConfigured ||
-                  !campaignId ||
-                  !templateId ||
+                  !campaign ||
+                  !template ||
                   !groups.length ||
                   !countries.length ||
                   !copy.primaryText.trim() ||
@@ -1147,7 +1276,10 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                 <Button variant="outline" onClick={() => setConfirmActivation(false)}>
                   {t("cancelActivation")}
                 </Button>
-                <Button disabled={saving || !activate || campaign?.status !== "ACTIVE"} onClick={create}>
+                <Button
+                  disabled={saving || !sourcesReady || !template || !activate || campaign?.status !== "ACTIVE"}
+                  onClick={create}
+                >
                   <Play className="mr-2 h-4 w-4" />
                   {t("confirmCreateActive")}
                 </Button>

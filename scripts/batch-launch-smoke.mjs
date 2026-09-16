@@ -175,6 +175,25 @@ async function main() {
       steps = 0;
     let creationRequests = 0;
     let visualFixture = false;
+    let mediaRequests = 0;
+    let pauseCampaignOnRefresh = false;
+    let failMedia = false,
+      failOptions = false,
+      delayAccountB = false;
+    let releaseAccountB, accountBStarted;
+    const slowAccountB = new Promise((resolve) => {
+      releaseAccountB = resolve;
+    });
+    const accountBRequested = new Promise((resolve) => {
+      accountBStarted = resolve;
+    });
+    let releaseMedia, releaseOptions;
+    const slowMedia = new Promise((resolve) => {
+      releaseMedia = resolve;
+    });
+    const slowOptions = new Promise((resolve) => {
+      releaseOptions = resolve;
+    });
     const favorites = { "account-a": [], "account-b": [] };
     await page.route("**/api/clients/test-client/batches/**", async (route) => {
       const request = route.request();
@@ -192,10 +211,33 @@ async function main() {
         else saved = [{ ...body.preset, id: "preset-1" }];
         result = { presets: saved };
       } else if (url.pathname.endsWith("/locales")) result = { locales: [{ id: 5, name: "Deutsch" }] };
-      else if (url.pathname.endsWith("/launch") && request.method() === "GET") {
+      else if (url.pathname.endsWith("/launch/media")) {
+        mediaRequests++;
+        if (failMedia) return route.fulfill({ status: 503, json: { error: "Test-Drive-Ausfall" } });
+        await slowMedia;
+        result = {
+          files,
+          groups: visualFixture ? initialGroups.map((group) => ({ ...group, matchMethod: "visual" })) : initialGroups,
+          ignoredFiles: ["Briefing.pdf"]
+        };
+      } else if (url.pathname.endsWith("/launch/options")) {
+        if (failOptions) return route.fulfill({ status: 503, json: { error: "Test-Meta-Ausfall" } });
+        await slowOptions;
+        const requestedAccount = url.searchParams.get("accountId");
+        const data = fixture(requestedAccount);
+        if (pauseCampaignOnRefresh) data.campaigns[0].status = "PAUSED";
+        if (requestedAccount === "account-b" && delayAccountB) {
+          accountBStarted();
+          await slowAccountB;
+          data.campaigns.push({ ...data.campaigns[0], id: "only-b", name: "Account B only" });
+        }
+        result = { campaigns: data.campaigns, templates: data.templates };
+      } else if (url.pathname.endsWith("/launch") && request.method() === "GET") {
         accountId = url.searchParams.get("accountId") || "account-a";
         result = fixture(accountId, accountId === "account-a" ? saved : [], job ? [job] : [], favorites[accountId]);
-        if (visualFixture) result.groups = result.groups.map((group) => ({ ...group, matchMethod: "visual" }));
+        delete result.files;
+        delete result.groups;
+        delete result.ignoredFiles;
       } else if (url.pathname.endsWith("/launch")) {
         submitted = request.postDataJSON();
         creationRequests++;
@@ -237,8 +279,33 @@ async function main() {
       await route.fulfill({ json: result });
     });
     const url = `${origin}/clients/test-client/batches/create?folderId=folder`;
-    await page.goto(url, { waitUntil: "networkidle", timeout: 90000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.getByRole("heading", { name: "Batch auf Meta erstellen" }).waitFor();
+    await page.locator("#launch-account").waitFor();
+    assert(
+      await page.locator("#launch-campaign").isEnabled(),
+      "Account settings usable while sources are still pending"
+    );
+    assert(await page.getByRole("status").filter({ hasText: "Kampagnen und Adsets werden" }).isVisible());
+    assert(await page.getByRole("status").filter({ hasText: "Drive-Medien werden" }).isVisible());
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.locator("#launch-budget").fill("71");
+    await page.locator("#launch-text").fill("Text edited while sources load");
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: path.join(output, "progressive-loading.png"), fullPage: true });
+    const pausedButton = page.getByRole("button", { name: "Pausiert auf Meta erstellen", exact: true });
+    assert(await pausedButton.isDisabled());
+    releaseMedia();
+    await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
+    assert(await pausedButton.isDisabled(), "Creation waits for live Meta even when matched media is ready");
+    releaseOptions();
+    await page.getByRole("status").filter({ hasText: "Kampagnen und Adsets werden" }).waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#launch-text").inputValue(), "Text edited while sources load");
+    assert.equal(await page.locator("#launch-budget").inputValue(), "71");
+    assert.equal(await page.locator("#launch-campaign").inputValue(), "789");
+    assert(await pausedButton.isEnabled());
+    await page.locator("#launch-campaign").selectOption("");
+    await page.locator("#launch-text").fill(copy.primaryText);
     const expectedName = `${new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date())}_Batch 01 - Herbstkampagne`;
     assert.equal(await page.locator("#launch-name").inputValue(), expectedName);
     assert(await page.locator("#launch-name").evaluate((input) => input.readOnly));
@@ -248,7 +315,7 @@ async function main() {
     );
     await page.locator("#launch-campaign").selectOption("789");
     assert.match(await page.locator("#launch-template").innerText(), /Website Purchases.*Sales - Deutschland/);
-    assert.equal(await page.locator("#launch-budget").inputValue(), "65.00");
+    assert.equal(await page.locator("#launch-budget").inputValue(), "71");
     const search = page.getByRole("combobox", { name: "Adset oder Kampagne suchen", exact: true });
     assert.equal(await search.count(), 0, "Search belongs inside the dropdown");
     await page.locator("#launch-template").click();
@@ -289,6 +356,8 @@ async function main() {
     await page.locator("#preset-name").fill("DACH Standard");
     await page.getByRole("button", { name: "Vorlage speichern", exact: true }).click();
     await page.locator('#launch-preset option[value="preset-1"]').waitFor({ state: "attached" });
+    const mediaBeforeSwitch = mediaRequests;
+    delayAccountB = true;
     await page.locator("#launch-account").selectOption("account-b");
     await page.waitForFunction(
       () =>
@@ -299,8 +368,17 @@ async function main() {
     assert.equal(await page.getByRole("group", { name: "Favorisierte Adsets", exact: true }).count(), 0);
     await search.press("Escape");
     await page.waitForFunction(() => document.activeElement?.id === "launch-template");
+    await accountBRequested;
     await page.locator("#launch-account").selectOption("account-a");
     await page.locator('#launch-preset option[value="preset-1"]').waitFor({ state: "attached" });
+    releaseAccountB();
+    await page.waitForLoadState("networkidle");
+    assert.equal(
+      await page.locator('#launch-campaign option[value="only-b"]').count(),
+      0,
+      "Discard late responses from the previous account"
+    );
+    assert.equal(mediaRequests, mediaBeforeSwitch, "Account switching must not reload Drive or redo matching");
     await page.locator("#launch-preset").selectOption("preset-1");
     assert.equal(await page.locator("#launch-budget").inputValue(), "60");
     await page.locator("#launch-campaign").selectOption("790");
@@ -444,9 +522,45 @@ async function main() {
     assert.equal(submitted.activate, true);
     assert.deepEqual(submitted.activationBudget, { dailyBudget: 10000, lifetimeBudget: 0 });
     assert.equal(creationRequests, 2);
+    job = null;
+    visualFixture = false;
+    failMedia = true;
+    failOptions = true;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.locator("#launch-text").fill("Preserve this text through retries");
+    assert(await pausedButton.isDisabled());
+    const failedMeta = page.getByRole("alert").filter({ hasText: "Test-Meta-Ausfall" });
+    const failedMedia = page.getByRole("alert").filter({ hasText: "Test-Drive-Ausfall" });
+    assert(await failedMeta.isVisible());
+    assert(await failedMedia.isVisible());
+    const failedMediaCount = mediaRequests;
+    failOptions = false;
+    await failedMeta.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await failedMeta.waitFor({ state: "hidden" });
+    await page.waitForLoadState("networkidle");
+    assert.equal(mediaRequests, failedMediaCount, "Retry Meta independently from Drive");
+    assert(await pausedButton.isDisabled(), "Cannot create without matched media after a retry");
+    failMedia = false;
+    await failedMedia.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
+    assert.equal(await page.locator("#launch-text").inputValue(), "Preserve this text through retries");
+    assert.equal(await page.locator("#launch-campaign").inputValue(), "789");
+    assert(await pausedButton.isEnabled());
+    assert.equal(creationRequests, 2, "Loading and retrying must never create Meta objects");
+    failOptions = true;
+    pauseCampaignOnRefresh = true;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    failOptions = false;
+    await failedMeta.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "Die ausgewählte Kampagne ist nicht mehr aktiv" }).waitFor();
+    assert.equal(await page.locator('#launch-campaign option[value="789"]').count(), 0);
+    assert(await pausedButton.isDisabled(), "A campaign paused since the last sync cannot be submitted");
+    assert.equal(creationRequests, 2);
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, persistent account favorites, cross-campaign templates, CBO, manual pair merging, visual match review, resume, paused default and explicit activation confirmation"
+      "PASS progressive loading, independent retries, stale-account cancellation, preserved edits, media reuse on account switch, active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, favorites, CBO, matching review, resume and explicit activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {

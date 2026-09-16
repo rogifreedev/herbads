@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { getRequiredEnv } from "@/lib/env";
 import type { BatchCampaign, BatchTemplate } from "@/lib/batch-launch-types";
 
@@ -81,7 +82,30 @@ export const BATCH_CAMPAIGN_FIELDS =
 export const BATCH_TEMPLATE_FIELDS =
   "id,account_id,name,campaign_id,status,targeting,promoted_object,optimization_goal,billing_event,bid_strategy,bid_amount,attribution_spec,destination_type,is_dynamic_creative,dsa_beneficiary,dsa_payor,daily_budget";
 
-export async function getLiveBatchOptions(metaAccountId: string) {
+type BatchOptions = Awaited<ReturnType<typeof loadLiveBatchOptions>>;
+const optionsCache = new Map<string, { expires: number; promise: Promise<BatchOptions> }>();
+
+export function getLiveBatchOptions(metaAccountId: string): Promise<BatchOptions> {
+  const tokenHash = createHash("sha256").update(getRequiredEnv("META_SYSTEM_USER_ACCESS_TOKEN")).digest("hex");
+  const key = `${process.env.META_API_VERSION || "v25.0"}:${metaAccountId}:${tokenHash}`;
+  const cached = optionsCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.promise;
+  // Reuse in-flight requests and recent picker data; creation still validates directly with Meta.
+  const entry = { expires: Date.now() + 60_000, promise: loadLiveBatchOptions(metaAccountId) };
+  if (optionsCache.size >= 20) optionsCache.delete(optionsCache.keys().next().value!);
+  optionsCache.set(key, entry);
+  void entry.promise.then(
+    () => {
+      entry.expires = Date.now() + 60_000;
+    },
+    () => {
+      if (optionsCache.get(key) === entry) optionsCache.delete(key);
+    }
+  );
+  return entry.promise;
+}
+
+async function loadLiveBatchOptions(metaAccountId: string) {
   const [campaigns, templates] = await Promise.all([
     metaLaunchList<Record<string, unknown>>(`${metaAccountId}/campaigns?fields=${BATCH_CAMPAIGN_FIELDS}&limit=100`),
     metaLaunchList<Record<string, unknown>>(`${metaAccountId}/adsets?fields=${BATCH_TEMPLATE_FIELDS}&limit=100`)

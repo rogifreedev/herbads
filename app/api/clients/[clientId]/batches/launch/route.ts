@@ -15,7 +15,8 @@ export async function GET(request: Request, context: Context) {
         clientId,
         url.searchParams.get("folderId") ?? "",
         url.searchParams.get("accountId") ?? undefined
-      )
+      ),
+      { headers: { "Cache-Control": "private, no-store" } }
     );
   } catch (error) {
     return NextResponse.json(

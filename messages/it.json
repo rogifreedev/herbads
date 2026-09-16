@@ -1,5 +1,9 @@
 {
   "batchLaunch": {
+    "mediaLoading": "Caricamento dei file Drive e abbinamento dei formati in corso",
+    "optionsLoading": "Aggiornamento di campagne e gruppi di inserzioni da Meta",
+    "optionsError": "Aggiornamento da Meta non riuscito. Le impostazioni salvate sono ancora visibili.",
+    "selectionUnavailable": "La campagna selezionata non è più attiva o il gruppo di inserzioni di riferimento non è più disponibile. Selezionarne un altro.",
     "visualMatch": "Suggerimento visivo",
     "matchingReviewed": "Coppie di formato verificate",
     "visualMatchReview": "Verificare le coppie abbinate visivamente prima della creazione. I motivi ambigui rimangono separati.",
