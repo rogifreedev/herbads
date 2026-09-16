@@ -57,15 +57,28 @@ export function sameCountrySelection(original: string[], selected: string[]) {
   );
 }
 
+export function adsetLocales(targeting: unknown) {
+  const values = (targeting as { locales?: unknown } | undefined)?.locales;
+  if (!Array.isArray(values)) return [];
+  return [
+    ...new Set(
+      values
+        .filter((value) => typeof value === "number" || (typeof value === "string" && /^\d+$/.test(value)))
+        .map(Number)
+        .filter((id) => Number.isSafeInteger(id) && id > 0)
+    )
+  ].map((id) => ({ id, name: String(id) }));
+}
+
 export function settingsFromAdset(template: BatchTemplate | undefined, currency: string) {
-  const targeting = template?.raw.targeting as { locales?: number[] } | undefined;
+  const targeting = template?.raw.targeting;
   const digits =
     new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
   const budget = Number(template?.raw.daily_budget ?? 0);
   return {
     dailyBudget: Number.isSafeInteger(budget) && budget > 0 ? (budget / 10 ** digits).toFixed(digits) : "",
     countries: adsetGeography(targeting).countries,
-    locales: (targeting?.locales ?? []).map((id) => ({ id, name: String(id) }))
+    locales: adsetLocales(targeting)
   };
 }
 

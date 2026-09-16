@@ -10,6 +10,7 @@ import {
   validateGroups,
   settingsFromAdset,
   adsetGeography,
+  adsetLocales,
   validateLaunchActivation
 } from "@/lib/batch-launch-plan";
 import type { BatchAdGroup, BatchLaunchCopy } from "@/lib/batch-launch-types";
@@ -143,6 +144,30 @@ describe("paused adset payloads", () => {
     });
     expect(settingsFromAdset({ ...source, raw: { daily_budget: "500" } }, "JPY").dailyBudget).toBe("500");
     expect(settingsFromAdset(undefined, "EUR").dailyBudget).toBe("");
+  });
+  it("inherits all explicit language IDs, including string IDs, without country-based guesses", () => {
+    const raw = { ...template, targeting: { geo_locations: { countries: ["IT"] }, locales: ["5", 4, 5, "9999"] } };
+    const inherited = settingsFromAdset({ id: "987", name: "Source", campaignId: "789", raw }, "EUR");
+    expect(inherited.locales).toEqual([
+      { id: 5, name: "5" },
+      { id: 4, name: "4" },
+      { id: 9999, name: "9999" }
+    ]);
+    expect(
+      buildAdSetPayload("Batch", campaign, raw, { ...inherited, dailyBudget: "15" }, "EUR").targeting
+    ).toHaveProperty("locales", [5, 4, 9999]);
+  });
+  it.each([undefined, {}, { locales: [] }, { geo_locations: { countries: ["IT"] } }])(
+    "keeps all languages when the source has no language restriction: %j",
+    (targeting) => {
+      expect(adsetLocales(targeting)).toEqual([]);
+    }
+  );
+  it("rejects malformed language IDs instead of coercing booleans or empty strings", () => {
+    expect(adsetLocales({ locales: [true, false, null, "", 0, -1, "5oops", 1.5, Infinity, "5", 5] })).toEqual([
+      { id: 5, name: "5" }
+    ]);
+    expect(adsetLocales({ locales: "5" })).toEqual([]);
   });
   it("inherits Italy from the Lana city target without expanding its 30 km radius", () => {
     const geo = {

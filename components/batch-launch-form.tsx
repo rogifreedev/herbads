@@ -39,6 +39,7 @@ import {
 import {
   COUNTRY_CODES,
   adsetGeography,
+  adsetLocales,
   batchAdsetName,
   groupBatchMedia,
   sameCountrySelection,
@@ -135,13 +136,33 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const [dailyBudget, setDailyBudget] = useState("");
   const [countries, setCountries] = useState<string[]>([]);
   const [countrySearch, setCountrySearch] = useState("");
-  const [locales, setLocales] = useState<{ id: number; name: string }[]>([]);
+  const [customLocales, setCustomLocales] = useState<{ id: number; name: string }[]>([]);
+  const [localeTemplateId, setLocaleTemplateId] = useState("");
+  const [localeNames, setLocaleNames] = useState<Record<string, Record<number, string>>>({});
+  const [localeNameError, setLocaleNameError] = useState(false);
+  const [localeNameRevision, setLocaleNameRevision] = useState(0);
+  const template = context?.templates.find((item) => item.id === templateId);
+  const locales =
+    localeTemplateId && template?.id === localeTemplateId ? adsetLocales(template.raw.targeting) : customLocales;
+  const localeIds = locales
+    .map((item) => item.id)
+    .sort((a, b) => a - b)
+    .join(",");
+  const namedLocales = locales.map((item) => ({
+    ...item,
+    name: localeNames[locale]?.[item.id] ?? (item.name === String(item.id) ? t("localeId", { id: item.id }) : item.name)
+  }));
   const [languageSearch, setLanguageSearch] = useState("");
   const [languageOptions, setLanguageOptions] = useState<typeof locales>([]);
   const [languageError, setLanguageError] = useState("");
   const [job, setJob] = useState<BatchLaunchJob | null>(null);
   const [autoRun, setAutoRun] = useState(false);
   const jobId = job?.id;
+
+  function setLocales(value: typeof customLocales) {
+    setLocaleTemplateId("");
+    setCustomLocales(value);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -161,7 +182,12 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         setPresetName("");
         setDailyBudget("");
         setCountries([]);
-        setLocales([]);
+        setCustomLocales([]);
+        setLocaleTemplateId("");
+        setLocaleNameError(false);
+        setLanguageSearch("");
+        setLanguageOptions([]);
+        setLanguageError("");
         setCopy(copyFields(data.suggestions[0] ?? emptyCopy));
         setSuggestionId(data.suggestions[0]?.id ?? "");
         setJob(data.recentJobs.find((item) => item.status !== "completed") ?? data.recentJobs[0] ?? null);
@@ -216,15 +242,38 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   }, [endpoint, optionsAccountId, optionsRevision, t]);
 
   useEffect(() => {
+    if (!context?.metaConfigured || !localeIds) return;
+    const controller = new AbortController();
+    jsonRequest<{ locales: typeof customLocales }>(
+      `${endpoint}/locales?accountId=${context.accountId}&ids=${encodeURIComponent(localeIds)}&language=${locale}`,
+      { signal: controller.signal }
+    )
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setLocaleNames((current) => ({
+          ...current,
+          [locale]: { ...current[locale], ...Object.fromEntries(data.locales.map((item) => [item.id, item.name])) }
+        }));
+        setLocaleNameError(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLocaleNameError(true);
+      });
+    return () => controller.abort();
+  }, [endpoint, context?.accountId, context?.metaConfigured, localeIds, locale, localeNameRevision]);
+
+  useEffect(() => {
     if (!context?.metaConfigured || languageSearch.trim().length < 2) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setLanguageError("");
       jsonRequest<{ locales: typeof locales }>(
-        `${endpoint}/locales?accountId=${context.accountId}&q=${encodeURIComponent(languageSearch)}`,
+        `${endpoint}/locales?accountId=${context.accountId}&q=${encodeURIComponent(languageSearch)}&language=${locale}`,
         { signal: controller.signal }
       )
-        .then((data) => setLanguageOptions(data.locales))
+        .then((data) => {
+          if (!controller.signal.aborted) setLanguageOptions(data.locales);
+        })
         .catch((failure) => {
           if (!controller.signal.aborted) setLanguageError(failure.message);
         });
@@ -233,7 +282,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
       clearTimeout(timer);
       controller.abort();
     };
-  }, [endpoint, context?.accountId, context?.metaConfigured, languageSearch]);
+  }, [endpoint, context?.accountId, context?.metaConfigured, languageSearch, locale]);
 
   useEffect(() => {
     if (!autoRun || !jobId) return;
@@ -267,7 +316,6 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
 
   const account = context?.accounts.find((item) => item.id === context.accountId);
   const campaign = context?.campaigns.find((item) => item.id === campaignId && item.status === "ACTIVE");
-  const template = context?.templates.find((item) => item.id === templateId);
   const templateGeo = adsetGeography(template?.raw.targeting);
   const inheritedLocations = sameCountrySelection(templateGeo.countries, countries) ? templateGeo.locations : [];
   const campaignBudget = Boolean(campaign?.dailyBudget || campaign?.lifetimeBudget);
@@ -296,7 +344,8 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
       const defaults = settingsFromAdset(selected, account?.currency ?? "EUR");
       setDailyBudget(defaults.dailyBudget);
       setCountries(defaults.countries);
-      setLocales(defaults.locales);
+      setCustomLocales(defaults.locales);
+      setLocaleTemplateId(selected?.id ?? "");
       if (replaceSettings) {
         setPresetId("");
         setPresetName("");
@@ -345,7 +394,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId: context.accountId,
-          preset: { id: asNew ? "" : presetId, name: presetName, dailyBudget, countries, locales }
+          preset: { id: asNew ? "" : presetId, name: presetName, dailyBudget, countries, locales: namedLocales }
         })
       });
       setContext((current) =>
@@ -417,7 +466,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
           campaignId,
           templateId,
           name,
-          settings: { dailyBudget, countries, locales },
+          settings: { dailyBudget, countries, locales: namedLocales },
           copy,
           groups
         })
@@ -802,7 +851,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                       placeholder={t("searchLanguage")}
                     />
                     <div className="flex flex-wrap gap-2">
-                      {locales.map((item) => (
+                      {namedLocales.map((item) => (
                         <Button
                           key={item.id}
                           size="sm"
@@ -815,6 +864,24 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                       ))}
                     </div>
                     {!locales.length ? <p className="text-xs text-muted-foreground">{t("allLanguages")}</p> : null}
+                    {localeNameError && locales.length ? (
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {t("localeNamesError")}
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          title={t("retry")}
+                          aria-label={t("retry")}
+                          onClick={() => {
+                            setLocaleNameError(false);
+                            setLocaleNameRevision((value) => value + 1);
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      </p>
+                    ) : null}
                     <div className="max-h-32 space-y-1 overflow-y-auto">
                       {(languageSearch.trim().length >= 2 ? languageOptions : [])
                         .filter((option) => !locales.some((selected) => selected.id === option.id))

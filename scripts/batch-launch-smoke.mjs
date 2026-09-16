@@ -176,6 +176,8 @@ async function main() {
     let creationRequests = 0;
     let visualFixture = false;
     let regionalFixture = false;
+    let liveLanguageIds = [5];
+    let failLocaleNames = false;
     let mediaRequests = 0;
     let pauseCampaignOnRefresh = false;
     let failMedia = false,
@@ -211,8 +213,19 @@ async function main() {
         if (request.method() === "DELETE") saved = saved.filter((item) => item.id !== body.id);
         else saved = [{ ...body.preset, id: "preset-1" }];
         result = { presets: saved };
-      } else if (url.pathname.endsWith("/locales")) result = { locales: [{ id: 5, name: "Deutsch" }] };
-      else if (url.pathname.endsWith("/launch/media")) {
+      } else if (url.pathname.endsWith("/locales")) {
+        const ids = url.searchParams.get("ids");
+        if (ids && failLocaleNames)
+          return route.fulfill({ status: 503, json: { error: "Language lookup unavailable" } });
+        result = {
+          locales: ids
+            ? [
+                { id: 5, name: "Deutsch" },
+                { id: 9999, name: "Testsprache" }
+              ].filter((item) => ids.split(",").includes(String(item.id)))
+            : [{ id: 5, name: "Deutsch" }]
+        };
+      } else if (url.pathname.endsWith("/launch/media")) {
         mediaRequests++;
         if (failMedia) return route.fulfill({ status: 503, json: { error: "Test-Drive-Ausfall" } });
         await slowMedia;
@@ -226,6 +239,7 @@ async function main() {
         await slowOptions;
         const requestedAccount = url.searchParams.get("accountId");
         const data = fixture(requestedAccount);
+        if (liveLanguageIds) data.templates[0].raw.targeting.locales = liveLanguageIds;
         if (pauseCampaignOnRefresh) data.campaigns[0].status = "PAUSED";
         if (requestedAccount === "account-b" && delayAccountB) {
           accountBStarted();
@@ -279,6 +293,7 @@ async function main() {
       }
       if (regionalFixture && result.templates) {
         result.templates[0].raw.daily_budget = "1500";
+        result.templates[0].raw.targeting.locales = [5, "9999"];
         result.templates[0].raw.targeting.geo_locations = {
           cities: [{ key: "1182606", name: "Lana", country: "IT", radius: 30, distance_unit: "kilometer" }],
           location_types: ["frequently_in", "home", "recent"]
@@ -308,6 +323,13 @@ async function main() {
     assert(await pausedButton.isDisabled(), "Creation waits for live Meta even when matched media is ready");
     releaseOptions();
     await page.getByRole("status").filter({ hasText: "Kampagnen und Adsets werden" }).waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Deutsch", exact: true }).waitFor();
+    assert.equal(
+      await page.getByText("Alle Sprachen", { exact: true }).count(),
+      0,
+      "Late Meta data must update untouched inherited languages"
+    );
+    liveLanguageIds = null;
     assert.equal(await page.locator("#launch-text").inputValue(), "Text edited while sources load");
     assert.equal(await page.locator("#launch-budget").inputValue(), "71");
     assert.equal(await page.locator("#launch-campaign").inputValue(), "789");
@@ -576,6 +598,13 @@ async function main() {
     assert(await italy.isChecked(), "City-only targeting automatically selects its country");
     assert.equal(await page.locator("#launch-budget").inputValue(), "15.00");
     await inheritedLocation.waitFor();
+    await page.getByRole("button", { name: "Deutsch", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Testsprache", exact: true }).waitFor();
+    assert.equal(await page.getByText("Alle Sprachen", { exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Testsprache", exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: "Testsprache", exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Adset-Einstellungen übernehmen", exact: true }).click();
+    await page.getByRole("button", { name: "Testsprache", exact: true }).waitFor();
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await inheritedLocation.scrollIntoViewIfNeeded();
@@ -597,6 +626,10 @@ async function main() {
     await search.press("Enter");
     assert(await austria.isChecked());
     assert(!(await italy.isChecked()));
+    assert(
+      await page.getByText("Alle Sprachen", { exact: true }).isVisible(),
+      "Unrestricted source clears inherited language restrictions"
+    );
     await page.locator("#launch-template").click();
     await search.fill("9789");
     await search.press("Enter");
@@ -606,10 +639,51 @@ async function main() {
     await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
     assert.deepEqual(submitted.settings.countries, ["IT"]);
     assert.equal(submitted.settings.dailyBudget, "15.00");
+    assert.deepEqual(submitted.settings.locales, [
+      { id: 5, name: "Deutsch" },
+      { id: 9999, name: "Testsprache" }
+    ]);
+    assert.equal(creationRequests, 3);
+    job = null;
+    regionalFixture = false;
+    liveLanguageIds = [9999];
+    failOptions = true;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.locator("#language-search").fill("Deu");
+    await page.getByRole("button", { name: "Deutsch", exact: true }).click();
+    failOptions = false;
+    await failedMeta.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await page.waitForLoadState("networkidle");
+    assert(await page.getByRole("button", { name: "Deutsch", exact: true }).isVisible());
+    assert.equal(
+      await page.getByRole("button", { name: "Testsprache", exact: true }).count(),
+      0,
+      "Live refresh must preserve manual language selection"
+    );
+    await page.getByRole("button", { name: "Adset-Einstellungen übernehmen", exact: true }).click();
+    await page.getByRole("button", { name: "Testsprache", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Deutsch", exact: true }).count(), 0);
+    regionalFixture = true;
+    liveLanguageIds = null;
+    failLocaleNames = true;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    const nameError = page.getByText("Sprachnamen nicht verfügbar. Die Sprachwahl bleibt erhalten.", { exact: true });
+    await nameError.waitFor();
+    assert(await page.getByRole("button", { name: "Meta-Sprache 5", exact: true }).isVisible());
+    assert(await page.getByRole("button", { name: "Meta-Sprache 9999", exact: true }).isVisible());
+    assert.equal(await page.getByText("Alle Sprachen", { exact: true }).count(), 0);
+    assert(await pausedButton.isEnabled(), "Language name errors must not discard selected IDs or block creation");
+    failLocaleNames = false;
+    await page.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await page.getByRole("button", { name: "Deutsch", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Testsprache", exact: true }).waitFor();
+    await nameError.waitFor({ state: "hidden" });
     assert.equal(creationRequests, 3);
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS country inheritance from city targeting, template switching and reapplying, location summary, progressive loading, independent retries, stale-account cancellation, preserved edits, media reuse on account switch, active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, favorites, CBO, matching review, resume and explicit activation confirmation"
+      "PASS language inheritance and names, unrestricted/multiple languages, late Meta updates, manual overrides, name lookup failure/retry, country inheritance from city targeting, template switching and reapplying, location summary, progressive loading, retries, stale-account cancellation, preserved edits, matching, presets, favorites and activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {

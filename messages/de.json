@@ -1,5 +1,7 @@
 {
   "batchLaunch": {
+    "localeId": "Meta-Sprache {id}",
+    "localeNamesError": "Sprachnamen nicht verfügbar. Die Sprachwahl bleibt erhalten.",
     "templateLocations": "Standorte aus Referenz-Adset: {locations}",
     "mediaLoading": "Drive-Medien werden geladen und Formatpaare abgeglichen",
     "optionsLoading": "Kampagnen und Adsets werden mit Meta aktualisiert",

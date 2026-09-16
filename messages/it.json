@@ -1,5 +1,7 @@
 {
   "batchLaunch": {
+    "localeId": "Lingua Meta {id}",
+    "localeNamesError": "Nomi delle lingue non disponibili. La selezione delle lingue viene mantenuta.",
     "templateLocations": "Località del gruppo di inserzioni di riferimento: {locations}",
     "mediaLoading": "Caricamento dei file Drive e abbinamento dei formati in corso",
     "optionsLoading": "Aggiornamento di campagne e gruppi di inserzioni da Meta",
