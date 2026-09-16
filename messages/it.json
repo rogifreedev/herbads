@@ -1,5 +1,6 @@
 {
   "batchLaunch": {
+    "templateLocations": "Località del gruppo di inserzioni di riferimento: {locations}",
     "mediaLoading": "Caricamento dei file Drive e abbinamento dei formati in corso",
     "optionsLoading": "Aggiornamento di campagne e gruppi di inserzioni da Meta",
     "optionsError": "Aggiornamento da Meta non riuscito. Le impostazioni salvate sono ancora visibili.",

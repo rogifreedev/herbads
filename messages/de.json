@@ -1,5 +1,6 @@
 {
   "batchLaunch": {
+    "templateLocations": "Standorte aus Referenz-Adset: {locations}",
     "mediaLoading": "Drive-Medien werden geladen und Formatpaare abgeglichen",
     "optionsLoading": "Kampagnen und Adsets werden mit Meta aktualisiert",
     "optionsError": "Meta-Aktualisierung fehlgeschlagen. Gespeicherte Einstellungen sind weiterhin sichtbar.",

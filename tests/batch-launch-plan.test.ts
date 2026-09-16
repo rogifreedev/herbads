@@ -9,6 +9,7 @@ import {
   validateCopy,
   validateGroups,
   settingsFromAdset,
+  adsetGeography,
   validateLaunchActivation
 } from "@/lib/batch-launch-plan";
 import type { BatchAdGroup, BatchLaunchCopy } from "@/lib/batch-launch-types";
@@ -142,6 +143,71 @@ describe("paused adset payloads", () => {
     });
     expect(settingsFromAdset({ ...source, raw: { daily_budget: "500" } }, "JPY").dailyBudget).toBe("500");
     expect(settingsFromAdset(undefined, "EUR").dailyBudget).toBe("");
+  });
+  it("inherits Italy from the Lana city target without expanding its 30 km radius", () => {
+    const geo = {
+      cities: [{ key: "1182606", name: "Lana", country: "IT", radius: 30, distance_unit: "kilometer" }],
+      location_types: ["frequently_in", "home", "recent"]
+    };
+    const raw = { ...template, daily_budget: "1500", targeting: { ...template.targeting, geo_locations: geo } };
+    const inherited = settingsFromAdset({ id: "987", name: "City source", campaignId: "789", raw }, "EUR");
+    expect(inherited.countries).toEqual(["IT"]);
+    expect(inherited.dailyBudget).toBe("15.00");
+    const payload = buildAdSetPayload("Batch", campaign, raw, inherited, "EUR");
+    expect(payload.targeting).toMatchObject({
+      geo_locations: geo,
+      excluded_geo_locations: raw.targeting.excluded_geo_locations
+    });
+    expect(payload.targeting).not.toHaveProperty("geo_locations.countries");
+    expect(raw.targeting.geo_locations).toEqual(geo);
+    expect(adsetGeography(raw.targeting).locations).toEqual(["Lana (30 km)"]);
+  });
+  it.each([
+    ["regions", { key: "127", name: "Tyrol", country: "AT" }, "AT"],
+    ["zips", { key: "DE:10115", country: "DE" }, "DE"]
+  ])("inherits and preserves %s targeting", (field, location, country) => {
+    const raw = { ...template, targeting: { geo_locations: { [field]: [location] } } };
+    const inherited = settingsFromAdset({ id: "987", name: "Local source", campaignId: "789", raw }, "EUR");
+    expect(inherited.countries).toEqual([country]);
+    expect(buildAdSetPayload("Batch", campaign, raw, { ...inherited, dailyBudget: "15" }, "EUR").targeting).toEqual(
+      raw.targeting
+    );
+  });
+  it("combines explicit countries and location countries without adding excluded countries", () => {
+    expect(
+      adsetGeography({
+        geo_locations: {
+          countries: ["IT", "DE"],
+          cities: [
+            { country: "it", name: "Lana" },
+            { country: "AT", name: "Innsbruck" }
+          ],
+          regions: [{ country: "AT" }],
+          country_groups: ["worldwide"]
+        },
+        excluded_geo_locations: { cities: [{ country: "FR", name: "Paris" }] }
+      }).countries
+    ).toEqual(["IT", "DE", "AT"]);
+  });
+  it("only replaces local targeting when the country selection changes", () => {
+    const raw = {
+      ...template,
+      targeting: { ...template.targeting, geo_locations: { regions: [{ key: "127", country: "AT" }] } }
+    };
+    const payload = buildAdSetPayload("Batch", campaign, raw, { ...settings, countries: ["DE"] }, "EUR");
+    expect(payload.targeting).toHaveProperty("geo_locations", { countries: ["DE"] });
+    expect(payload.targeting).not.toHaveProperty("excluded_geo_locations");
+  });
+  it("does not guess country codes from location names or unknown coordinates", () => {
+    expect(
+      adsetGeography({
+        geo_locations: {
+          cities: [null, { name: "Lana" }, { country: "invalid" }],
+          custom_locations: [{ latitude: 46.6, longitude: 11.1 }]
+        }
+      }).countries
+    ).toEqual([]);
+    expect(adsetGeography(undefined)).toEqual({ countries: [], locations: [] });
   });
   it("requires explicit activation and an active campaign with confirmed budget", () => {
     const budget = { dailyBudget: 0, lifetimeBudget: 0 };

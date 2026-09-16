@@ -36,7 +36,14 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { COUNTRY_CODES, batchAdsetName, groupBatchMedia, settingsFromAdset } from "@/lib/batch-launch-plan";
+import {
+  COUNTRY_CODES,
+  adsetGeography,
+  batchAdsetName,
+  groupBatchMedia,
+  sameCountrySelection,
+  settingsFromAdset
+} from "@/lib/batch-launch-plan";
 import type {
   BatchAdGroup,
   BatchLaunchAccountContext,
@@ -261,6 +268,8 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const account = context?.accounts.find((item) => item.id === context.accountId);
   const campaign = context?.campaigns.find((item) => item.id === campaignId && item.status === "ACTIVE");
   const template = context?.templates.find((item) => item.id === templateId);
+  const templateGeo = adsetGeography(template?.raw.targeting);
+  const inheritedLocations = sameCountrySelection(templateGeo.countries, countries) ? templateGeo.locations : [];
   const campaignBudget = Boolean(campaign?.dailyBudget || campaign?.lifetimeBudget);
   const currencyDigits =
     new Intl.NumberFormat(locale, { style: "currency", currency: account?.currency ?? "EUR" }).resolvedOptions()
@@ -778,6 +787,11 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                     <p className="text-xs text-muted-foreground">
                       {countries.map((code) => displayNames.of(code)).join(", ") || t("noneSelected")}
                     </p>
+                    {inheritedLocations.length ? (
+                      <p className="break-words text-xs text-muted-foreground">
+                        {t("templateLocations", { locations: inheritedLocations.join(", ") })}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="min-w-0 space-y-2">
                     <Label htmlFor="language-search">{t("languages")}</Label>

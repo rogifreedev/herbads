@@ -175,6 +175,7 @@ async function main() {
       steps = 0;
     let creationRequests = 0;
     let visualFixture = false;
+    let regionalFixture = false;
     let mediaRequests = 0;
     let pauseCampaignOnRefresh = false;
     let failMedia = false,
@@ -275,6 +276,13 @@ async function main() {
           };
         }
         result = { job };
+      }
+      if (regionalFixture && result.templates) {
+        result.templates[0].raw.daily_budget = "1500";
+        result.templates[0].raw.targeting.geo_locations = {
+          cities: [{ key: "1182606", name: "Lana", country: "IT", radius: 30, distance_unit: "kilometer" }],
+          location_types: ["frequently_in", "home", "recent"]
+        };
       }
       await route.fulfill({ json: result });
     });
@@ -558,9 +566,50 @@ async function main() {
     assert.equal(await page.locator('#launch-campaign option[value="789"]').count(), 0);
     assert(await pausedButton.isDisabled(), "A campaign paused since the last sync cannot be submitted");
     assert.equal(creationRequests, 2);
+    pauseCampaignOnRefresh = false;
+    regionalFixture = true;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    const italy = page.getByRole("checkbox", { name: "Italien", exact: true });
+    const austria = page.getByRole("checkbox", { name: "Österreich", exact: true });
+    const inheritedLocation = page.getByText("Standorte aus Referenz-Adset: Lana (30 km)", { exact: true });
+    assert(await italy.isChecked(), "City-only targeting automatically selects its country");
+    assert.equal(await page.locator("#launch-budget").inputValue(), "15.00");
+    await inheritedLocation.waitFor();
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await inheritedLocation.scrollIntoViewIfNeeded();
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(output, `inherited-location-${width}.png`) });
+    }
+    await austria.check();
+    assert.equal(
+      await inheritedLocation.count(),
+      0,
+      "Changed country selection does not claim inherited city targeting"
+    );
+    await page.getByRole("button", { name: "Adset-Einstellungen übernehmen", exact: true }).click();
+    assert(await italy.isChecked());
+    assert(!(await austria.isChecked()));
+    await inheritedLocation.waitFor();
+    await page.locator("#launch-template").click();
+    await search.fill("9790");
+    await search.press("Enter");
+    assert(await austria.isChecked());
+    assert(!(await italy.isChecked()));
+    await page.locator("#launch-template").click();
+    await search.fill("9789");
+    await search.press("Enter");
+    assert(await italy.isChecked());
+    assert(await pausedButton.isEnabled());
+    await pausedButton.click();
+    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    assert.deepEqual(submitted.settings.countries, ["IT"]);
+    assert.equal(submitted.settings.dailyBudget, "15.00");
+    assert.equal(creationRequests, 3);
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS progressive loading, independent retries, stale-account cancellation, preserved edits, media reuse on account switch, active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, favorites, CBO, matching review, resume and explicit activation confirmation"
+      "PASS country inheritance from city targeting, template switching and reapplying, location summary, progressive loading, independent retries, stale-account cancellation, preserved edits, media reuse on account switch, active campaigns, dated name, searchable dropdown and keyboard/mobile, presets, favorites, CBO, matching review, resume and explicit activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {

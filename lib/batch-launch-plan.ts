@@ -18,16 +18,53 @@ export function batchAdsetName(folderName: string, date = new Date()) {
   return `${day}_${folderName.trim()}`;
 }
 
+export function adsetGeography(targeting: unknown) {
+  const geo = (targeting as { geo_locations?: Record<string, unknown> } | undefined)?.geo_locations;
+  const codes: unknown[] = Array.isArray(geo?.countries) ? [...geo.countries] : [];
+  const locations: string[] = [];
+  // City/region/ZIP-only targeting has no countries array. Read the country on each included location.
+  for (const values of Object.values(geo ?? {})) {
+    if (!Array.isArray(values)) continue;
+    for (const location of values) {
+      if (!location || typeof location !== "object") continue;
+      codes.push(location.country);
+      const name = location.name ?? location.key;
+      if (typeof name !== "string" || !name.trim()) continue;
+      const unit = location.distance_unit === "kilometer" ? "km" : location.distance_unit === "mile" ? "mi" : "";
+      const radius =
+        typeof location.radius === "number" && location.radius > 0 && unit ? ` (${location.radius} ${unit})` : "";
+      locations.push(`${name}${radius}`);
+    }
+  }
+  return {
+    countries: [
+      ...new Set(
+        codes
+          .filter((code): code is string => typeof code === "string")
+          .map((code) => code.trim().toUpperCase())
+          .filter((code) => COUNTRY_CODES.includes(code))
+      )
+    ],
+    locations: [...new Set(locations)]
+  };
+}
+
+export function sameCountrySelection(original: string[], selected: string[]) {
+  return (
+    original.length > 0 &&
+    new Set(original).size === new Set(selected).size &&
+    original.every((country) => selected.includes(country))
+  );
+}
+
 export function settingsFromAdset(template: BatchTemplate | undefined, currency: string) {
-  const targeting = template?.raw.targeting as
-    | { geo_locations?: { countries?: string[] }; locales?: number[] }
-    | undefined;
+  const targeting = template?.raw.targeting as { locales?: number[] } | undefined;
   const digits =
     new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
   const budget = Number(template?.raw.daily_budget ?? 0);
   return {
     dailyBudget: Number.isSafeInteger(budget) && budget > 0 ? (budget / 10 ** digits).toFixed(digits) : "",
-    countries: [...(targeting?.geo_locations?.countries ?? [])],
+    countries: adsetGeography(targeting).countries,
     locales: (targeting?.locales ?? []).map((id) => ({ id, name: String(id) }))
   };
 }
@@ -245,11 +282,8 @@ export function buildAdSetPayload(
   if (!template.optimization_goal || !template.billing_event)
     throw new Error("Optimierungsziel oder Abrechnungsart fehlt in der Vorlage.");
   const targeting = structuredClone(template.targeting ?? {}) as Record<string, unknown>;
-  const originalCountries = (targeting.geo_locations as { countries?: string[] } | undefined)?.countries ?? [];
-  const sameCountries =
-    originalCountries.length > 0 &&
-    new Set(originalCountries).size === new Set(settings.countries).size &&
-    originalCountries.every((country) => settings.countries.includes(country));
+  const originalCountries = adsetGeography(targeting).countries;
+  const sameCountries = sameCountrySelection(originalCountries, settings.countries);
   if (!sameCountries) {
     targeting.geo_locations = { countries: [...new Set(settings.countries)] };
     delete targeting.excluded_geo_locations;
