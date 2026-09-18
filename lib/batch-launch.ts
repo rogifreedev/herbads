@@ -39,6 +39,8 @@ export type BatchLaunchPayload = {
 };
 
 export type BatchLaunchJobRow = {
+  queue_enabled?: boolean;
+  control_status?: "run" | "pause" | "cancel";
   id: string;
   client_id: string;
   ad_account_id: string;
@@ -56,6 +58,8 @@ export type BatchLaunchJobRow = {
 
 export function mapLaunchJob(row: BatchLaunchJobRow): BatchLaunchJob {
   return {
+    queueEnabled: Boolean(row.queue_enabled),
+    controlStatus: row.control_status ?? "run",
     activate: Boolean(row.payload.input.activate),
     id: row.id,
     accountId: row.ad_account_id,
@@ -389,6 +393,7 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
       ad_account_id: account.id,
       drive_folder_id: input.folderId,
       meta_campaign_id: input.campaignId,
+      queue_enabled: true,
       name: input.name,
       payload
     })

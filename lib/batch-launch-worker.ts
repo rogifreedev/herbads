@@ -13,24 +13,18 @@ function createdId(result: { id?: string }) {
   return result.id;
 }
 
-export async function processBatchLaunch(clientId: string, jobId: string) {
+export async function processBatchLaunch(clientId: string, jobId: string, queueToken: string) {
   const db = createSupabaseServiceRoleClient();
   const token = randomUUID();
   const current = await getBatchLaunchJob(clientId, jobId);
-  if (["completed", "review"].includes(current.status)) return mapLaunchJob(current);
+  if (["completed", "review", "paused", "cancelled", "failed"].includes(current.status)) return mapLaunchJob(current);
   const { data: claimed, error: claimError } = await db
-    .from("batch_launch_jobs")
-    .update({
-      lease_token: token,
-      lease_until: new Date(Date.now() + 180000).toISOString(),
-      status: "running",
-      error: null
+    .rpc("claim_batch_upload_step", {
+      p_client_id: clientId,
+      p_job_id: jobId,
+      p_queue_token: queueToken,
+      p_token: token
     })
-    .eq("id", jobId)
-    .eq("client_id", clientId)
-    .in("status", ["pending", "running", "failed"])
-    .or(`lease_until.is.null,lease_until.lt.${new Date().toISOString()}`)
-    .select("*")
     .maybeSingle();
   if (claimError) throw new Error(claimError.message);
   if (!claimed) return mapLaunchJob(await getBatchLaunchJob(clientId, jobId));
@@ -39,19 +33,15 @@ export async function processBatchLaunch(clientId: string, jobId: string) {
   const { input, files, metaAccountId } = payload;
 
   async function persist(release = false) {
-    const { error, data } = await db
-      .from("batch_launch_jobs")
-      .update({
-        state,
-        status: job.status,
-        error: job.error,
-        ...(release ? { lease_token: null, lease_until: null } : {})
-      })
-      .eq("id", job.id)
-      .eq("client_id", clientId)
-      .eq("lease_token", token)
-      .select("id")
-      .single();
+    const { error, data } = await db.rpc("persist_batch_upload_step", {
+      p_client_id: clientId,
+      p_job_id: job.id,
+      p_token: token,
+      p_state: state,
+      p_status: job.status,
+      p_error: job.error,
+      p_release: release
+    });
     if (error || !data) throw new Error("Upload-Fortschritt konnte nicht gespeichert werden.");
   }
 
@@ -210,10 +200,11 @@ export async function processBatchLaunch(clientId: string, jobId: string) {
           }
         } else {
           state.step = "saving";
-          await storeCreatedBatch(job);
-          state.step = "done";
-          job.status = "completed";
-          revalidateCacheTags(...BATCH_CACHE_TAGS);
+          if (await storeCreatedBatch(job)) {
+            state.step = "done";
+            job.status = "completed";
+            revalidateCacheTags(...BATCH_CACHE_TAGS);
+          }
         }
       }
     }
@@ -269,7 +260,9 @@ async function storeCreatedBatch(job: BatchLaunchJobRow) {
     .select("id")
     .single();
   if (adsetResult.error) throw new Error(adsetResult.error.message);
-  for (const group of input.groups) {
+  // Bound the final database writes as well; replays are idempotent upserts.
+  state.savedAdIds ??= [];
+  for (const group of input.groups.filter((item) => !state.savedAdIds!.includes(item.id)).slice(0, 5)) {
     const external = state.ads[group.id];
     const file = payload.files.find((item) => item.id === (group.feedFileId ?? group.storyFileId))!;
     const media = state.media[file.id];
@@ -311,7 +304,9 @@ async function storeCreatedBatch(job: BatchLaunchJobRow) {
       { onConflict: "ad_account_id,meta_ad_id" }
     );
     if (error) throw new Error(error.message);
+    state.savedAdIds.push(group.id);
   }
+  if (state.savedAdIds.length < input.groups.length) return false;
   const { error } = await db
     .from("batch_folder_checks")
     .update({
@@ -327,4 +322,5 @@ async function storeCreatedBatch(job: BatchLaunchJobRow) {
     .eq("client_id", clientId)
     .eq("drive_folder_id", input.folderId);
   if (error) throw new Error(error.message);
+  return true;
 }

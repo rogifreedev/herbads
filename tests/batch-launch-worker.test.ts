@@ -22,7 +22,9 @@ vi.mock("@/lib/meta/batch-launch", async (original) => ({
   metaLaunchRequest: mocks.request
 }));
 vi.mock("@/lib/cache-tags", () => ({ BATCH_CACHE_TAGS: ["batch"], revalidateCacheTags: mocks.revalidate }));
-import { processBatchLaunch } from "@/lib/batch-launch-worker";
+import { processBatchLaunch as processQueuedBatchLaunch } from "@/lib/batch-launch-worker";
+const processBatchLaunch = (clientId: string, jobId: string) =>
+  processQueuedBatchLaunch(clientId, jobId, "queue-token");
 import { MetaLaunchError } from "@/lib/meta/batch-launch";
 
 let row: BatchLaunchJobRow;
@@ -57,6 +59,41 @@ beforeEach(() => {
     return structuredClone(row);
   });
   mocks.database.mockImplementation(() => ({
+    rpc(name: string, args: Record<string, unknown>) {
+      if (name === "claim_batch_upload_step")
+        return {
+          maybeSingle: async () => {
+            if (row.lease_until && Date.parse(row.lease_until) > Date.now()) return { data: null, error: null };
+            row = {
+              ...row,
+              status: "running",
+              error: null,
+              lease_token: String(args.p_token),
+              lease_until: new Date(Date.now() + 180000).toISOString()
+            };
+            return { data: structuredClone(row), error: null };
+          }
+        };
+      if (name === "persist_batch_upload_step") {
+        if (args.p_token !== row.lease_token) return Promise.resolve({ data: false, error: null });
+        const status = ["completed", "review", "failed"].includes(String(args.p_status))
+          ? args.p_status
+          : row.control_status === "pause"
+            ? "paused"
+            : row.control_status === "cancel"
+              ? "cancelled"
+              : args.p_status;
+        row = {
+          ...row,
+          state: structuredClone(args.p_state),
+          status,
+          error: args.p_error,
+          ...(args.p_release ? { lease_token: null, lease_until: null } : {})
+        } as BatchLaunchJobRow;
+        return Promise.resolve({ data: true, error: null });
+      }
+      throw new Error(`Unexpected RPC ${name}`);
+    },
     from(table: string) {
       let values: Record<string, unknown> = {};
       const filters: Record<string, unknown> = {};
@@ -119,6 +156,22 @@ beforeEach(() => {
 });
 
 describe("resumable paused batch worker", () => {
+  it.each(["paused", "cancelled", "failed"] as const)("never automatically processes a %s job", async (status) => {
+    row.status = status;
+    expect((await processBatchLaunch("client", "job")).status).toBe(status);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it("preserves a pause requested while a Meta write is already in flight", async () => {
+    mocks.request.mockImplementationOnce(async () => {
+      row.control_status = "pause";
+      return { id: "100" };
+    });
+    expect((await processBatchLaunch("client", "job")).status).toBe("paused");
+    expect(row.state.adsetId).toBe("100");
+    expect(row.state.inFlight).toBeUndefined();
+    await processBatchLaunch("client", "job");
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
   it("creates one paused ad with all 15 text variants and retains them in the stored creative", async () => {
     row.payload.input.copy = normalizeBatchCopy({
       ...row.payload.input.copy,
@@ -217,6 +270,7 @@ describe("resumable paused batch worker", () => {
     expect(row.status).toBe("failed");
     expect(row.state.activationStarted).toBe(true);
     expect(row.state.inFlight).toBeUndefined();
+    row.status = "pending"; // Explicit resume after the failed activation.
     await processBatchLaunch("client", "job");
     await processBatchLaunch("client", "job");
     expect(row.status).toBe("completed");
@@ -280,6 +334,7 @@ describe("resumable paused batch worker", () => {
     mocks.request.mockRejectedValueOnce(new MetaLaunchError("Invalid parameter", false));
     expect((await processBatchLaunch("client", "job")).status).toBe("failed");
     expect(row.state.inFlight).toBeUndefined();
+    row.status = "pending"; // Explicit resume, never an automatic replay of a failed write.
     await processBatchLaunch("client", "job");
     expect(row.state.adsetId).toBe("100");
   });

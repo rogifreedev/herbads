@@ -124,6 +124,7 @@ export type BatchUploadedMedia = {
 };
 
 export type BatchLaunchState = {
+  savedAdIds?: string[];
   adsetId?: string;
   media: Record<string, BatchUploadedMedia>;
   ads: Record<string, { creativeId?: string; adId?: string; activated?: boolean }>;
@@ -134,6 +135,8 @@ export type BatchLaunchState = {
 };
 
 export type BatchLaunchJob = {
+  queueEnabled?: boolean;
+  controlStatus?: "run" | "pause" | "cancel";
   activate: boolean;
   id: string;
   accountId: string;
@@ -141,10 +144,51 @@ export type BatchLaunchJob = {
   folderId: string;
   campaignId: string;
   name: string;
-  status: "pending" | "running" | "failed" | "review" | "completed";
+  status: "pending" | "running" | "paused" | "cancelled" | "failed" | "review" | "completed";
   state: BatchLaunchState;
   error: string | null;
   adCount: number;
   fileCount: number;
   updatedAt: string;
+};
+
+export type BatchUploadItem = {
+  id: string;
+  client_id: string;
+  client_name: string;
+  ad_account_id: string;
+  account_name: string;
+  meta_account_id: string;
+  drive_folder_id: string;
+  name: string;
+  status: BatchLaunchJob["status"];
+  control_status: "run" | "pause" | "cancel";
+  queue_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  queued_at: string;
+  error: string | null;
+  lease_until: string | null;
+  step: string;
+  adset_id: string | null;
+  activate: boolean;
+  activated: boolean;
+  activation_started: boolean;
+  ad_count: number;
+  file_count: number;
+  ads_done: number;
+  files_done: number;
+  queue_position: number | null;
+};
+export type BatchUploadOverview = {
+  jobs: BatchUploadItem[];
+  total: number;
+  page: number;
+  clients: { id: string; name: string }[];
+  runtime: {
+    enabled: boolean;
+    scheduler_seen_at: string | null;
+    heartbeat_at: string | null;
+    last_error: string | null;
+  };
 };

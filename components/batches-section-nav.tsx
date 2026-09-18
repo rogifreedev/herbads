@@ -9,6 +9,7 @@ type Props = {
 export function BatchesSectionNav({ clientId, active }: Props) {
   const items = [
     { id: "batches", label: "Batches", href: `/clients/${clientId}/batches` },
+    { id: "uploads", label: "Uploads", href: `/uploads?clientId=${clientId}` },
     { id: "settings", label: "Settings", href: `/clients/${clientId}/batches/settings` }
   ] as const;
 

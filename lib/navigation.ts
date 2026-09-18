@@ -65,6 +65,7 @@ export const navItems: NavItem[] = [
     icon: FolderKanban,
     children: [
       { title: "batches", href: "/clients/[clientId]/batches" },
+      { title: "uploads", href: "/uploads" },
       { title: "settings", href: "/clients/[clientId]/batches/settings" }
     ]
   },

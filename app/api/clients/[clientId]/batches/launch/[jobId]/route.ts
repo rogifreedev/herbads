@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBatchLaunchJob, mapLaunchJob } from "@/lib/batch-launch";
-import { processBatchLaunch } from "@/lib/batch-launch-worker";
+import { controlBatchUpload } from "@/lib/batch-upload-queue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +19,15 @@ export async function GET(_request: Request, context: Context) {
   }
 }
 
-export async function POST(_request: Request, context: Context) {
+export async function POST(request: Request, context: Context) {
   try {
     const { clientId, jobId } = await context.params;
-    return NextResponse.json({ job: await processBatchLaunch(clientId, jobId) });
+    const body = await request.text();
+    // Older open tabs may still POST to advance a step. Never resume a paused queue job implicitly.
+    const job = body.trim()
+      ? await controlBatchUpload(clientId, jobId, JSON.parse(body).action)
+      : mapLaunchJob(await getBatchLaunchJob(clientId, jobId));
+    return NextResponse.json({ job }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Upload fehlgeschlagen." },

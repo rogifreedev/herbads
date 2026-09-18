@@ -1,5 +1,21 @@
 {
+  "batchUploads": {
+    "title": "Caricamenti batch", "refresh": "Aggiorna", "client": "Partner", "allClients": "Tutti i partner",
+    "statusFilter": "Stato caricamento", "active": "Coda", "attention": "Da verificare", "completed": "Conclusi", "all": "Tutti",
+    "batch": "Batch / Account pubblicitario", "status": "Stato", "progress": "Avanzamento", "actions": "Azioni",
+    "loading": "Caricamento degli upload", "empty": "Nessun caricamento in questa vista.", "total": "{count} caricamenti",
+    "workerReady": "Worker pronto", "workerPaused": "Worker fermo", "workerStale": "Worker non raggiungibile",
+    "workerPausedNotice": "L'elaborazione in background è disattivata. I caricamenti in coda restano salvati.",
+    "workerStaleNotice": "Il worker non risponde da oltre due minuti. I caricamenti in coda restano salvati.",
+    "queuePosition": "Posizione {position}", "legacy": "Caricamento esistente: ripresa necessaria",
+    "loadError": "Impossibile aggiornare lo stato.", "actionError": "Azione non riuscita.",
+    "details": "Apri caricamento", "previous": "Pagina precedente", "next": "Pagina successiva",
+    "cancel": "Annulla caricamento", "cancelTitle": "Annullare definitivamente il caricamento?", "keep": "Mantieni",
+    "cancelNotice": "I passaggi successivi saranno fermati. Un passaggio Meta già avviato potrebbe completarsi. Gli oggetti creati non vengono eliminati e le inserzioni attive non vengono sospese. Il caricamento non potrà essere ripreso."
+  },
   "batchLaunch": {
+    "uploadOverview": "Tutti i caricamenti", "pausing": "Arresto in corso", "cancelling": "Annullamento in corso",
+    "statusRefreshError": "Impossibile aggiornare lo stato. L'elaborazione in background è indipendente.",
     "templateCopyLoading": "Caricamento dei testi dal gruppo di inserzioni di riferimento",
     "copySource": "Inserzione di origine nel gruppo di riferimento",
     "templateCopySelected": "Testi dal gruppo di riferimento",
@@ -17,7 +33,7 @@
     "matchingReviewed": "Coppie di formato verificate",
     "visualMatchReview": "Verificare le coppie abbinate visivamente prima della creazione. I motivi ambigui rimangono separati.",
     "matchingUnavailable": "Il confronto visivo non è stato completato. Verificare le varianti di formato dei motivi singoli prima della creazione.",
-    "activationStopNotice": "L'attivazione diretta è stata richiesta. Interrompere o chiudere non annulla un passaggio Meta già in corso. In caso di dubbio controlla lo stato su Meta.",
+    "activationStopNotice": "L'attivazione diretta prosegue anche a pagina chiusa. L'arresto avviene dopo il passaggio Meta in corso. In caso di dubbio controlla lo stato su Meta.",
     "searchTemplate": "Cerca gruppo di inserzioni o campagna",
     "favoriteAdsets": "Gruppi di inserzioni preferiti",
     "otherAdsets": "Altri gruppi nell'account pubblicitario",
@@ -49,7 +65,7 @@
     "copy": "Testi e destinazione", "suggestion": "Testo da inserzioni attive", "ownCopy": "Testo personalizzato", "copyMetrics": "Inserzioni con questo testo · ultimi 30 giorni: {purchases} acquisti · {spend} spesa · ROAS {roas} · {ads} inserzioni. Con varianti di testo, i dati si riferiscono all'intera inserzione.", "primaryText": "Testo principale", "headline": "Titolo", "description": "Descrizione", "landingUrl": "URL di destinazione", "page": "ID pagina Facebook", "instagram": "ID account Instagram (facoltativo)", "urlTags": "Parametri URL (facoltativi)", "cta": "Call to action",
     "ads": "Inserzioni ({count})", "resetMatching": "Ripristina abbinamenti", "adName": "Nome inserzione", "matched": "Coppia di formati", "single": "Singolo contenuto", "exclude": "Escludi dal batch", "unpair": "Separa i formati", "feed": "Feed · 1:1 / 4:5", "story": "Storie / Reels · 9:16", "noVariant": "Nessuna variante", "unused": "Contenuti non selezionati ({count})", "ignored": "File non supportati o non scaricabili ({count})", "summary": "1 gruppo in pausa · {ads} inserzioni in pausa · {files} file multimediali", "createPaused": "Crea su Meta in pausa",
     "progress": "{ads} / {total} inserzioni · {files} / {fileTotal} contenuti", "stopUpload": "Interrompi caricamento", "resumeUpload": "Riprendi caricamento", "openMeta": "Apri in Meta", "anotherCampaign": "Altra campagna", "reviewHint": "L'ultimo passaggio non è stato confermato con certezza. Gli oggetti esistenti restano in pausa. Verifica in Meta prima di creare nuovamente.",
-    "status": { "pending": "Preparato", "running": "In elaborazione", "failed": "Interrotto", "review": "Verifica necessaria", "completed": "Creato in pausa" },
+    "status": { "pending": "In coda", "running": "In elaborazione", "paused": "Fermo", "cancelled": "Annullato", "failed": "Interrotto", "review": "Verifica necessaria", "completed": "Creato in pausa" },
     "steps": { "adset": "Creazione gruppo", "upload": "Caricamento contenuti", "processing": "Meta sta elaborando il video", "creative": "Creazione creatività", "ad": "Creazione inserzione", "saving": "Aggiornamento Batch Check", "done": "Completato" }
   },
   "common": {
@@ -839,6 +855,7 @@
     "noComments": "Non ci sono ancora commenti salvati. Avvia la prima sincronizzazione."
   },
   "nav": {
+    "uploads": "Caricamenti",
     "dashboard": "Dashboard",
     "metaAds": "META Ads",
     "creatives": "Creatives",

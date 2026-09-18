@@ -99,7 +99,15 @@ async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   return result;
 }
 
-export function BatchLaunchForm({ clientId, folderId }: { clientId: string; folderId: string }) {
+export function BatchLaunchForm({
+  clientId,
+  folderId,
+  initialJob
+}: {
+  clientId: string;
+  folderId: string;
+  initialJob?: BatchLaunchJob;
+}) {
   const t = useTranslations("batchLaunch");
   const locale = useLocale();
   const endpoint = `/api/clients/${clientId}/batches`;
@@ -122,7 +130,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const optionsAccountId = accountContext?.metaConfigured ? accountContext.accountId : "";
   const optionsLoading = Boolean(optionsAccountId && optionsState?.accountId !== optionsAccountId);
   const optionsError = optionsState?.accountId === optionsAccountId ? optionsState?.error : undefined;
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(initialJob?.accountId ?? "");
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,7 +186,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const [languageOptions, setLanguageOptions] = useState<typeof locales>([]);
   const [languageError, setLanguageError] = useState("");
   const [job, setJob] = useState<BatchLaunchJob | null>(null);
-  const [autoRun, setAutoRun] = useState(false);
+  const [jobPollError, setJobPollError] = useState(false);
   const jobId = job?.id;
 
   function setLocales(value: typeof customLocales) {
@@ -216,7 +224,13 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         setLanguageError("");
         setCopy(copyFields(data.suggestions[0] ?? emptyCopy));
         setSuggestionId(data.suggestions[0]?.id ?? "");
-        setJob(data.recentJobs.find((item) => item.status !== "completed") ?? data.recentJobs[0] ?? null);
+        setJob(
+          initialJob?.accountId === data.accountId
+            ? initialJob
+            : (data.recentJobs.find((item) => !["completed", "cancelled"].includes(item.status)) ??
+                data.recentJobs[0] ??
+                null)
+        );
       })
       .catch((failure) => {
         if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : t("loadError"));
@@ -225,7 +239,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [endpoint, folderId, accountId, revision, t]);
+  }, [endpoint, folderId, accountId, revision, initialJob, t]);
 
   useEffect(() => {
     if (!copyRequest || copyRequest.accountId !== accountContext?.accountId) return;
@@ -339,34 +353,27 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   }, [endpoint, context?.accountId, context?.metaConfigured, languageSearch, locale]);
 
   useEffect(() => {
-    if (!autoRun || !jobId) return;
+    if (!jobId) return;
     const controller = new AbortController();
     async function process() {
       while (!controller.signal.aborted) {
         try {
           const result = await jsonRequest<{ job: BatchLaunchJob }>(`${endpoint}/launch/${jobId}`, {
-            method: "POST",
             signal: controller.signal
           });
           if (controller.signal.aborted) return;
           setJob(result.job);
-          if (["completed", "failed", "review"].includes(result.job.status)) {
-            setAutoRun(false);
-            return;
-          }
-          await new Promise((resolve) => setTimeout(resolve, result.job.state.step === "processing" ? 4000 : 500));
-        } catch (failure) {
-          if (!controller.signal.aborted) {
-            setError(failure instanceof Error ? failure.message : t("createError"));
-            setAutoRun(false);
-          }
-          return;
+          setJobPollError(false);
+          if (["completed", "cancelled"].includes(result.job.status)) return;
+        } catch {
+          if (!controller.signal.aborted) setJobPollError(true);
         }
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     }
     void process();
     return () => controller.abort();
-  }, [autoRun, jobId, endpoint, t]);
+  }, [jobId, endpoint]);
 
   const account = context?.accounts.find((item) => item.id === context.accountId);
   const campaign = context?.campaigns.find((item) => item.id === campaignId && item.status === "ACTIVE");
@@ -385,7 +392,28 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const filteredCountries = COUNTRY_CODES.filter((code) =>
     `${code} ${displayNames.of(code)}`.toLowerCase().includes(countrySearch.toLowerCase())
   ).sort((a, b) => (displayNames.of(a) ?? a).localeCompare(displayNames.of(b) ?? b, locale));
-  const locked = saving || autoRun || Boolean(job);
+  const locked = saving || Boolean(job);
+  const jobRunning = Boolean(
+    job?.queueEnabled && ["pending", "running"].includes(job.status) && job.controlStatus === "run"
+  );
+
+  async function controlUpload(action: "pause" | "resume") {
+    if (!job) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await jsonRequest<{ job: BatchLaunchJob }>(`${endpoint}/launch/${job.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action })
+      });
+      setJob(result.job);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : t("createError"));
+    } finally {
+      setSaving(false);
+    }
+  }
   const favoriteIds = context?.favoriteTemplateIds ?? [];
   const visualMatches = groups.filter((group) => group.matchMethod === "visual");
   const matchingKey = JSON.stringify(visualMatches.map((group) => [group.feedFileId, group.storyFileId]));
@@ -557,7 +585,6 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         })
       });
       setJob(result.job);
-      setAutoRun(!["completed", "review"].includes(result.job.status));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t("createError"));
     } finally {
@@ -623,14 +650,13 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
               className={`${selectClass} max-w-xl`}
               value={context.accountId}
               onChange={(event) => {
-                setAutoRun(false);
                 setLoading(true);
                 setContext(null);
                 setOptionsState(null);
                 setError(null);
                 setAccountId(event.target.value);
               }}
-              disabled={autoRun || saving}
+              disabled={saving}
             >
               {context.accounts.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -674,6 +700,16 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                   <AlertDescription className="break-words">{job.error}</AlertDescription>
                 </Alert>
               ) : null}
+              {jobPollError ? (
+                <Alert variant="warning">
+                  <AlertDescription>{t("statusRefreshError")}</AlertDescription>
+                </Alert>
+              ) : null}
+              {job.controlStatus !== "run" && job.status === "running" ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t(job.controlStatus === "cancel" ? "cancelling" : "pausing")}
+                </p>
+              ) : null}
               {job.state.activationStarted && !job.state.activated ? (
                 <Alert variant="warning">
                   <AlertDescription>{t("activationUncertain")}</AlertDescription>
@@ -685,18 +721,21 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
               {job.state.activated ? <p className="text-sm text-muted-foreground">{t("deliveryNotice")}</p> : null}
               {job.status === "review" ? <p className="text-sm text-muted-foreground">{t("reviewHint")}</p> : null}
               <div className="flex flex-wrap gap-2">
-                {!["completed", "review"].includes(job.status) ? (
+                {!["completed", "review", "cancelled"].includes(job.status) ? (
                   <Button
-                    disabled={!context.metaConfigured}
-                    onClick={() => {
-                      setError(null);
-                      setAutoRun(!autoRun);
-                    }}
+                    disabled={!context.metaConfigured || saving}
+                    onClick={() => controlUpload(jobRunning ? "pause" : "resume")}
                   >
-                    {autoRun ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                    {autoRun ? t("stopUpload") : t("resumeUpload")}
+                    {jobRunning ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                    {jobRunning ? t("stopUpload") : t("resumeUpload")}
                   </Button>
                 ) : null}
+                <Button asChild variant="outline">
+                  <Link href="/uploads">
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    {t("uploadOverview")}
+                  </Link>
+                </Button>
                 <Button asChild variant="outline">
                   <a
                     href={`https://adsmanager.facebook.com/adsmanager/manage/adsets?act=${job.metaAccountId.replace(/^act_/, "")}${job.state.adsetId ? `&selected_adset_ids=${job.state.adsetId}` : ""}`}

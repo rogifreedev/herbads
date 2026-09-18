@@ -297,6 +297,8 @@ async function main() {
         submitted = request.postDataJSON();
         creationRequests++;
         job = {
+          queueEnabled: true,
+          controlStatus: "run",
           activate: Boolean(submitted.activate),
           id: "job-1",
           accountId,
@@ -313,7 +315,14 @@ async function main() {
         };
         result = { job };
       } else {
-        if (failOnce) {
+        if (request.method() === "POST") {
+          const action = request.postDataJSON().action;
+          job.controlStatus = action === "resume" ? "run" : action;
+          job.status = action === "resume" ? "pending" : "paused";
+          job.error = null;
+        } else if (job.status === "failed" || job.status === "paused") {
+          // Read-only polling cannot implicitly resume a job.
+        } else if (failOnce) {
           failOnce = false;
           job.status = "failed";
           job.error = "Test-Unterbrechung";
@@ -827,6 +836,121 @@ async function main() {
     await copyFailure.getByRole("button", { name: "Eigene Texte verwenden", exact: true }).click();
     assert(await pausedButton.isEnabled(), "Manual text fallback requires explicit choice after a failed import");
     assert.equal(creationRequests, 4);
+    const queueClient = "11111111-1111-4111-8111-111111111111";
+    const queueJobs = ["running", "pending", "paused", "failed", "review", "completed", "cancelled"].map(
+      (status, index) => ({
+        id: `queue-${index}`,
+        client_id: queueClient,
+        client_name: "Karlo Testpartner",
+        ad_account_id: "account-a",
+        account_name: "Meta Testkonto",
+        meta_account_id: "act_111",
+        drive_folder_id: `folder-${index}`,
+        name: `18.09.2026_Batch ${index + 1}`,
+        status,
+        control_status: "run",
+        queue_enabled: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        queued_at: new Date().toISOString(),
+        error:
+          status === "failed"
+            ? "Video konnte nicht verarbeitet werden."
+            : status === "review"
+              ? "Meta-Antwort unklar. Bitte prüfen."
+              : null,
+        lease_until: null,
+        step: status === "completed" ? "done" : "processing",
+        adset_id: "123",
+        activate: false,
+        activated: false,
+        activation_started: false,
+        ad_count: 3,
+        file_count: 6,
+        ads_done: status === "completed" ? 3 : 0,
+        files_done: status === "completed" ? 6 : 2,
+        queue_position: index < 2 ? index + 1 : null
+      })
+    );
+    let queueActionCount = 0;
+    let queueReadCount = 0;
+    await page.route("**/api/batch-uploads?**", async (route) => {
+      queueReadCount++;
+      const params = new URL(route.request().url()).searchParams;
+      const statuses = {
+        active: ["pending", "running"],
+        attention: ["paused", "failed", "review"],
+        completed: ["completed", "cancelled"]
+      };
+      const selected = statuses[params.get("status")];
+      let queuePosition = 0;
+      for (const job of queueJobs)
+        job.queue_position = ["pending", "running"].includes(job.status) ? ++queuePosition : null;
+      const jobs = queueJobs.filter((job) => !selected || selected.includes(job.status));
+      await route.fulfill({
+        json: {
+          jobs,
+          total: jobs.length,
+          page: 0,
+          clients: [{ id: queueClient, name: "Karlo Testpartner" }],
+          runtime: {
+            enabled: true,
+            scheduler_seen_at: new Date().toISOString(),
+            heartbeat_at: new Date().toISOString(),
+            last_error: null
+          }
+        }
+      });
+    });
+    await page.route(`**/api/clients/${queueClient}/batches/launch/queue-*`, async (route) => {
+      assert.equal(route.request().method(), "POST");
+      const action = route.request().postDataJSON().action;
+      const id = new URL(route.request().url()).pathname.split("/").at(-1);
+      const job = queueJobs.find((item) => item.id === id);
+      queueActionCount++;
+      job.status = action === "pause" ? "paused" : action === "resume" ? "pending" : "cancelled";
+      job.control_status = action === "resume" ? "run" : action;
+      await route.fulfill({ json: { job: { id: job.id, status: job.status } } });
+    });
+    await page.goto(`${origin}/uploads`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Batch-Uploads", exact: true }).waitFor();
+    await page.getByText("Worker bereit", { exact: true }).waitFor();
+    const firstQueueRow = page.getByRole("row").filter({ hasText: "18.09.2026_Batch 1" });
+    assert.equal(await page.locator("tbody tr").count(), 2);
+    await firstQueueRow.getByRole("button", { name: "Upload anhalten", exact: true }).click();
+    await firstQueueRow.waitFor({ state: "hidden" });
+    await page.getByRole("tab", { name: "Handlungsbedarf", exact: true }).click();
+    await firstQueueRow.waitFor();
+    await firstQueueRow.getByRole("button", { name: "Upload fortsetzen", exact: true }).click();
+    await firstQueueRow.waitFor({ state: "hidden" });
+    const reviewRow = page.getByRole("row").filter({ hasText: "18.09.2026_Batch 5" });
+    assert.equal(await reviewRow.getByRole("button", { name: "Upload fortsetzen", exact: true }).count(), 0);
+    await page.getByRole("tab", { name: "Warteschlange", exact: true }).click();
+    await firstQueueRow.waitFor();
+    await firstQueueRow.getByRole("button", { name: "Upload abbrechen", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Beibehalten", exact: true }).click();
+    assert.equal(queueActionCount, 2, "Dismissing cancellation does not mutate the job");
+    await firstQueueRow.getByRole("button", { name: "Upload abbrechen", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Upload abbrechen", exact: true }).click();
+    await firstQueueRow.waitFor({ state: "hidden" });
+    assert.equal(queueActionCount, 3);
+    await page.getByRole("tab", { name: "Alle", exact: true }).click();
+    await page.waitForFunction(() => document.querySelectorAll("tbody tr").length === 7);
+    await page.locator("#upload-client").selectOption(queueClient);
+    await page.waitForLoadState("networkidle");
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      assert(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+        "Upload page has no viewport overflow"
+      );
+      await page.screenshot({ path: path.join(output, `upload-queue-${width}.png`), fullPage: true });
+    }
+    const readsBeforePolling = queueReadCount;
+    await page.waitForTimeout(5200);
+    assert(queueReadCount > readsBeforePolling, "Status polling continues without mutation requests");
+    assert.equal(queueActionCount, 3, "Polling is read-only");
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
       "PASS 5x3 copy variants, source ad selection, edits and submission, pending copy, stale template cancellation, copy failure/retry/manual fallback, language inheritance and names, countries, progressive loading, matching, presets, favorites and activation confirmation"
