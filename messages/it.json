@@ -14,6 +14,26 @@
     "cancelNotice": "I passaggi successivi saranno fermati. Un passaggio Meta già avviato potrebbe completarsi. Gli oggetti creati non vengono eliminati e le inserzioni attive non vengono sospese. Il caricamento non potrà essere ripreso."
   },
   "batchLaunch": {
+    "blockersTitle": "Da completare prima della creazione:",
+    "blockers": {
+      "meta": "La connessione Meta non è configurata. Verifica le impostazioni dell'account.",
+      "mediaLoading": "Caricamento dei file Drive e delle coppie di formati ancora in corso.",
+      "mediaError": "Impossibile caricare i file Drive. Riprova.",
+      "optionsLoading": "Caricamento delle opzioni Meta aggiornate ancora in corso.",
+      "optionsError": "Impossibile caricare le opzioni Meta. Riprova.",
+      "copyLoading": "Caricamento dei testi del gruppo di riferimento ancora in corso.",
+      "copyError": "Importazione dei testi non riuscita. Riprova oppure usa testi personalizzati.",
+      "campaign": "Seleziona una campagna di destinazione attiva.",
+      "template": "Seleziona un gruppo di inserzioni di riferimento disponibile.",
+      "media": "Assegna almeno un'immagine o un video a un'inserzione.",
+      "matching": "Verifica gli abbinamenti visivi e conferma «Coppie di formato verificate».",
+      "countries": "Seleziona almeno un paese.",
+      "primaryText": "Inserisci almeno un testo principale.",
+      "headline": "Inserisci almeno un titolo.",
+      "page": "Inserisci un ID della pagina Facebook valido (solo cifre).",
+      "landingUrl": "Inserisci un URL di destinazione completo con https:// o http://.",
+      "budget": "Inserisci un budget giornaliero valido maggiore di 0 nella valuta dell'account."
+    },
     "uploadOverview": "Tutti i caricamenti", "pausing": "Arresto in corso", "cancelling": "Annullamento in corso",
     "statusRefreshError": "Impossibile aggiornare lo stato. L'elaborazione in background è indipendente.",
     "templateCopyLoading": "Caricamento dei testi dal gruppo di inserzioni di riferimento",

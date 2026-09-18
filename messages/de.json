@@ -14,6 +14,26 @@
     "cancelNotice": "Weitere Schritte werden gestoppt. Ein bereits laufender Meta-Schritt kann noch abgeschlossen werden. Bereits erstellte Objekte werden nicht gelöscht und aktive Anzeigen nicht pausiert. Der Upload kann danach nicht fortgesetzt werden."
   },
   "batchLaunch": {
+    "blockersTitle": "Vor dem Erstellen noch offen:",
+    "blockers": {
+      "meta": "Die Meta-Verbindung fehlt. Bitte die Kontoeinstellungen prüfen.",
+      "mediaLoading": "Die Drive-Medien und Formatpaare werden noch geladen.",
+      "mediaError": "Die Drive-Medien konnten nicht geladen werden. Bitte erneut versuchen.",
+      "optionsLoading": "Die aktuelle Meta-Auswahl wird noch geladen.",
+      "optionsError": "Die Meta-Auswahl konnte nicht geladen werden. Bitte erneut versuchen.",
+      "copyLoading": "Die Texte aus dem Referenz-Adset werden noch geladen.",
+      "copyError": "Der Textimport ist fehlgeschlagen. Erneut versuchen oder eigene Texte verwenden.",
+      "campaign": "Eine aktive Zielkampagne auswählen.",
+      "template": "Ein verfügbares Referenz-Adset auswählen.",
+      "media": "Mindestens ein Bild oder Video einer Anzeige zuordnen.",
+      "matching": "Visuell erkannte Formatpaare prüfen und „Formatpaare geprüft“ bestätigen.",
+      "countries": "Mindestens ein Land auswählen.",
+      "primaryText": "Mindestens einen primären Text eingeben.",
+      "headline": "Mindestens eine Headline eingeben.",
+      "page": "Eine gültige Facebook-Seiten-ID eingeben (nur Ziffern).",
+      "landingUrl": "Eine vollständige Ziel-URL mit https:// oder http:// eingeben.",
+      "budget": "Ein gültiges Tagesbudget größer als 0 in der Kontowährung eingeben."
+    },
     "uploadOverview": "Alle Uploads", "pausing": "Wird angehalten", "cancelling": "Wird abgebrochen",
     "statusRefreshError": "Status konnte nicht aktualisiert werden. Die Hintergrundverarbeitung ist davon unabhängig.",
     "templateCopyLoading": "Anzeigentexte aus dem Referenz-Adset werden geladen",

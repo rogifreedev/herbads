@@ -29,6 +29,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { BatchTemplateSelect } from "@/components/batch-template-select";
 import { MAX_COPY_VARIANTS, normalizeBatchCopy } from "@/lib/batch-launch-copy";
+import { batchLaunchBlockerTargets, getBatchLaunchBlockers } from "@/lib/batch-launch-readiness";
 import {
   Dialog,
   DialogContent,
@@ -157,7 +158,6 @@ export function BatchLaunchForm({
   const copyError = templateCopy?.request === copyRequest ? templateCopy?.error : undefined;
   const copySources = templateCopy?.request === copyRequest ? (templateCopy?.sources ?? []) : [];
   const copySource = copySources.find((item) => item.id === copySourceId);
-  const sourcesReady = Boolean(media && !optionsLoading && !optionsError && !copyLoading && !copyError);
   const [suggestionId, setSuggestionId] = useState("");
   const [groups, setGroups] = useState<BatchAdGroup[]>([]);
   const [reviewedMatching, setReviewedMatching] = useState("");
@@ -418,6 +418,24 @@ export function BatchLaunchForm({
   const visualMatches = groups.filter((group) => group.matchMethod === "visual");
   const matchingKey = JSON.stringify(visualMatches.map((group) => [group.feedFileId, group.storyFileId]));
   const unreviewedMatching = visualMatches.length > 0 && reviewedMatching !== matchingKey;
+  const blockers = getBatchLaunchBlockers({
+    metaConfigured: Boolean(context?.metaConfigured),
+    mediaReady: Boolean(media),
+    mediaError,
+    optionsLoading,
+    optionsError,
+    copyLoading,
+    copyError,
+    hasActiveCampaign: Boolean(campaign),
+    hasTemplate: Boolean(template),
+    adCount: groups.length,
+    unreviewedMatching,
+    countries,
+    copy,
+    campaignBudget,
+    dailyBudget,
+    currency: account?.currency ?? "EUR"
+  });
 
   function loadTemplateCopy(id: string, replaceCopy = true) {
     setCopySourceId("");
@@ -560,7 +578,7 @@ export function BatchLaunchForm({
   }
 
   async function create() {
-    if (!context || !sourcesReady || !campaign || !template || unreviewedMatching) return;
+    if (!context || saving || job || blockers.length || !campaign || !template) return;
     setSaving(true);
     setConfirmActivation(false);
     setError(null);
@@ -770,7 +788,12 @@ export function BatchLaunchForm({
             </section>
           ) : null}
           {!job ? (
-            <fieldset disabled={locked} className="min-w-0 space-y-6 disabled:opacity-60">
+            <fieldset
+              id="launch-options"
+              tabIndex={-1}
+              disabled={locked}
+              className="min-w-0 space-y-6 disabled:opacity-60"
+            >
               {optionsLoading ? (
                 <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1069,7 +1092,7 @@ export function BatchLaunchForm({
                   ) : null}
                 </div>
               </section>
-              <section className="space-y-4 border-b border-border pb-6">
+              <section id="launch-copy" tabIndex={-1} className="space-y-4 border-b border-border pb-6">
                 <h3 className="font-heading text-xl">{t("copy")}</h3>
                 {copyLoading ? (
                   <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1245,7 +1268,7 @@ export function BatchLaunchForm({
                   </Field>
                 </div>
               </section>
-              <section className="space-y-4">
+              <section id="launch-media" tabIndex={-1} className="space-y-4">
                 {!media ? (
                   mediaError ? (
                     <Alert variant="warning">
@@ -1281,6 +1304,7 @@ export function BatchLaunchForm({
                         <AlertDescription>{t("visualMatchReview")}</AlertDescription>
                         <label className="mt-3 flex items-center gap-2 text-sm">
                           <input
+                            id="launch-matching-review"
                             type="checkbox"
                             className="h-4 w-4 accent-primary"
                             checked={!unreviewedMatching}
@@ -1504,27 +1528,40 @@ export function BatchLaunchForm({
           ) : null}
           {!job ? (
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+              {blockers.length ? (
+                <div
+                  id="launch-blockers"
+                  aria-live="polite"
+                  className="w-full space-y-2 border-l-2 border-amber-500 pl-3 text-sm"
+                >
+                  <p className="font-medium">{t("blockersTitle")}</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    {blockers.map((reason) => (
+                      <li key={reason}>
+                        <a
+                          className="break-words underline underline-offset-4 hover:text-primary"
+                          href={`#${batchLaunchBlockerTargets[reason]}`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            const field = document.getElementById(batchLaunchBlockerTargets[reason]);
+                            field?.scrollIntoView({ block: "center" });
+                            field?.focus({ preventScroll: true });
+                          }}
+                        >
+                          {t(`blockers.${reason}`)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 {t(activate ? "activeSummary" : "summary", { ads: groups.length, files: assigned.size })}
               </p>
               <Button
                 size="lg"
-                disabled={
-                  saving ||
-                  !sourcesReady ||
-                  unreviewedMatching ||
-                  !context.metaConfigured ||
-                  !campaign ||
-                  !template ||
-                  !groups.length ||
-                  !countries.length ||
-                  !copy.primaryText.trim() ||
-                  !copy.headline.trim() ||
-                  !copy.pageId ||
-                  !copy.landingUrl ||
-                  (activate && campaign?.status !== "ACTIVE") ||
-                  (!campaignBudget && !dailyBudget)
-                }
+                disabled={saving || blockers.length > 0}
+                aria-describedby={blockers.length ? "launch-blockers" : undefined}
                 onClick={() => (activate ? setConfirmActivation(true) : void create())}
               >
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
@@ -1571,10 +1608,7 @@ export function BatchLaunchForm({
                 <Button variant="outline" onClick={() => setConfirmActivation(false)}>
                   {t("cancelActivation")}
                 </Button>
-                <Button
-                  disabled={saving || !sourcesReady || !template || !activate || campaign?.status !== "ACTIVE"}
-                  onClick={create}
-                >
+                <Button disabled={saving || blockers.length > 0 || !activate} onClick={create}>
                   <Play className="mr-2 h-4 w-4" />
                   {t("confirmCreateActive")}
                 </Button>

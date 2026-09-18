@@ -576,8 +576,36 @@ async function main() {
     assert(await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).isDisabled());
     await page.locator("#launch-campaign").selectOption("790");
     await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).check();
+    await page.waitForLoadState("networkidle");
     assert(await page.getByRole("button", { name: "Erstellen und aktivieren", exact: true }).isDisabled());
+    const blockers = page.locator("#launch-blockers");
+    const matchingReason = blockers.getByRole("link", { name: /Visuell erkannte Formatpaare/ });
+    assert(await matchingReason.isVisible(), "The batch's hidden matching gate is explained next to submit");
+    assert.equal(await blockers.getByRole("link").count(), 1, "A complete batch only needs the visual review");
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.screenshot({ path: path.join(output, `launch-blockers-${width}.png`) });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    await matchingReason.click();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "launch-matching-review");
+    assert(
+      await page.getByRole("button", { name: "Erstellen und aktivieren", exact: true }).isDisabled(),
+      "Jumping to review never confirms it"
+    );
     await page.getByRole("checkbox", { name: "Formatpaare geprüft", exact: true }).check();
+    await blockers.waitFor({ state: "hidden" });
+    await page.locator("#launch-pageId").fill("");
+    const pageReason = blockers.getByRole("link", { name: /Facebook-Seiten-ID/ });
+    await pageReason.click();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "launch-pageId");
+    await page.locator("#launch-pageId").fill(copy.pageId);
+    await page.locator("#launch-landingUrl").fill("example.com");
+    assert(await blockers.getByRole("link", { name: /vollständige Ziel-URL/ }).isVisible());
+    await page.locator("#launch-landingUrl").fill(copy.landingUrl);
+    await blockers.waitFor({ state: "hidden" });
+    assert.equal(creationRequests, 1, "Readiness checks and field links never create ads");
     await page.getByRole("button", { name: "Erstellen und aktivieren", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
@@ -957,6 +985,11 @@ async function main() {
     );
     console.log("Screenshots:", output);
   } catch (error) {
+    const failedPage = browser?.contexts()[0]?.pages()[0];
+    if (failedPage) {
+      console.error(await failedPage.locator("body").innerText().catch(() => "Page unavailable"));
+      await failedPage.screenshot({ path: path.join(output, "failure.png"), fullPage: true }).catch(() => {});
+    }
     console.error(logs.join("").slice(-12000));
     throw error;
   } finally {
