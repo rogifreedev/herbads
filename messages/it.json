@@ -1,5 +1,11 @@
 {
   "batchLaunch": {
+    "templateCopyLoading": "Caricamento dei testi dal gruppo di inserzioni di riferimento",
+    "copySource": "Inserzione di origine nel gruppo di riferimento",
+    "templateCopySelected": "Testi dal gruppo di riferimento",
+    "templateCopyEmpty": "Nessun testo disponibile nel gruppo di inserzioni di riferimento.",
+    "templateCopyTruncated": "L'inserzione contiene più di cinque varianti. Sono state importate le prime cinque varianti distinte per tipo di testo.",
+    "useOwnCopy": "Usa testi personalizzati",
     "localeId": "Lingua Meta {id}",
     "localeNamesError": "Nomi delle lingue non disponibili. La selezione delle lingue viene mantenuta.",
     "templateLocations": "Località del gruppo di inserzioni di riferimento: {locations}",

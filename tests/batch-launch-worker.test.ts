@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BatchLaunchJobRow } from "@/lib/batch-launch";
 import { campaign, feed, launchInput, template } from "./batch-launch-fixtures";
 import { buildAdSetPayload } from "@/lib/batch-launch-plan";
+import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
 
 const mocks = vi.hoisted(() => ({
   getJob: vi.fn(),
@@ -118,6 +119,28 @@ beforeEach(() => {
 });
 
 describe("resumable paused batch worker", () => {
+  it("creates one paused ad with all 15 text variants and retains them in the stored creative", async () => {
+    row.payload.input.copy = normalizeBatchCopy({
+      ...row.payload.input.copy,
+      primaryTexts: Array.from({ length: 5 }, (_, i) => `Body ${i}`),
+      headlines: Array.from({ length: 5 }, (_, i) => `Title ${i}`),
+      descriptions: Array.from({ length: 5 }, (_, i) => `Description ${i}`)
+    });
+    for (let i = 0; i < 8; i++) await processBatchLaunch("client", "job");
+    expect(row.status).toBe("completed");
+    const creativeCalls = mocks.request.mock.calls.filter(([path]) => path.endsWith("/adcreatives"));
+    const adCalls = mocks.request.mock.calls.filter(([path]) => path.endsWith("/ads"));
+    expect(creativeCalls).toHaveLength(1);
+    expect(adCalls).toHaveLength(1);
+    expect(adCalls[0][1].status).toBe("PAUSED");
+    for (const key of ["bodies", "titles", "descriptions"])
+      expect(creativeCalls[0][1].asset_feed_spec[key]).toHaveLength(5);
+    expect(writes.find((write) => write.table === "creatives")?.values).toMatchObject({
+      body: "Body 0",
+      title: "Title 0",
+      raw: creativeCalls[0][1]
+    });
+  });
   it("finishes every ad before enabling any of them, with the parent always last", async () => {
     row.payload.input.activate = true;
     row.payload.files.push({ ...feed, id: "second" });

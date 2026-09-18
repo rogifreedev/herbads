@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { BatchTemplateSelect } from "@/components/batch-template-select";
+import { MAX_COPY_VARIANTS, normalizeBatchCopy } from "@/lib/batch-launch-copy";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +54,7 @@ import type {
   BatchLaunchCopy,
   BatchLaunchJob,
   BatchLaunchPreset,
+  BatchTemplateCopySource,
   BatchMediaFile
 } from "@/lib/batch-launch-types";
 
@@ -70,10 +72,14 @@ const emptyCopy: BatchLaunchCopy = {
 };
 
 function copyFields(value: BatchLaunchCopy): BatchLaunchCopy {
+  value = normalizeBatchCopy(value);
   return {
     primaryText: value.primaryText,
     headline: value.headline,
     description: value.description,
+    primaryTexts: value.primaryTexts,
+    headlines: value.headlines,
+    descriptions: value.descriptions,
     landingUrl: value.landingUrl,
     callToAction: value.callToAction,
     pageId: value.pageId,
@@ -116,7 +122,6 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const optionsAccountId = accountContext?.metaConfigured ? accountContext.accountId : "";
   const optionsLoading = Boolean(optionsAccountId && optionsState?.accountId !== optionsAccountId);
   const optionsError = optionsState?.accountId === optionsAccountId ? optionsState?.error : undefined;
-  const sourcesReady = Boolean(media && !optionsLoading && !optionsError);
   const [accountId, setAccountId] = useState("");
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +133,23 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const [activate, setActivate] = useState(false);
   const [confirmActivation, setConfirmActivation] = useState(false);
   const [copy, setCopy] = useState<BatchLaunchCopy>(emptyCopy);
+  const copyEdits = useRef(0);
+  const [copyRequest, setCopyRequest] = useState<{
+    accountId: string;
+    templateId: string;
+    editVersion: number;
+  } | null>(null);
+  const [templateCopy, setTemplateCopy] = useState<{
+    request: typeof copyRequest;
+    sources: BatchTemplateCopySource[];
+    error?: string;
+  } | null>(null);
+  const [copySourceId, setCopySourceId] = useState("");
+  const copyLoading = Boolean(copyRequest && templateCopy?.request !== copyRequest);
+  const copyError = templateCopy?.request === copyRequest ? templateCopy?.error : undefined;
+  const copySources = templateCopy?.request === copyRequest ? (templateCopy?.sources ?? []) : [];
+  const copySource = copySources.find((item) => item.id === copySourceId);
+  const sourcesReady = Boolean(media && !optionsLoading && !optionsError && !copyLoading && !copyError);
   const [suggestionId, setSuggestionId] = useState("");
   const [groups, setGroups] = useState<BatchAdGroup[]>([]);
   const [reviewedMatching, setReviewedMatching] = useState("");
@@ -176,6 +198,10 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         setName(batchAdsetName(data.folder.name));
         setCampaignId("");
         setTemplateId("");
+        setCopyRequest(null);
+        setTemplateCopy(null);
+        setCopySourceId("");
+        copyEdits.current = 0;
         setActivate(false);
         setConfirmActivation(false);
         setPresetId("");
@@ -200,6 +226,34 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
       });
     return () => controller.abort();
   }, [endpoint, folderId, accountId, revision, t]);
+
+  useEffect(() => {
+    if (!copyRequest || copyRequest.accountId !== accountContext?.accountId) return;
+    const controller = new AbortController();
+    jsonRequest<{ sources: BatchTemplateCopySource[] }>(
+      `${endpoint}/launch/copy?accountId=${encodeURIComponent(copyRequest.accountId)}&templateId=${encodeURIComponent(copyRequest.templateId)}`,
+      { signal: controller.signal }
+    )
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setTemplateCopy({ request: copyRequest, sources: data.sources });
+        // A delayed template response must not replace edits made while it was loading.
+        if (copyEdits.current === copyRequest.editVersion) {
+          setCopy(copyFields(data.sources[0]?.copy ?? emptyCopy));
+          setCopySourceId(data.sources[0]?.id ?? "");
+          setSuggestionId("");
+        }
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted)
+          setTemplateCopy({
+            request: copyRequest,
+            sources: [],
+            error: failure instanceof Error ? failure.message : t("loadError")
+          });
+      });
+    return () => controller.abort();
+  }, [endpoint, copyRequest, accountContext?.accountId, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -337,8 +391,22 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
   const matchingKey = JSON.stringify(visualMatches.map((group) => [group.feedFileId, group.storyFileId]));
   const unreviewedMatching = visualMatches.length > 0 && reviewedMatching !== matchingKey;
 
+  function loadTemplateCopy(id: string, replaceCopy = true) {
+    setCopySourceId("");
+    setCopyRequest(
+      id && context
+        ? {
+            accountId: context.accountId,
+            templateId: id,
+            editVersion: replaceCopy ? copyEdits.current : -1
+          }
+        : null
+    );
+  }
+
   function chooseTemplate(id: string, replaceSettings = false) {
     setTemplateId(id);
+    loadTemplateCopy(id, replaceSettings || !copyEdits.current);
     const selected = context?.templates.find((item) => item.id === id);
     if (!presetId || replaceSettings) {
       const defaults = settingsFromAdset(selected, account?.currency ?? "EUR");
@@ -351,6 +419,23 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
         setPresetName("");
       }
     }
+  }
+
+  function editCopy(value: BatchLaunchCopy) {
+    copyEdits.current++;
+    setCopy(value);
+    setSuggestionId("");
+    setCopySourceId("");
+  }
+
+  function editVariant(key: "primaryTexts" | "headlines" | "descriptions", index: number, value: string) {
+    const scalar = { primaryTexts: "primaryText", headlines: "headline", descriptions: "description" } as const;
+    const values = Array.from(
+      { length: MAX_COPY_VARIANTS },
+      (_, i) => copy[key]?.[i] ?? (i === 0 ? copy[scalar[key]] : "")
+    );
+    values[index] = value;
+    editCopy({ ...copy, [key]: values, [scalar[key]]: values.find((item) => item.trim()) ?? "" });
   }
 
   async function toggleFavorite() {
@@ -947,18 +1032,76 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
               </section>
               <section className="space-y-4 border-b border-border pb-6">
                 <h3 className="font-heading text-xl">{t("copy")}</h3>
+                {copyLoading ? (
+                  <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t("templateCopyLoading")}
+                  </p>
+                ) : null}
+                {copyError ? (
+                  <Alert variant="warning">
+                    <AlertDescription>{copyError}</AlertDescription>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => loadTemplateCopy(templateId)}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        {t("retry")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCopyRequest(null);
+                          setTemplateCopy(null);
+                        }}
+                      >
+                        {t("useOwnCopy")}
+                      </Button>
+                    </div>
+                  </Alert>
+                ) : null}
+                {copyRequest && !copyLoading && !copyError && !copySources.length ? (
+                  <p className="text-sm text-muted-foreground">{t("templateCopyEmpty")}</p>
+                ) : null}
+                {copySources.length ? (
+                  <Field label={t("copySource")} id="launch-copy-source">
+                    <select
+                      id="launch-copy-source"
+                      className={selectClass}
+                      value={copySourceId}
+                      onChange={(event) => {
+                        copyEdits.current++;
+                        setCopySourceId(event.target.value);
+                        setSuggestionId("");
+                        const source = copySources.find((item) => item.id === event.target.value);
+                        if (source) setCopy(copyFields(source.copy));
+                      }}
+                    >
+                      <option value="">{t("ownCopy")}</option>
+                      {copySources.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} ({item.id})
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+                {copySource?.truncated ? (
+                  <p className="text-sm text-muted-foreground">{t("templateCopyTruncated")}</p>
+                ) : null}
                 <Field label={t("suggestion")} id="launch-suggestion">
                   <select
                     id="launch-suggestion"
                     className={selectClass}
                     value={suggestionId}
                     onChange={(event) => {
+                      copyEdits.current++;
+                      setCopySourceId("");
                       setSuggestionId(event.target.value);
                       const next = context.suggestions.find((item) => item.id === event.target.value);
                       if (next) setCopy(copyFields(next));
                     }}
                   >
-                    <option value="">{t("ownCopy")}</option>
+                    <option value="">{copySource ? t("templateCopySelected") : t("ownCopy")}</option>
                     {context.suggestions.map((item, index) => (
                       <option key={item.id} value={item.id}>
                         {index + 1}. {item.primaryText.slice(0, 110)}
@@ -976,20 +1119,52 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                     })}
                   </p>
                 ) : null}
-                <Field label={t("primaryText")} id="launch-text">
-                  <Textarea
-                    id="launch-text"
-                    rows={5}
-                    maxLength={10000}
-                    value={copy.primaryText}
-                    onChange={(event) => setCopy({ ...copy, primaryText: event.target.value })}
-                  />
-                </Field>
+                <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="min-w-0 space-y-4">
+                    {Array.from({ length: MAX_COPY_VARIANTS }, (_, index) => {
+                      const id = index ? `launch-text-${index + 1}` : "launch-text";
+                      return (
+                        <Field key={id} label={`${t("primaryText")} ${index + 1}`} id={id}>
+                          <Textarea
+                            id={id}
+                            rows={4}
+                            maxLength={10000}
+                            value={copy.primaryTexts?.[index] ?? (index === 0 ? copy.primaryText : "")}
+                            onChange={(event) => editVariant("primaryTexts", index, event.target.value)}
+                          />
+                        </Field>
+                      );
+                    })}
+                  </div>
+                  <div className="contents">
+                    {(
+                      [
+                        ["headlines", "headline", 255],
+                        ["descriptions", "description", 1000]
+                      ] as const
+                    ).map(([key, label, maxLength]) => (
+                      <div key={key} className="min-w-0 space-y-4">
+                        {Array.from({ length: MAX_COPY_VARIANTS }, (_, index) => {
+                          const id = `launch-${label}${index ? `-${index + 1}` : ""}`;
+                          return (
+                            <Field key={id} label={`${t(label)} ${index + 1}`} id={id}>
+                              <Textarea
+                                id={id}
+                                rows={2}
+                                maxLength={maxLength}
+                                value={copy[key]?.[index] ?? (index === 0 ? copy[label] : "")}
+                                onChange={(event) => editVariant(key, index, event.target.value)}
+                              />
+                            </Field>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   {(
                     [
-                      ["headline", "headline"],
-                      ["description", "description"],
                       ["landingUrl", "landingUrl"],
                       ["pageId", "page"],
                       ["instagramId", "instagram"],
@@ -1000,7 +1175,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                       <Input
                         id={`launch-${key}`}
                         value={copy[key]}
-                        onChange={(event) => setCopy({ ...copy, [key]: event.target.value })}
+                        onChange={(event) => editCopy({ ...copy, [key]: event.target.value })}
                       />
                     </Field>
                   ))}
@@ -1009,7 +1184,7 @@ export function BatchLaunchForm({ clientId, folderId }: { clientId: string; fold
                       id="launch-cta"
                       className={selectClass}
                       value={copy.callToAction}
-                      onChange={(event) => setCopy({ ...copy, callToAction: event.target.value })}
+                      onChange={(event) => editCopy({ ...copy, callToAction: event.target.value })}
                     >
                       {[
                         ...new Set([

@@ -1,4 +1,5 @@
 import "server-only";
+import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { listBatchMedia } from "@/lib/batch-launch-drive";
 import {
@@ -359,6 +360,7 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   const folder = await launchFolder(clientId, input.folderId);
   input = { ...input, name: batchAdsetName(folder.name) };
   validateCopy(input.copy);
+  input = { ...input, copy: normalizeBatchCopy(input.copy) };
   const [media, rawCampaign, template] = await Promise.all([
     listBatchMedia(input.folderId),
     metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),

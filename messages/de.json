@@ -1,5 +1,11 @@
 {
   "batchLaunch": {
+    "templateCopyLoading": "Anzeigentexte aus dem Referenz-Adset werden geladen",
+    "copySource": "Quellanzeige im Referenz-Adset",
+    "templateCopySelected": "Texte aus dem Referenz-Adset",
+    "templateCopyEmpty": "Im Referenz-Adset sind keine Anzeigentexte verfügbar.",
+    "templateCopyTruncated": "Die Quellanzeige enthält mehr als fünf Varianten. Die ersten fünf unterschiedlichen Varianten je Textart wurden übernommen.",
+    "useOwnCopy": "Eigene Texte verwenden",
     "localeId": "Meta-Sprache {id}",
     "localeNamesError": "Sprachnamen nicht verfügbar. Die Sprachwahl bleibt erhalten.",
     "templateLocations": "Standorte aus Referenz-Adset: {locations}",

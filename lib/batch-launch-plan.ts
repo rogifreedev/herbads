@@ -7,6 +7,7 @@ import type {
   BatchUploadedMedia
 } from "@/lib/batch-launch-types";
 import type { BatchTemplate } from "@/lib/batch-launch-types";
+import { MAX_COPY_VARIANTS, copyVariants, normalizeBatchCopy } from "@/lib/batch-launch-copy";
 
 export function batchAdsetName(folderName: string, date = new Date()) {
   const day = new Intl.DateTimeFormat("de-DE", {
@@ -261,6 +262,21 @@ export function validateCopy(copy: BatchLaunchCopy) {
     "urlTags"
   ];
   if (!copy || keys.some((key) => typeof copy[key] !== "string")) throw new Error("Ungueltige Anzeigentexte.");
+  for (const [key, maxLength] of [
+    ["primaryTexts", 10000],
+    ["headlines", 255],
+    ["descriptions", 1000]
+  ] as const) {
+    const values = copy[key];
+    if (
+      values !== undefined &&
+      (!Array.isArray(values) ||
+        values.length > MAX_COPY_VARIANTS ||
+        values.some((value) => typeof value !== "string" || value.length > maxLength))
+    )
+      throw new Error("Maximal fuenf gueltige Varianten pro Textfeld erlaubt.");
+  }
+  copy = normalizeBatchCopy(copy);
   if (!copy.primaryText?.trim() || copy.primaryText.length > 10000)
     throw new Error("Primaerer Text fehlt oder ist zu lang.");
   if (!copy.headline?.trim() || copy.headline.length > 255 || copy.description.length > 1000)
@@ -332,8 +348,17 @@ export function buildCreativePayload(
   uploaded: Record<string, BatchUploadedMedia>,
   copy: BatchLaunchCopy
 ) {
-  copy = { ...copy, primaryText: group.primaryText?.trim() || copy.primaryText };
   validateCopy(copy);
+  copy = normalizeBatchCopy(copy);
+  if (group.primaryText?.trim())
+    copy = { ...copy, primaryText: group.primaryText.trim(), primaryTexts: [group.primaryText.trim()] };
+  validateCopy(copy);
+  const variants = copyVariants(copy);
+  const textAssets = {
+    bodies: variants.primaryTexts.map((text) => ({ text })),
+    titles: variants.headlines.map((text) => ({ text })),
+    descriptions: (variants.descriptions.length ? variants.descriptions : [""]).map((text) => ({ text }))
+  };
   const selected = [group.feedFileId, group.storyFileId].filter((id): id is string => Boolean(id));
   const file = files.find((item) => item.id === selected[0])!;
   const story: Record<string, unknown> = { page_id: copy.pageId };
@@ -360,7 +385,9 @@ export function buildCreativePayload(
         link_description: copy.description,
         call_to_action: cta
       };
-    return base;
+    return Object.values(variants).some((items) => items.length > 1)
+      ? { ...base, asset_feed_spec: { ...textAssets, optimization_type: "DEGREES_OF_FREEDOM" } }
+      : base;
   }
   const label = file.kind === "image" ? "image_label" : "video_label";
   const assets = selected.map((id) => ({
@@ -375,14 +402,17 @@ export function buildCreativePayload(
       [file.kind === "image" ? "images" : "videos"]: assets,
       ad_formats: [file.kind === "image" ? "SINGLE_IMAGE" : "SINGLE_VIDEO"],
       optimization_type: "PLACEMENT",
-      bodies: [{ text: copy.primaryText }],
-      titles: [{ text: copy.headline }],
-      descriptions: [{ text: copy.description }],
+      bodies: textAssets.bodies.map((asset) => ({ ...asset, adlabels: [{ name: "batch_bodies" }] })),
+      titles: textAssets.titles.map((asset) => ({ ...asset, adlabels: [{ name: "batch_titles" }] })),
+      descriptions: textAssets.descriptions.map((asset) => ({ ...asset, adlabels: [{ name: "batch_descriptions" }] })),
       link_urls: [{ website_url: copy.landingUrl }],
       call_to_action_types: [copy.callToAction],
       asset_customization_rules: [
         {
           priority: 1,
+          body_label: { name: "batch_bodies" },
+          title_label: { name: "batch_titles" },
+          description_label: { name: "batch_descriptions" },
           [label]: { name: "batch_story" },
           customization_spec: {
             publisher_platforms: ["facebook", "instagram", "messenger"],
@@ -391,7 +421,14 @@ export function buildCreativePayload(
             messenger_positions: ["story"]
           }
         },
-        { priority: 2, [label]: { name: "batch_feed" }, customization_spec: { age_min: 13, age_max: 65 } }
+        {
+          priority: 2,
+          [label]: { name: "batch_feed" },
+          body_label: { name: "batch_bodies" },
+          title_label: { name: "batch_titles" },
+          description_label: { name: "batch_descriptions" },
+          customization_spec: { age_min: 13, age_max: 65 }
+        }
       ]
     }
   };

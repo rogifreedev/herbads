@@ -33,11 +33,22 @@ export type BatchLaunchCopy = {
   primaryText: string;
   headline: string;
   description: string;
+  primaryTexts?: string[];
+  headlines?: string[];
+  descriptions?: string[];
   landingUrl: string;
   callToAction: string;
   pageId: string;
   instagramId: string;
   urlTags: string;
+};
+
+export type BatchTemplateCopySource = {
+  id: string;
+  name: string;
+  status: string;
+  copy: BatchLaunchCopy;
+  truncated: boolean;
 };
 
 export type BatchCopySuggestion = BatchLaunchCopy & {

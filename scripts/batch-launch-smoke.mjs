@@ -23,6 +23,15 @@ const copy = {
   instagramId: "456",
   urlTags: "utm_source=meta"
 };
+const variantCopy = {
+  ...copy,
+  primaryText: "Primaerer Text 1 aus Vorlage",
+  headline: "Headline 1 aus Vorlage",
+  description: "Beschreibung 1 aus Vorlage",
+  primaryTexts: Array.from({ length: 5 }, (_, i) => `Primaerer Text ${i + 1} aus Vorlage`),
+  headlines: Array.from({ length: 5 }, (_, i) => `Headline ${i + 1} aus Vorlage`),
+  descriptions: Array.from({ length: 5 }, (_, i) => `Beschreibung ${i + 1} aus Vorlage`)
+};
 const files = [
   { id: "feed", name: "Motif_1_1x1.png", path: "Feed/Motif_1_1x1.png", width: 1080, height: 1080, placement: "feed" },
   {
@@ -178,6 +187,9 @@ async function main() {
     let regionalFixture = false;
     let liveLanguageIds = [5];
     let failLocaleNames = false;
+    let variantFixture = false;
+    let failCopy = false;
+    let copyGate = null;
     let mediaRequests = 0;
     let pauseCampaignOnRefresh = false;
     let failMedia = false,
@@ -225,6 +237,34 @@ async function main() {
               ].filter((item) => ids.split(",").includes(String(item.id)))
             : [{ id: 5, name: "Deutsch" }]
         };
+      } else if (url.pathname.endsWith("/launch/copy")) {
+        if (failCopy) return route.fulfill({ status: 503, json: { error: "Test-Text-Ausfall" } });
+        const templateId = url.searchParams.get("templateId");
+        result = {
+          sources: variantFixture
+            ? [
+                {
+                  id: `${templateId}-full`,
+                  name: "Anzeige mit allen Varianten",
+                  status: "ACTIVE",
+                  copy: variantCopy,
+                  truncated: false
+                },
+                {
+                  id: `${templateId}-single`,
+                  name: "Anzeige mit einem Text",
+                  status: "PAUSED",
+                  copy: { ...copy, description: "" },
+                  truncated: false
+                }
+              ]
+            : [{ id: `${templateId}-copy`, name: "Quellanzeige", status: "ACTIVE", copy, truncated: false }]
+        };
+        const gate = copyGate;
+        if (gate?.templateId === templateId) {
+          gate.started();
+          await gate.promise;
+        }
       } else if (url.pathname.endsWith("/launch/media")) {
         mediaRequests++;
         if (failMedia) return route.fulfill({ status: 503, json: { error: "Test-Drive-Ausfall" } });
@@ -634,6 +674,10 @@ async function main() {
     await search.fill("9789");
     await search.press("Enter");
     assert(await italy.isChecked());
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Anzeigentexte aus dem Referenz-Adset" })
+      .waitFor({ state: "hidden" });
     assert(await pausedButton.isEnabled());
     await pausedButton.click();
     await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
@@ -681,9 +725,111 @@ async function main() {
     await page.getByRole("button", { name: "Testsprache", exact: true }).waitFor();
     await nameError.waitFor({ state: "hidden" });
     assert.equal(creationRequests, 3);
+    variantFixture = true;
+    regionalFixture = false;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    const sourcePicker = page.locator("#launch-copy-source");
+    await sourcePicker.waitFor();
+    const variantField = (base, i) => page.locator(`#launch-${base}${i ? `-${i + 1}` : ""}`);
+    for (const [base, key] of [
+      ["text", "primaryTexts"],
+      ["headline", "headlines"],
+      ["description", "descriptions"]
+    ]) {
+      for (let i = 0; i < 5; i++) assert.equal(await variantField(base, i).inputValue(), variantCopy[key][i]);
+    }
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole("heading", { name: "Anzeigentexte und Ziel", exact: true }).evaluate((element) => {
+        window.scrollTo(0, element.getBoundingClientRect().top + scrollY - 80);
+      });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(output, `copy-variants-${width}.png`) });
+    }
+    await sourcePicker.selectOption("9789-single");
+    assert.equal(await page.locator("#launch-text").inputValue(), copy.primaryText);
+    for (let i = 1; i < 5; i++) {
+      assert.equal(await variantField("text", i).inputValue(), "");
+      assert.equal(await variantField("headline", i).inputValue(), "");
+    }
+    for (let i = 0; i < 5; i++) assert.equal(await variantField("description", i).inputValue(), "");
+    await sourcePicker.selectOption("9789-full");
+    await page.locator("#launch-text-5").fill("Manuell bearbeiteter Text 5");
+    await page.locator("#launch-headline-5").fill("Manuelle Headline 5");
+    await page.locator("#launch-description-5").fill("Manuelle Beschreibung 5");
+    assert.equal(await sourcePicker.inputValue(), "");
+    await pausedButton.click();
+    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    assert.deepEqual(submitted.copy.primaryTexts, [
+      ...variantCopy.primaryTexts.slice(0, 4),
+      "Manuell bearbeiteter Text 5"
+    ]);
+    assert.deepEqual(submitted.copy.headlines, [...variantCopy.headlines.slice(0, 4), "Manuelle Headline 5"]);
+    assert.deepEqual(submitted.copy.descriptions, [...variantCopy.descriptions.slice(0, 4), "Manuelle Beschreibung 5"]);
+    assert.equal(submitted.groups.length, 1, "Text alternatives do not split a matched creative into separate ads");
+    assert.equal(submitted.groups[0].storyFileId, "story");
+    job = null;
+    await page.goto(url, { waitUntil: "networkidle" });
+    let releaseCopy, copyStarted;
+    const heldCopy = new Promise((resolve) => {
+      releaseCopy = resolve;
+    });
+    const startedCopy = new Promise((resolve) => {
+      copyStarted = resolve;
+    });
+    copyGate = { templateId: "9789", promise: heldCopy, started: copyStarted };
+    await page.locator("#launch-campaign").selectOption("789");
+    await startedCopy;
+    await page.locator("#launch-text").fill("Manuelle Eingabe waehrend Textabruf");
+    assert(await pausedButton.isDisabled(), "Pending import cannot launch stale copy");
+    releaseCopy();
+    await sourcePicker.waitFor();
+    assert.equal(await page.locator("#launch-text").inputValue(), "Manuelle Eingabe waehrend Textabruf");
+    let releaseStale, staleStarted;
+    const heldStale = new Promise((resolve) => {
+      releaseStale = resolve;
+    });
+    const startedStale = new Promise((resolve) => {
+      staleStarted = resolve;
+    });
+    copyGate = { templateId: "9789", promise: heldStale, started: staleStarted };
+    await page.getByRole("button", { name: "Adset-Einstellungen übernehmen", exact: true }).click();
+    await startedStale;
+    await page.locator("#launch-template").click();
+    await search.fill("9790");
+    await search.press("Enter");
+    await sourcePicker.waitFor();
+    await page.waitForFunction(() => document.querySelector("#launch-copy-source")?.value === "9790-full");
+    releaseStale();
+    copyGate = null;
+    await page.waitForLoadState("networkidle");
+    assert.equal(await sourcePicker.inputValue(), "9790-full", "Late copy from previous adset must be discarded");
+    failCopy = true;
+    await page.getByRole("button", { name: "Adset-Einstellungen übernehmen", exact: true }).click();
+    const copyFailure = page.getByRole("alert").filter({ hasText: "Test-Text-Ausfall" });
+    await copyFailure.waitFor();
+    assert(await pausedButton.isDisabled());
+    await page.locator("#launch-budget").fill("77");
+    await page.getByRole("checkbox", { name: "Italien", exact: true }).check();
+    failCopy = false;
+    await copyFailure.getByRole("button", { name: "Erneut versuchen", exact: true }).click();
+    await sourcePicker.waitFor();
+    assert.equal(await page.locator("#launch-text-5").inputValue(), variantCopy.primaryTexts[4]);
+    assert.equal(await page.locator("#launch-budget").inputValue(), "77", "Text retry preserves edited budget");
+    assert(
+      await page.getByRole("checkbox", { name: "Italien", exact: true }).isChecked(),
+      "Text retry preserves targeting"
+    );
+    failCopy = true;
+    await page.getByRole("button", { name: "Adset-Einstellungen übernehmen", exact: true }).click();
+    await copyFailure.waitFor();
+    await copyFailure.getByRole("button", { name: "Eigene Texte verwenden", exact: true }).click();
+    assert(await pausedButton.isEnabled(), "Manual text fallback requires explicit choice after a failed import");
+    assert.equal(creationRequests, 4);
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS language inheritance and names, unrestricted/multiple languages, late Meta updates, manual overrides, name lookup failure/retry, country inheritance from city targeting, template switching and reapplying, location summary, progressive loading, retries, stale-account cancellation, preserved edits, matching, presets, favorites and activation confirmation"
+      "PASS 5x3 copy variants, source ad selection, edits and submission, pending copy, stale template cancellation, copy failure/retry/manual fallback, language inheritance and names, countries, progressive loading, matching, presets, favorites and activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {

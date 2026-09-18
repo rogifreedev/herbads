@@ -53,6 +53,24 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("batch creation defaults", () => {
+  it("persists every variant with canonical scalar fallbacks for the resumable worker", async () => {
+    const copy = {
+      ...launchInput.copy,
+      primaryTexts: ["", "Second body", "Third body"],
+      headlines: ["New title", "Second title"],
+      descriptions: ["", "Description"]
+    };
+    await createBatchLaunch("client", { ...launchInput, copy });
+    expect(mocks.insert.mock.calls[0][0].payload.input.copy).toMatchObject({
+      primaryText: "Second body",
+      primaryTexts: ["Second body", "Third body"],
+      headline: "New title",
+      headlines: ["New title", "Second title"],
+      description: "Description",
+      descriptions: ["Description"]
+    });
+    expect(copy.primaryTexts).toEqual(["", "Second body", "Third body"]);
+  });
   it("uses the server date and authoritative folder name for validation, persistence and Meta", async () => {
     const job = await createBatchLaunch("client", { ...launchInput, name: "untrusted or stale browser name" });
     const name = "16.09.2026_01_Batch";
