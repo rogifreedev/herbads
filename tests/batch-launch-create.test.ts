@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ database: vi.fn(), meta: vi.fn(), media: vi.fn(), insert: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  database: vi.fn(),
+  meta: vi.fn(),
+  media: vi.fn(),
+  insert: vi.fn(),
+  identities: vi.fn()
+}));
+vi.mock("@/lib/meta/batch-identities", () => ({ getLiveBatchIdentities: mocks.identities }));
 vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient: mocks.database }));
 vi.mock("@/lib/batch-launch-drive", () => ({ listBatchMedia: mocks.media }));
 vi.mock("@/lib/meta/batch-launch", async (original) => ({
@@ -14,6 +21,10 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-09-15T22:30:00Z"));
   mocks.media.mockResolvedValue({ files: [feed] });
+  mocks.identities.mockResolvedValue({
+    pages: [{ id: launchInput.copy.pageId, name: "Page" }],
+    instagramAccounts: [{ id: launchInput.copy.instagramId, name: "Instagram" }]
+  });
   mocks.meta.mockImplementation(async (path: string) => {
     if (path.startsWith(`${campaign.id}?`)) return { ...campaign, account_id: "111" };
     if (path.startsWith(`${template.id}?`)) return { ...template, status: "PAUSED", campaign_id: "other" };
@@ -53,6 +64,14 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("batch creation defaults", () => {
+  it.each(["pageId", "instagramId"] as const)("rejects an identity outside this account: %s", async (field) => {
+    await expect(
+      createBatchLaunch("client", { ...launchInput, copy: { ...launchInput.copy, [field]: "999999" } })
+    ).rejects.toThrow(/Werbekonto nicht verfuegbar/);
+    expect(mocks.identities).toHaveBeenCalledWith("act_111", true);
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.meta.mock.calls.every(([, body]) => body === undefined)).toBe(true);
+  });
   it("persists every variant with canonical scalar fallbacks for the resumable worker", async () => {
     const copy = {
       ...launchInput.copy,

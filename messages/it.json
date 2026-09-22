@@ -14,6 +14,16 @@
     "cancelNotice": "I passaggi successivi saranno fermati. Un passaggio Meta già avviato potrebbe completarsi. Gli oggetti creati non vengono eliminati e le inserzioni attive non vengono sospese. Il caricamento non potrà essere ripreso."
   },
   "batchLaunch": {
+    "identities": "Facebook e Instagram",
+    "identitiesLoading": "Caricamento delle pagine Facebook e degli account Instagram",
+    "identitiesError": "Impossibile caricare le pagine Facebook e gli account Instagram disponibili.",
+    "refreshIdentities": "Aggiorna la selezione Facebook e Instagram",
+    "choosePage": "Seleziona una pagina Facebook",
+    "noInstagram": "Nessun account Instagram separato",
+    "noPages": "Nessuna pagina Facebook disponibile per questo account pubblicitario. Verifica l'assegnazione e le autorizzazioni in Meta.",
+    "noInstagramAccounts": "Nessun account Instagram disponibile per questo account pubblicitario.",
+    "identityUnavailable": "Non disponibile: {id}",
+    "identityPending": "Verifica in corso: {id}",
     "blockersTitle": "Da completare prima della creazione:",
     "blockers": {
       "meta": "La connessione Meta non è configurata. Verifica le impostazioni dell'account.",
@@ -30,7 +40,10 @@
       "countries": "Seleziona almeno un paese.",
       "primaryText": "Inserisci almeno un testo principale.",
       "headline": "Inserisci almeno un titolo.",
-      "page": "Inserisci un ID della pagina Facebook valido (solo cifre).",
+      "page": "Seleziona una pagina Facebook disponibile per questo account pubblicitario.",
+      "instagram": "Seleziona un account Instagram disponibile oppure rimuovi la selezione Instagram.",
+      "identitiesLoading": "Caricamento della selezione Facebook e Instagram ancora in corso.",
+      "identitiesError": "Impossibile caricare la selezione Facebook e Instagram. Aggiorna la selezione.",
       "landingUrl": "Inserisci un URL di destinazione completo con https:// o http://.",
       "budget": "Inserisci un budget giornaliero valido maggiore di 0 nella valuta dell'account."
     },
@@ -82,7 +95,7 @@
     "missingMeta": "La connessione Meta non è configurata in questo ambiente. La creazione richiede un token System User con ads_management e accesso all'account pubblicitario e alla pagina Facebook.",
     "account": "Account pubblicitario", "adsetName": "Nome gruppo di inserzioni", "campaign": "Campagna", "templateAdset": "Gruppo di riferimento", "choose": "Seleziona", "inherited": "Ottimizzazione e pubblico dal gruppo di riferimento", "optimization": "Ottimizzazione", "pixel": "Pixel", "event": "Evento di conversione", "age": "Età", "audience": "Pubblico", "audienceDetails": "Altre impostazioni di pubblico e posizionamento come nel gruppo di riferimento",
     "settings": "Budget e pubblico", "preset": "Modello account", "custom": "Impostazioni personalizzate", "dailyBudget": "Budget giornaliero", "campaignBudget": "Il budget è gestito dalla campagna selezionata (CBO).", "countries": "Paesi", "searchCountry": "Cerca paese", "noneSelected": "Nessun paese selezionato", "languages": "Lingue", "searchLanguage": "Cerca lingua su Meta", "allLanguages": "Tutte le lingue", "presetName": "Nome del modello account", "savePreset": "Salva modello", "saveAsNew": "Salva con un nuovo nome", "deletePreset": "Elimina modello",
-    "copy": "Testi e destinazione", "suggestion": "Testo da inserzioni attive", "ownCopy": "Testo personalizzato", "copyMetrics": "Inserzioni con questo testo · ultimi 30 giorni: {purchases} acquisti · {spend} spesa · ROAS {roas} · {ads} inserzioni. Con varianti di testo, i dati si riferiscono all'intera inserzione.", "primaryText": "Testo principale", "headline": "Titolo", "description": "Descrizione", "landingUrl": "URL di destinazione", "page": "ID pagina Facebook", "instagram": "ID account Instagram (facoltativo)", "urlTags": "Parametri URL (facoltativi)", "cta": "Call to action",
+    "copy": "Testi e destinazione", "suggestion": "Testo da inserzioni attive", "ownCopy": "Testo personalizzato", "copyMetrics": "Inserzioni con questo testo · ultimi 30 giorni: {purchases} acquisti · {spend} spesa · ROAS {roas} · {ads} inserzioni. Con varianti di testo, i dati si riferiscono all'intera inserzione.", "primaryText": "Testo principale", "headline": "Titolo", "description": "Descrizione", "landingUrl": "URL di destinazione", "page": "Pagina Facebook", "instagram": "Account Instagram (facoltativo)", "urlTags": "Parametri URL (facoltativi)", "cta": "Call to action",
     "ads": "Inserzioni ({count})", "resetMatching": "Ripristina abbinamenti", "adName": "Nome inserzione", "matched": "Coppia di formati", "single": "Singolo contenuto", "exclude": "Escludi dal batch", "unpair": "Separa i formati", "feed": "Feed · 1:1 / 4:5", "story": "Storie / Reels · 9:16", "noVariant": "Nessuna variante", "unused": "Contenuti non selezionati ({count})", "ignored": "File non supportati o non scaricabili ({count})", "summary": "1 gruppo in pausa · {ads} inserzioni in pausa · {files} file multimediali", "createPaused": "Crea su Meta in pausa",
     "progress": "{ads} / {total} inserzioni · {files} / {fileTotal} contenuti", "stopUpload": "Interrompi caricamento", "resumeUpload": "Riprendi caricamento", "openMeta": "Apri in Meta", "anotherCampaign": "Altra campagna", "reviewHint": "L'ultimo passaggio non è stato confermato con certezza. Gli oggetti esistenti restano in pausa. Verifica in Meta prima di creare nuovamente.",
     "status": { "pending": "In coda", "running": "In elaborazione", "paused": "Fermo", "cancelled": "Annullato", "failed": "Interrotto", "review": "Verifica necessaria", "completed": "Creato in pausa" },

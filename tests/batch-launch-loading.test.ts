@@ -5,17 +5,24 @@ const mocks = vi.hoisted(() => ({
   media: vi.fn(),
   matching: vi.fn(),
   options: vi.fn(),
+  identities: vi.fn(),
   tables: [] as string[],
   denied: false
 }));
 vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient: mocks.database }));
 vi.mock("@/lib/batch-launch-drive", () => ({ listBatchMedia: mocks.media }));
+vi.mock("@/lib/meta/batch-identities", () => ({ getLiveBatchIdentities: mocks.identities }));
 vi.mock("@/lib/batch-media-matching", () => ({ matchBatchMedia: mocks.matching }));
 vi.mock("@/lib/meta/batch-launch", async (original) => ({
   ...(await original<typeof import("@/lib/meta/batch-launch")>()),
   getLiveBatchOptions: mocks.options
 }));
-import { getBatchLaunchContext, getBatchLaunchMedia, getBatchLaunchOptions } from "@/lib/batch-launch";
+import {
+  getBatchLaunchContext,
+  getBatchLaunchMedia,
+  getBatchLaunchOptions,
+  getBatchLaunchIdentities
+} from "@/lib/batch-launch";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -25,6 +32,7 @@ beforeEach(() => {
   mocks.media.mockResolvedValue({ files: [], ignoredFiles: [] });
   mocks.matching.mockResolvedValue({ groups: [], matchingUnavailable: false });
   mocks.options.mockResolvedValue({ campaigns: [], templates: [] });
+  mocks.identities.mockResolvedValue({ pages: [], instagramAccounts: [] });
   mocks.database.mockReturnValue({
     rpc: async () => ({ data: [], error: null }),
     from(table: string) {
@@ -60,6 +68,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("progressive batch loading", () => {
+  it("scopes identity lookups to the client before any Meta request, even on refresh", async () => {
+    expect(await getBatchLaunchIdentities("client", "account", true)).toEqual({ pages: [], instagramAccounts: [] });
+    await expect(getBatchLaunchIdentities("other-client", "account")).rejects.toThrow(/Werbekonto/);
+    expect(mocks.identities).toHaveBeenCalledTimes(1);
+    expect(mocks.identities).toHaveBeenCalledWith("act_111", true);
+  });
   it("returns account settings without waiting for Drive, matching or live Meta", async () => {
     for (const mock of [mocks.media, mocks.matching, mocks.options]) mock.mockReturnValue(new Promise(() => {}));
     const result = await getBatchLaunchContext("client", "folder", "account");

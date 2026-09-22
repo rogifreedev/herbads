@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { BatchTemplateSelect } from "@/components/batch-template-select";
 import { MAX_COPY_VARIANTS, normalizeBatchCopy } from "@/lib/batch-launch-copy";
 import { batchLaunchBlockerTargets, getBatchLaunchBlockers } from "@/lib/batch-launch-readiness";
+import { resolveBatchIdentity } from "@/lib/batch-launch-identities";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ import type {
   BatchLaunchAccountContext,
   BatchLaunchMedia,
   BatchLaunchOptions,
+  BatchLaunchIdentities,
   BatchLaunchCopy,
   BatchLaunchJob,
   BatchLaunchPreset,
@@ -141,7 +143,26 @@ export function BatchLaunchForm({
   const [templateId, setTemplateId] = useState("");
   const [activate, setActivate] = useState(false);
   const [confirmActivation, setConfirmActivation] = useState(false);
-  const [copy, setCopy] = useState<BatchLaunchCopy>(emptyCopy);
+  const [identityState, setIdentityState] = useState<{
+    accountId: string;
+    data?: BatchLaunchIdentities;
+    error?: string;
+  } | null>(null);
+  const [identityRevision, setIdentityRevision] = useState(0);
+  const [identitySelection, setIdentitySelection] = useState<{
+    accountId: string;
+    pageId?: string;
+    instagramId?: string;
+  } | null>(null);
+  const identities = identityState?.accountId === optionsAccountId ? identityState?.data : undefined;
+  const identitiesError = identityState?.accountId === optionsAccountId ? identityState?.error : undefined;
+  const identitiesLoading = Boolean(optionsAccountId && !identities && !identitiesError);
+  const [copyDraft, setCopy] = useState<BatchLaunchCopy>(emptyCopy);
+  const copy = resolveBatchIdentity(
+    copyDraft,
+    identities,
+    identitySelection?.accountId === optionsAccountId ? identitySelection : undefined
+  );
   const copyEdits = useRef(0);
   const [copyRequest, setCopyRequest] = useState<{
     accountId: string;
@@ -209,6 +230,7 @@ export function BatchLaunchForm({
         setCopyRequest(null);
         setTemplateCopy(null);
         setCopySourceId("");
+        setIdentitySelection(null);
         copyEdits.current = 0;
         setActivate(false);
         setConfirmActivation(false);
@@ -308,6 +330,28 @@ export function BatchLaunchForm({
       });
     return () => controller.abort();
   }, [endpoint, optionsAccountId, optionsRevision, t]);
+
+  useEffect(() => {
+    if (!optionsAccountId) return;
+    const controller = new AbortController();
+    jsonRequest<BatchLaunchIdentities>(
+      `${endpoint}/launch/identities?accountId=${encodeURIComponent(optionsAccountId)}${identityRevision ? "&refresh=1" : ""}`,
+      {
+        signal: controller.signal
+      }
+    )
+      .then((data) => {
+        if (!controller.signal.aborted) setIdentityState({ accountId: optionsAccountId, data });
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted)
+          setIdentityState({
+            accountId: optionsAccountId,
+            error: failure instanceof Error ? failure.message : t("identitiesError")
+          });
+      });
+    return () => controller.abort();
+  }, [endpoint, optionsAccountId, identityRevision, t]);
 
   useEffect(() => {
     if (!context?.metaConfigured || !localeIds) return;
@@ -434,8 +478,19 @@ export function BatchLaunchForm({
     copy,
     campaignBudget,
     dailyBudget,
-    currency: account?.currency ?? "EUR"
+    currency: account?.currency ?? "EUR",
+    identities,
+    identitiesLoading,
+    identitiesError
   });
+
+  function selectIdentity(key: "pageId" | "instagramId", value: string) {
+    setIdentitySelection((current) => ({
+      ...(current?.accountId === optionsAccountId ? current : {}),
+      accountId: optionsAccountId,
+      [key]: value
+    }));
+  }
 
   function loadTemplateCopy(id: string, replaceCopy = true) {
     setCopySourceId("");
@@ -1092,6 +1147,89 @@ export function BatchLaunchForm({
                   ) : null}
                 </div>
               </section>
+              <section id="launch-identities" tabIndex={-1} className="space-y-4 border-b border-border pb-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-heading text-xl">{t("identities")}</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    title={t("refreshIdentities")}
+                    aria-label={t("refreshIdentities")}
+                    disabled={identitiesLoading || !context.metaConfigured}
+                    onClick={() => {
+                      setIdentityState(null);
+                      setIdentityRevision((value) => value + 1);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+                {identitiesLoading ? (
+                  <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t("identitiesLoading")}
+                  </p>
+                ) : null}
+                {identitiesError ? (
+                  <Alert variant="warning">
+                    <AlertDescription>
+                      {t("identitiesError")} {identitiesError}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                <div className="grid min-w-0 gap-4 md:grid-cols-2">
+                  <Field label={t("page")} id="launch-pageId">
+                    <select
+                      id="launch-pageId"
+                      className={selectClass}
+                      value={copy.pageId}
+                      disabled={!identities}
+                      onChange={(event) => selectIdentity("pageId", event.target.value)}
+                    >
+                      <option value="">{t("choosePage")}</option>
+                      {copy.pageId && !identities?.pages.some((item) => item.id === copy.pageId) ? (
+                        <option value={copy.pageId} disabled>
+                          {t(identities ? "identityUnavailable" : "identityPending", { id: copy.pageId })}
+                        </option>
+                      ) : null}
+                      {identities?.pages.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} ({item.id})
+                        </option>
+                      ))}
+                    </select>
+                    {identities && !identities.pages.length ? (
+                      <p className="text-sm text-destructive">{t("noPages")}</p>
+                    ) : null}
+                  </Field>
+                  <Field label={t("instagram")} id="launch-instagramId">
+                    <select
+                      id="launch-instagramId"
+                      className={selectClass}
+                      value={copy.instagramId}
+                      disabled={!identities}
+                      onChange={(event) => selectIdentity("instagramId", event.target.value)}
+                    >
+                      <option value="">{t("noInstagram")}</option>
+                      {copy.instagramId &&
+                      !identities?.instagramAccounts.some((item) => item.id === copy.instagramId) ? (
+                        <option value={copy.instagramId} disabled>
+                          {t(identities ? "identityUnavailable" : "identityPending", { id: copy.instagramId })}
+                        </option>
+                      ) : null}
+                      {identities?.instagramAccounts.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} ({item.id})
+                        </option>
+                      ))}
+                    </select>
+                    {identities && !identities.instagramAccounts.length ? (
+                      <p className="text-sm text-muted-foreground">{t("noInstagramAccounts")}</p>
+                    ) : null}
+                  </Field>
+                </div>
+              </section>
               <section id="launch-copy" tabIndex={-1} className="space-y-4 border-b border-border pb-6">
                 <h3 className="font-heading text-xl">{t("copy")}</h3>
                 {copyLoading ? (
@@ -1228,8 +1366,6 @@ export function BatchLaunchForm({
                   {(
                     [
                       ["landingUrl", "landingUrl"],
-                      ["pageId", "page"],
-                      ["instagramId", "instagram"],
                       ["urlTags", "urlTags"]
                     ] as const
                   ).map(([key, label]) => (

@@ -1,5 +1,7 @@
 import "server-only";
 import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
+import { validateBatchIdentity } from "@/lib/batch-launch-identities";
+import { getLiveBatchIdentities } from "@/lib/meta/batch-identities";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { listBatchMedia } from "@/lib/batch-launch-drive";
 import {
@@ -357,6 +359,11 @@ export async function getBatchLaunchOptions(clientId: string, accountId: string)
     : storedBatchOptions(accountId);
 }
 
+export async function getBatchLaunchIdentities(clientId: string, accountId: string, fresh = false) {
+  const account = await launchAccount(clientId, accountId);
+  return getLiveBatchIdentities(account.meta_account_id, fresh);
+}
+
 export async function createBatchLaunch(clientId: string, input: BatchLaunchInput) {
   if (!input || !/^\d+$/.test(input.campaignId) || !/^\d+$/.test(input.templateId))
     throw new Error("Kampagne oder Vorlagen-Adset fehlt.");
@@ -365,16 +372,18 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   input = { ...input, name: batchAdsetName(folder.name) };
   validateCopy(input.copy);
   input = { ...input, copy: normalizeBatchCopy(input.copy) };
-  const [media, rawCampaign, template] = await Promise.all([
+  const [media, rawCampaign, template, identities] = await Promise.all([
     listBatchMedia(input.folderId),
     metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
-    metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`)
+    metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
+    getLiveBatchIdentities(account.meta_account_id, true)
   ]);
   const metaId = account.meta_account_id.replace(/^act_/, "");
   if (String(rawCampaign.account_id) !== metaId || String(template.account_id) !== metaId)
     throw new Error("Kampagne oder Vorlage gehoert nicht zum Werbekonto.");
   if (rawCampaign.status !== "ACTIVE")
     throw new Error("Die Kampagne ist nicht mehr aktiv. Bitte eine aktive Kampagne auswaehlen.");
+  validateBatchIdentity(input.copy, identities);
   const files = validateGroups(input.groups, media.files);
   const campaign = mapBatchCampaign(rawCampaign);
   validateLaunchActivation(input.activate, campaign, input.activationBudget);

@@ -190,6 +190,9 @@ async function main() {
     let variantFixture = false;
     let failCopy = false;
     let copyGate = null;
+    let failIdentities = false;
+    let emptyIdentities = false;
+    let identityGate = null;
     let mediaRequests = 0;
     let pauseCampaignOnRefresh = false;
     let failMedia = false,
@@ -237,6 +240,31 @@ async function main() {
               ].filter((item) => ids.split(",").includes(String(item.id)))
             : [{ id: 5, name: "Deutsch" }]
         };
+      } else if (url.pathname.endsWith("/launch/identities")) {
+        if (failIdentities) return route.fulfill({ status: 503, json: { error: "Test-Identitaeten-Ausfall" } });
+        const requestedAccount = url.searchParams.get("accountId");
+        result = emptyIdentities
+          ? { pages: [], instagramAccounts: [] }
+          : requestedAccount === "account-b"
+            ? {
+                pages: [{ id: "223", name: "Seite Konto B" }],
+                instagramAccounts: [{ id: "556", name: "@konto_b" }]
+              }
+            : {
+                pages: [
+                  { id: "123", name: "HERB Facebook" },
+                  { id: "124", name: "Weitere Facebook-Seite" }
+                ],
+                instagramAccounts: [
+                  { id: "456", name: "@herb" },
+                  { id: "457", name: "@herb_design" }
+                ]
+              };
+        const gate = identityGate;
+        if (gate?.accountId === requestedAccount) {
+          gate.started();
+          await gate.promise;
+        }
       } else if (url.pathname.endsWith("/launch/copy")) {
         if (failCopy) return route.fulfill({ status: 503, json: { error: "Test-Text-Ausfall" } });
         const templateId = url.searchParams.get("templateId");
@@ -354,6 +382,15 @@ async function main() {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.getByRole("heading", { name: "Batch auf Meta erstellen" }).waitFor();
     await page.locator("#launch-account").waitFor();
+    await page.locator('#launch-pageId option[value="123"]:not([disabled])').waitFor({ state: "attached" });
+    assert.equal(await page.locator("#launch-pageId").evaluate((element) => element.tagName), "SELECT");
+    assert.equal(await page.locator("#launch-instagramId").evaluate((element) => element.tagName), "SELECT");
+    assert.equal(
+      await page.locator("#launch-pageId").inputValue(),
+      "123",
+      "Identity is preloaded before campaign selection"
+    );
+    assert.equal(await page.locator("#launch-instagramId").inputValue(), "456");
     assert(
       await page.locator("#launch-campaign").isEnabled(),
       "Account settings usable while sources are still pending"
@@ -596,11 +633,11 @@ async function main() {
     );
     await page.getByRole("checkbox", { name: "Formatpaare geprüft", exact: true }).check();
     await blockers.waitFor({ state: "hidden" });
-    await page.locator("#launch-pageId").fill("");
-    const pageReason = blockers.getByRole("link", { name: /Facebook-Seiten-ID/ });
+    await page.locator("#launch-pageId").selectOption("");
+    const pageReason = blockers.getByRole("link", { name: /Facebook-Seite/ });
     await pageReason.click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), "launch-pageId");
-    await page.locator("#launch-pageId").fill(copy.pageId);
+    await page.locator("#launch-pageId").selectOption(copy.pageId);
     await page.locator("#launch-landingUrl").fill("example.com");
     assert(await blockers.getByRole("link", { name: /vollständige Ziel-URL/ }).isVisible());
     await page.locator("#launch-landingUrl").fill(copy.landingUrl);
@@ -818,11 +855,19 @@ async function main() {
     copyGate = { templateId: "9789", promise: heldCopy, started: copyStarted };
     await page.locator("#launch-campaign").selectOption("789");
     await startedCopy;
+    await page.locator("#launch-pageId").selectOption("124");
+    await page.locator("#launch-instagramId").selectOption("457");
     await page.locator("#launch-text").fill("Manuelle Eingabe waehrend Textabruf");
     assert(await pausedButton.isDisabled(), "Pending import cannot launch stale copy");
     releaseCopy();
     await sourcePicker.waitFor();
     assert.equal(await page.locator("#launch-text").inputValue(), "Manuelle Eingabe waehrend Textabruf");
+    assert.equal(
+      await page.locator("#launch-pageId").inputValue(),
+      "124",
+      "Late template copy preserves manual Facebook selection"
+    );
+    assert.equal(await page.locator("#launch-instagramId").inputValue(), "457");
     let releaseStale, staleStarted;
     const heldStale = new Promise((resolve) => {
       releaseStale = resolve;
@@ -864,6 +909,81 @@ async function main() {
     await copyFailure.getByRole("button", { name: "Eigene Texte verwenden", exact: true }).click();
     assert(await pausedButton.isEnabled(), "Manual text fallback requires explicit choice after a failed import");
     assert.equal(creationRequests, 4);
+    failCopy = false;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.waitForLoadState("networkidle");
+    await page.locator("#launch-pageId").selectOption("124");
+    await page.locator("#launch-instagramId").selectOption("");
+    const refreshIdentities = page.getByRole("button", {
+      name: "Facebook- und Instagram-Auswahl aktualisieren",
+      exact: true
+    });
+    failIdentities = true;
+    await refreshIdentities.click();
+    const identityFailure = page.getByRole("alert").filter({ hasText: "Test-Identitaeten-Ausfall" });
+    await identityFailure.waitFor();
+    assert(await pausedButton.isDisabled());
+    assert(await page.locator("#launch-pageId").isDisabled());
+    assert(
+      await page
+        .locator("#launch-blockers")
+        .getByRole("link", { name: /Facebook- und Instagram-Auswahl konnte nicht/ })
+        .isVisible()
+    );
+    failIdentities = false;
+    await refreshIdentities.click();
+    await identityFailure.waitFor({ state: "hidden" });
+    await page.waitForLoadState("networkidle");
+    assert.equal(await page.locator("#launch-pageId").inputValue(), "124");
+    assert.equal(
+      await page.locator("#launch-instagramId").inputValue(),
+      "",
+      "Explicitly empty Instagram is retained on retry"
+    );
+    emptyIdentities = true;
+    await refreshIdentities.click();
+    await page.getByText(/Für dieses Werbekonto ist keine Facebook-Seite verfügbar/).waitFor();
+    assert(await pausedButton.isDisabled(), "Unavailable IDs cannot silently remain valid");
+    assert(await page.locator('#launch-pageId option[value="124"]').evaluate((option) => option.disabled));
+    emptyIdentities = false;
+    await refreshIdentities.click();
+    await page.getByText(/Für dieses Werbekonto ist keine Facebook-Seite verfügbar/).waitFor({ state: "hidden" });
+    await page.waitForLoadState("networkidle");
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.locator("#launch-identities").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(output, `identity-dropdowns-${width}.png`) });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    await pausedButton.click();
+    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    assert.equal(submitted.copy.pageId, "124");
+    assert.equal(submitted.copy.instagramId, "");
+    job = null;
+    await page.goto(url, { waitUntil: "networkidle" });
+    let releaseIdentity, identityStarted;
+    const heldIdentity = new Promise((resolve) => {
+      releaseIdentity = resolve;
+    });
+    const identityRequested = new Promise((resolve) => {
+      identityStarted = resolve;
+    });
+    identityGate = { accountId: "account-b", promise: heldIdentity, started: identityStarted };
+    await page.locator("#launch-account").selectOption("account-b");
+    await identityRequested;
+    assert(await page.locator("#launch-pageId").isDisabled(), "Old account identities are not usable while switching");
+    await page.locator("#launch-account").selectOption("account-a");
+    await page.locator('#launch-pageId option[value="123"]:not([disabled])').waitFor({ state: "attached" });
+    releaseIdentity();
+    identityGate = null;
+    await page.waitForLoadState("networkidle");
+    assert.equal(
+      await page.locator('#launch-pageId option[value="223"]').count(),
+      0,
+      "Late identity response from a previous account is discarded"
+    );
+    assert.equal(creationRequests, 5);
     const queueClient = "11111111-1111-4111-8111-111111111111";
     const queueJobs = ["running", "pending", "paused", "failed", "review", "completed", "cancelled"].map(
       (status, index) => ({
@@ -987,7 +1107,12 @@ async function main() {
   } catch (error) {
     const failedPage = browser?.contexts()[0]?.pages()[0];
     if (failedPage) {
-      console.error(await failedPage.locator("body").innerText().catch(() => "Page unavailable"));
+      console.error(
+        await failedPage
+          .locator("body")
+          .innerText()
+          .catch(() => "Page unavailable")
+      );
       await failedPage.screenshot({ path: path.join(output, "failure.png"), fullPage: true }).catch(() => {});
     }
     console.error(logs.join("").slice(-12000));

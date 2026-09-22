@@ -27,6 +27,18 @@ const ready = {
 };
 
 describe("batch launch readiness", () => {
+  it("explains identity loading, errors and unavailable selections", () => {
+    expect(getBatchLaunchBlockers({ ...ready, identitiesLoading: true })).toContain("identitiesLoading");
+    expect(getBatchLaunchBlockers({ ...ready, identitiesError: "No permission" })).toContain("identitiesError");
+    expect(getBatchLaunchBlockers({ ...ready, identities: { pages: [], instagramAccounts: [] } })).toContain("page");
+    expect(
+      getBatchLaunchBlockers({
+        ...ready,
+        copy: { ...ready.copy, instagramId: "999" },
+        identities: { pages: [{ id: ready.copy.pageId, name: "Page" }], instagramAccounts: [] }
+      })
+    ).toEqual(["instagram"]);
+  });
   it("allows a complete batch without requiring all five variants or a description", () => {
     expect(getBatchLaunchBlockers(ready)).toEqual([]);
   });

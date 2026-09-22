@@ -14,6 +14,16 @@
     "cancelNotice": "Weitere Schritte werden gestoppt. Ein bereits laufender Meta-Schritt kann noch abgeschlossen werden. Bereits erstellte Objekte werden nicht gelöscht und aktive Anzeigen nicht pausiert. Der Upload kann danach nicht fortgesetzt werden."
   },
   "batchLaunch": {
+    "identities": "Facebook und Instagram",
+    "identitiesLoading": "Facebook-Seiten und Instagram-Konten werden geladen",
+    "identitiesError": "Die verfügbaren Facebook-Seiten und Instagram-Konten konnten nicht geladen werden.",
+    "refreshIdentities": "Facebook- und Instagram-Auswahl aktualisieren",
+    "choosePage": "Facebook-Seite auswählen",
+    "noInstagram": "Kein separates Instagram-Konto",
+    "noPages": "Für dieses Werbekonto ist keine Facebook-Seite verfügbar. Bitte die Zuordnung und Zugriffsrechte in Meta prüfen.",
+    "noInstagramAccounts": "Für dieses Werbekonto ist kein Instagram-Konto verfügbar.",
+    "identityUnavailable": "Nicht verfügbar: {id}",
+    "identityPending": "Wird geprüft: {id}",
     "blockersTitle": "Vor dem Erstellen noch offen:",
     "blockers": {
       "meta": "Die Meta-Verbindung fehlt. Bitte die Kontoeinstellungen prüfen.",
@@ -30,7 +40,10 @@
       "countries": "Mindestens ein Land auswählen.",
       "primaryText": "Mindestens einen primären Text eingeben.",
       "headline": "Mindestens eine Headline eingeben.",
-      "page": "Eine gültige Facebook-Seiten-ID eingeben (nur Ziffern).",
+      "page": "Eine verfügbare Facebook-Seite für dieses Werbekonto auswählen.",
+      "instagram": "Ein verfügbares Instagram-Konto auswählen oder die Instagram-Auswahl entfernen.",
+      "identitiesLoading": "Die Facebook- und Instagram-Auswahl wird noch geladen.",
+      "identitiesError": "Die Facebook- und Instagram-Auswahl konnte nicht geladen werden. Bitte aktualisieren.",
       "landingUrl": "Eine vollständige Ziel-URL mit https:// oder http:// eingeben.",
       "budget": "Ein gültiges Tagesbudget größer als 0 in der Kontowährung eingeben."
     },
@@ -82,7 +95,7 @@
     "missingMeta": "Die Meta-Verbindung ist in dieser Umgebung nicht eingerichtet. Die Erstellung benötigt einen System-User-Token mit ads_management und Zugriff auf das Werbekonto und die Facebook-Seite.",
     "account": "Werbekonto", "adsetName": "Adset-Name", "campaign": "Kampagne", "templateAdset": "Referenz-Adset", "choose": "Bitte auswählen", "inherited": "Optimierung und Zielgruppe aus dem Referenz-Adset", "optimization": "Optimierung", "pixel": "Pixel", "event": "Conversion-Ereignis", "age": "Alter", "audience": "Zielgruppe", "audienceDetails": "Weitere Zielgruppen- und Platzierungseinstellungen wie im Referenz-Adset",
     "settings": "Budget und Zielgruppe", "preset": "Kontovorlage", "custom": "Individuelle Einstellungen", "dailyBudget": "Tagesbudget", "campaignBudget": "Das Budget wird von der ausgewählten Kampagne gesteuert (CBO).", "countries": "Länder", "searchCountry": "Land suchen", "noneSelected": "Keine Länder ausgewählt", "languages": "Sprachen", "searchLanguage": "Sprache auf Meta suchen", "allLanguages": "Alle Sprachen", "presetName": "Name der Kontovorlage", "savePreset": "Vorlage speichern", "saveAsNew": "Unter neuem Namen speichern", "deletePreset": "Vorlage löschen",
-    "copy": "Anzeigentexte und Ziel", "suggestion": "Text aus laufenden Anzeigen", "ownCopy": "Eigener Text", "copyMetrics": "Anzeigen mit diesem Text · letzte 30 Tage: {purchases} Käufe · {spend} Spend · ROAS {roas} · {ads} Anzeigen. Bei Textvarianten gelten die Kennzahlen für die gesamte Anzeige.", "primaryText": "Primärer Text", "headline": "Headline", "description": "Beschreibung", "landingUrl": "Ziel-URL", "page": "Facebook-Seiten-ID", "instagram": "Instagram-Konto-ID (optional)", "urlTags": "URL-Parameter (optional)", "cta": "Call-to-Action",
+    "copy": "Anzeigentexte und Ziel", "suggestion": "Text aus laufenden Anzeigen", "ownCopy": "Eigener Text", "copyMetrics": "Anzeigen mit diesem Text · letzte 30 Tage: {purchases} Käufe · {spend} Spend · ROAS {roas} · {ads} Anzeigen. Bei Textvarianten gelten die Kennzahlen für die gesamte Anzeige.", "primaryText": "Primärer Text", "headline": "Headline", "description": "Beschreibung", "landingUrl": "Ziel-URL", "page": "Facebook-Seite", "instagram": "Instagram-Konto (optional)", "urlTags": "URL-Parameter (optional)", "cta": "Call-to-Action",
     "ads": "Anzeigen ({count})", "resetMatching": "Zuordnung zurücksetzen", "adName": "Anzeigenname", "matched": "Formatpaar", "single": "Einzelmotiv", "exclude": "Aus Batch ausschließen", "unpair": "Formatpaar trennen", "feed": "Feed · 1:1 / 4:5", "story": "Stories / Reels · 9:16", "noVariant": "Keine Variante", "unused": "Nicht ausgewählte Medien ({count})", "ignored": "Nicht unterstützte oder nicht herunterladbare Dateien ({count})", "summary": "1 pausiertes Adset · {ads} pausierte Anzeigen · {files} Mediendateien", "createPaused": "Pausiert auf Meta erstellen",
     "progress": "{ads} / {total} Anzeigen · {files} / {fileTotal} Medien", "stopUpload": "Upload anhalten", "resumeUpload": "Upload fortsetzen", "openMeta": "In Meta öffnen", "anotherCampaign": "Weitere Kampagne", "reviewHint": "Der letzte Erstellungsschritt ist nicht eindeutig bestätigt. Bestehende Objekte bleiben pausiert. Bitte vor einer erneuten Erstellung in Meta prüfen.",
     "status": { "pending": "In Warteschlange", "running": "In Bearbeitung", "paused": "Angehalten", "cancelled": "Abgebrochen", "failed": "Unterbrochen", "review": "Prüfung erforderlich", "completed": "Pausiert erstellt" },

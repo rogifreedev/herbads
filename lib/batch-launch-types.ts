@@ -75,6 +75,12 @@ export type BatchTemplate = {
   raw: Record<string, unknown>;
 };
 
+export type BatchIdentity = { id: string; name: string; legacyId?: string };
+export type BatchLaunchIdentities = {
+  pages: BatchIdentity[];
+  instagramAccounts: BatchIdentity[];
+};
+
 export type BatchLaunchAccountContext = {
   folder: { id: string; name: string };
   accounts: { id: string; metaAccountId: string; name: string; currency: string }[];

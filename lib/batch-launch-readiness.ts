@@ -1,6 +1,6 @@
 import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
 import { budgetMinorUnits } from "@/lib/batch-launch-plan";
-import type { BatchLaunchCopy } from "@/lib/batch-launch-types";
+import type { BatchLaunchCopy, BatchLaunchIdentities } from "@/lib/batch-launch-types";
 
 export const batchLaunchBlockerTargets = {
   meta: "launch-account",
@@ -18,6 +18,9 @@ export const batchLaunchBlockerTargets = {
   primaryText: "launch-text",
   headline: "launch-headline",
   page: "launch-pageId",
+  instagram: "launch-instagramId",
+  identitiesLoading: "launch-identities",
+  identitiesError: "launch-identities",
   landingUrl: "launch-landingUrl",
   budget: "launch-budget"
 } as const;
@@ -39,12 +42,17 @@ type Readiness = {
   campaignBudget: boolean;
   dailyBudget: string;
   currency: string;
+  identities?: BatchLaunchIdentities;
+  identitiesLoading?: boolean;
+  identitiesError?: string;
 };
 
 // The displayed reasons and both submit buttons must use the same readiness checks.
 export function getBatchLaunchBlockers(value: Readiness) {
   const reasons: (keyof typeof batchLaunchBlockerTargets)[] = [];
   if (!value.metaConfigured) reasons.push("meta");
+  if (value.identitiesLoading) reasons.push("identitiesLoading");
+  else if (value.identitiesError) reasons.push("identitiesError");
   if (!value.mediaReady) reasons.push(value.mediaError ? "mediaError" : "mediaLoading");
   if (value.optionsLoading) reasons.push("optionsLoading");
   else if (value.optionsError) reasons.push("optionsError");
@@ -58,7 +66,17 @@ export function getBatchLaunchBlockers(value: Readiness) {
   const copy = normalizeBatchCopy(value.copy);
   if (!copy.primaryText) reasons.push("primaryText");
   if (!copy.headline) reasons.push("headline");
-  if (!/^\d+$/.test(copy.pageId)) reasons.push("page");
+  if (
+    !/^\d+$/.test(copy.pageId) ||
+    (value.identities && !value.identities.pages.some((item) => item.id === copy.pageId))
+  )
+    reasons.push("page");
+  if (
+    copy.instagramId &&
+    value.identities &&
+    !value.identities.instagramAccounts.some((item) => item.id === copy.instagramId)
+  )
+    reasons.push("instagram");
   try {
     const url = new URL(copy.landingUrl);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) reasons.push("landingUrl");
