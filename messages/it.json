@@ -14,6 +14,10 @@
     "cancelNotice": "I passaggi successivi saranno fermati. Un passaggio Meta già avviato potrebbe completarsi. Gli oggetti creati non vengono eliminati e le inserzioni attive non vengono sospese. Il caricamento non potrà essere ripreso."
   },
   "batchLaunch": {
+    "retryCancelled": "Correggi impostazioni e crea di nuovo",
+    "retryCancelledNotice": "Il vecchio caricamento resta annullato. Un nuovo tentativo crea un nuovo gruppo di inserzioni; gli oggetti Meta esistenti non vengono eliminati o attivati. Verifica la selezione Facebook/Instagram e l'abbinamento dei contenuti.",
+    "retryCancelledBlocked": "Sono già state create inserzioni oppure un passaggio Meta è ancora incerto. Verifica gli oggetti esistenti in Meta; un nuovo tentativo è bloccato per evitare duplicati.",
+    "openPreviousAdset": "Apri il gruppo precedente in Meta",
     "identities": "Facebook e Instagram",
     "identitiesLoading": "Caricamento delle pagine Facebook e degli account Instagram",
     "identitiesError": "Impossibile caricare le pagine Facebook e gli account Instagram disponibili.",

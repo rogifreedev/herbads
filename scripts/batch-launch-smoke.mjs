@@ -348,7 +348,7 @@ async function main() {
           job.controlStatus = action === "resume" ? "run" : action;
           job.status = action === "resume" ? "pending" : "paused";
           job.error = null;
-        } else if (job.status === "failed" || job.status === "paused") {
+        } else if (["failed", "paused", "cancelled", "review", "completed"].includes(job.status)) {
           // Read-only polling cannot implicitly resume a job.
         } else if (failOnce) {
           failOnce = false;
@@ -984,6 +984,86 @@ async function main() {
       "Late identity response from a previous account is discarded"
     );
     assert.equal(creationRequests, 5);
+    const cancelledJob = {
+      id: "cancelled-rouge",
+      accountId: "account-a",
+      metaAccountId: "act_111",
+      folderId: "folder",
+      campaignId: "789",
+      name: "Cancelled Rouge",
+      status: "cancelled",
+      controlStatus: "cancel",
+      activate: true,
+      state: {
+        adsetId: "100",
+        media: { feed: { imageHash: "old" } },
+        ads: { first: { creativeId: "200" } },
+        step: "ad"
+      },
+      error: "Wähle ein Instagram-Konto oder eine Facebook-Seite aus.",
+      adCount: 1,
+      fileCount: 2,
+      updatedAt: new Date().toISOString(),
+      retryDraft: {
+        campaignId: "789",
+        templateId: "9789",
+        settings: { dailyBudget: "83", countries: ["IT"], locales: [{ id: 5, name: "Deutsch" }] },
+        copy: { ...variantCopy, pageId: "124", instagramId: "" }
+      }
+    };
+    job = structuredClone(cancelledJob);
+    visualFixture = true;
+    await page.goto(url, { waitUntil: "networkidle" });
+    const restart = page.getByRole("button", { name: "Einstellungen korrigieren und neu erstellen", exact: true });
+    await restart.waitFor();
+    assert.equal(await page.getByText(/Direkte Aktivierung ist beauftragt und läuft/).count(), 0);
+    assert.equal(await page.locator("#launch-campaign").count(), 0);
+    assert.equal(creationRequests, 5, "Viewing a cancelled job cannot start another upload");
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: path.join(output, "cancelled-retry-action-390.png") });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await page.evaluate(() => {
+      const location = new URL(window.location.href);
+      location.searchParams.set("jobId", "cancelled-rouge");
+      window.history.replaceState(window.history.state, "", location);
+    });
+    await restart.click();
+    assert.equal(new URL(page.url()).searchParams.has("jobId"), false, "Old job deep link is cleared for retries");
+    await page.locator("#launch-campaign").waitFor();
+    assert.equal(await page.locator("#launch-campaign").inputValue(), "789");
+    assert.equal(await page.locator("#launch-budget").inputValue(), "83");
+    assert(await page.getByRole("checkbox", { name: "Italien", exact: true }).isChecked());
+    assert.equal(await page.locator("#launch-text-5").inputValue(), variantCopy.primaryTexts[4]);
+    assert.equal(await page.locator("#launch-headline-5").inputValue(), variantCopy.headlines[4]);
+    assert.equal(await page.locator("#launch-description-5").inputValue(), variantCopy.descriptions[4]);
+    assert.equal(await page.locator("#launch-pageId").inputValue(), "124");
+    assert(await page.getByRole("link", { name: "Vorheriges Adset in Meta öffnen" }).isVisible());
+    assert(await pausedButton.isDisabled(), "Fresh media pairing must be confirmed again");
+    await page.locator("#launch-instagramId").selectOption("457");
+    await page.getByRole("checkbox", { name: "Formatpaare geprüft", exact: true }).check();
+    assert(await pausedButton.isEnabled(), "Corrected cancelled batch is not stuck on its old job");
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: path.join(output, `cancelled-retry-${width}.png`) });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    await pausedButton.click();
+    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    assert.equal(submitted.activate, false, "Old activation choice is never silently reused");
+    assert.equal(submitted.campaignId, cancelledJob.campaignId);
+    assert.equal(submitted.copy.instagramId, "457");
+    assert.equal(submitted.copy.primaryTexts[4], variantCopy.primaryTexts[4]);
+    assert.equal(job.id, "job-1", "A separate job is created; cancelled history is not resumed");
+    assert.equal(creationRequests, 6);
+    job = { ...cancelledJob, retryDraft: undefined, state: { ...cancelledJob.state, inFlight: "ad:first" } };
+    await page.goto(url, { waitUntil: "networkidle" });
+    assert.equal(await restart.count(), 0, "Uncertain cancelled attempt cannot be restarted");
+    await page.getByText(/ein neuer Versuch ist zum Schutz vor doppelten Anzeigen gesperrt/).waitFor();
+    assert.equal(creationRequests, 6);
+    job = null;
+    visualFixture = false;
     const queueClient = "11111111-1111-4111-8111-111111111111";
     const queueJobs = ["running", "pending", "paused", "failed", "review", "completed", "cancelled"].map(
       (status, index) => ({
@@ -1101,7 +1181,7 @@ async function main() {
     assert.equal(queueActionCount, 3, "Polling is read-only");
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS 5x3 copy variants, source ad selection, edits and submission, pending copy, stale template cancellation, copy failure/retry/manual fallback, language inheritance and names, countries, progressive loading, matching, presets, favorites and activation confirmation"
+      "PASS cancelled retry, preserved settings, corrected identities, duplicate/activation protection, 5x3 copy variants, source selection, stale responses, recovery, languages, countries, progressive loading, matching, presets, favorites and activation confirmation"
     );
     console.log("Screenshots:", output);
   } catch (error) {

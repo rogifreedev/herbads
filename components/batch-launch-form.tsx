@@ -207,6 +207,7 @@ export function BatchLaunchForm({
   const [languageOptions, setLanguageOptions] = useState<typeof locales>([]);
   const [languageError, setLanguageError] = useState("");
   const [job, setJob] = useState<BatchLaunchJob | null>(null);
+  const [retrySource, setRetrySource] = useState<BatchLaunchJob | null>(null);
   const [jobPollError, setJobPollError] = useState(false);
   const jobId = job?.id;
 
@@ -224,6 +225,7 @@ export function BatchLaunchForm({
       .then((data) => {
         if (controller.signal.aborted) return;
         setContext(data);
+        setRetrySource(null);
         setName(batchAdsetName(data.folder.name));
         setCampaignId("");
         setTemplateId("");
@@ -665,6 +667,34 @@ export function BatchLaunchForm({
     }
   }
 
+  function restartCancelledJob() {
+    if (!job?.retryDraft || !context || saving) return;
+    const draft = job.retryDraft;
+    // A history deep link must not pin a later reload to the cancelled attempt.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("jobId");
+    window.history.replaceState(window.history.state, "", url);
+    setRetrySource(job);
+    setJob(null);
+    setJobPollError(false);
+    setError(null);
+    setCampaignId(draft.campaignId);
+    setTemplateId(draft.templateId);
+    setDailyBudget(draft.settings.dailyBudget);
+    setCountries(draft.settings.countries);
+    setLocales(draft.settings.locales);
+    setCopy(copyFields(draft.copy));
+    copyEdits.current++;
+    setCopyRequest(null);
+    setTemplateCopy(null);
+    setCopySourceId("");
+    setSuggestionId("");
+    setIdentitySelection(null);
+    setActivate(false);
+    setConfirmActivation(false);
+    setReviewedMatching("");
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
@@ -788,12 +818,27 @@ export function BatchLaunchForm({
                   <AlertDescription>{t("activationUncertain")}</AlertDescription>
                 </Alert>
               ) : null}
-              {job.activate && !job.state.activated && !job.state.activationStarted ? (
+              {jobRunning && job.activate && !job.state.activated && !job.state.activationStarted ? (
                 <p className="text-sm text-muted-foreground">{t("activationStopNotice")}</p>
               ) : null}
               {job.state.activated ? <p className="text-sm text-muted-foreground">{t("deliveryNotice")}</p> : null}
               {job.status === "review" ? <p className="text-sm text-muted-foreground">{t("reviewHint")}</p> : null}
+              {job.status === "cancelled" ? (
+                <p className="text-sm text-muted-foreground">
+                  {t(job.retryDraft ? "retryCancelledNotice" : "retryCancelledBlocked")}
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
+                {job.retryDraft ? (
+                  <Button
+                    className="h-auto min-h-10 max-w-full whitespace-normal"
+                    disabled={saving}
+                    onClick={restartCancelledJob}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
+                    {t("retryCancelled")}
+                  </Button>
+                ) : null}
                 {!["completed", "review", "cancelled"].includes(job.status) ? (
                   <Button
                     disabled={!context.metaConfigured || saving}
@@ -849,6 +894,23 @@ export function BatchLaunchForm({
               disabled={locked}
               className="min-w-0 space-y-6 disabled:opacity-60"
             >
+              {retrySource ? (
+                <Alert variant="warning">
+                  <AlertDescription>
+                    {t("retryCancelledNotice")}
+                    {retrySource.state.adsetId ? (
+                      <a
+                        className="ml-2 underline"
+                        href={`https://adsmanager.facebook.com/adsmanager/manage/adsets?act=${retrySource.metaAccountId.replace(/^act_/, "")}&selected_adset_ids=${retrySource.state.adsetId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("openPreviousAdset")}
+                      </a>
+                    ) : null}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
               {optionsLoading ? (
                 <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />

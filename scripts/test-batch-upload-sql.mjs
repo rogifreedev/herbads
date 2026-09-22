@@ -6,12 +6,15 @@ import { spawnSync } from "node:child_process";
 const directory = await mkdtemp(path.join(tmpdir(), "herbads-queue-sql-"));
 const file = path.join(directory, "transaction.sql");
 try {
+  const retry = process.argv.includes("--retry");
   const migration = process.argv.includes("--with-schema")
-    ? (await readFile("supabase/migrations/20260918135918_add_batch_upload_queue.sql", "utf8")) +
-      "\n" +
-      (await readFile("supabase/migrations/20260918141559_reconcile_interrupted_batch_upload_controls.sql", "utf8"))
+    ? retry
+      ? await readFile("supabase/migrations/20260922155443_allow_safe_cancelled_batch_retry.sql", "utf8")
+      : (await readFile("supabase/migrations/20260918135918_add_batch_upload_queue.sql", "utf8")) +
+        "\n" +
+        (await readFile("supabase/migrations/20260918141559_reconcile_interrupted_batch_upload_controls.sql", "utf8"))
     : "";
-  const tests = await readFile("tests/batch-upload-queue.sql", "utf8");
+  const tests = await readFile(retry ? "tests/batch-launch-retry.sql" : "tests/batch-upload-queue.sql", "utf8");
   await writeFile(file, `begin;\n${migration}\n${tests}\nrollback;\n`);
   const command = `npx supabase db query --linked --file "${file}"`;
   const result = spawnSync(command, { shell: true, stdio: "inherit", windowsHide: true });

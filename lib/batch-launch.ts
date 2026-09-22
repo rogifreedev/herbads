@@ -1,5 +1,6 @@
 import "server-only";
 import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
+import { canRestartBatch } from "@/lib/batch-launch-retry";
 import { validateBatchIdentity } from "@/lib/batch-launch-identities";
 import { getLiveBatchIdentities } from "@/lib/meta/batch-identities";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -60,6 +61,16 @@ export type BatchLaunchJobRow = {
 
 export function mapLaunchJob(row: BatchLaunchJobRow): BatchLaunchJob {
   return {
+    ...(canRestartBatch(row, Boolean(row.lease_token))
+      ? {
+          retryDraft: {
+            campaignId: row.payload.input.campaignId,
+            templateId: row.payload.input.templateId,
+            settings: row.payload.input.settings,
+            copy: normalizeBatchCopy(row.payload.input.copy)
+          }
+        }
+      : {}),
     queueEnabled: Boolean(row.queue_enabled),
     controlStatus: row.control_status ?? "run",
     activate: Boolean(row.payload.input.activate),
@@ -416,9 +427,14 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
       .eq("ad_account_id", account.id)
       .eq("drive_folder_id", input.folderId)
       .eq("meta_campaign_id", input.campaignId)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1000);
     if (existing.error) throw new Error(existing.error.message);
-    return mapLaunchJob(existing.data as BatchLaunchJobRow);
+    const blocking = (existing.data as BatchLaunchJobRow[]).find(
+      (row) => !canRestartBatch(row, Boolean(row.lease_token))
+    );
+    if (!blocking) throw new Error("Der Upload-Status hat sich geaendert. Bitte erneut versuchen.");
+    return mapLaunchJob(blocking);
   }
   if (error) throw new Error(error.message);
   return mapLaunchJob(data as BatchLaunchJobRow);

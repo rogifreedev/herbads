@@ -141,6 +141,7 @@ export type BatchLaunchState = {
 };
 
 export type BatchLaunchJob = {
+  retryDraft?: Pick<BatchLaunchInput, "campaignId" | "templateId" | "settings" | "copy">;
   queueEnabled?: boolean;
   controlStatus?: "run" | "pause" | "cancel";
   activate: boolean;

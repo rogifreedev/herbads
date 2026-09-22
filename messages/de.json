@@ -14,6 +14,10 @@
     "cancelNotice": "Weitere Schritte werden gestoppt. Ein bereits laufender Meta-Schritt kann noch abgeschlossen werden. Bereits erstellte Objekte werden nicht gelöscht und aktive Anzeigen nicht pausiert. Der Upload kann danach nicht fortgesetzt werden."
   },
   "batchLaunch": {
+    "retryCancelled": "Einstellungen korrigieren und neu erstellen",
+    "retryCancelledNotice": "Der alte Upload bleibt abgebrochen. Ein neuer Versuch erstellt ein neues Adset; vorhandene Meta-Objekte werden nicht gelöscht oder aktiviert. Bitte Facebook-/Instagram-Auswahl und Medien-Zuordnung prüfen.",
+    "retryCancelledBlocked": "Es wurden bereits Anzeigen erstellt oder ein Meta-Schritt ist noch unklar. Bitte die vorhandenen Objekte in Meta prüfen; ein neuer Versuch ist zum Schutz vor doppelten Anzeigen gesperrt.",
+    "openPreviousAdset": "Vorheriges Adset in Meta öffnen",
     "identities": "Facebook und Instagram",
     "identitiesLoading": "Facebook-Seiten und Instagram-Konten werden geladen",
     "identitiesError": "Die verfügbaren Facebook-Seiten und Instagram-Konten konnten nicht geladen werden.",
