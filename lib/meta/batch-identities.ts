@@ -16,7 +16,9 @@ export function getLiveBatchIdentities(metaAccountId: string, fresh = false): Pr
   if (cache.size >= 20) cache.delete(cache.keys().next().value!);
   cache.set(key, entry);
   void entry.promise.then(
-    () => {
+    (result) => {
+      // A partial response must be retried instead of becoming a cached empty picker.
+      if (result.warnings?.length && cache.get(key) === entry) cache.delete(key);
       entry.expires = Date.now() + 60_000;
     },
     () => {
@@ -26,26 +28,81 @@ export function getLiveBatchIdentities(metaAccountId: string, fresh = false): Pr
   return entry.promise;
 }
 
+type InstagramAccount = { id: string; username?: string; legacy_instagram_user_id?: string };
+type PromotablePage = {
+  id: string;
+  name?: string;
+  instagram_business_account?: InstagramAccount;
+  connected_instagram_account?: InstagramAccount;
+};
+const instagramFields = "id,username,legacy_instagram_user_id";
+
+async function loadPages(metaAccountId: string) {
+  try {
+    const pages = await metaLaunchList<PromotablePage>(
+      `${metaAccountId}/promote_pages?fields=id,name,instagram_business_account{${instagramFields}},connected_instagram_account{${instagramFields}}&limit=100`
+    );
+    return { pages, instagramAvailable: true };
+  } catch {
+    // Page linkage may require extra permissions. Keep the base page picker usable.
+    const pages = await metaLaunchList<PromotablePage>(`${metaAccountId}/promote_pages?fields=id,name&limit=100`);
+    return { pages, instagramAvailable: false };
+  }
+}
+
+function mergeInstagramAccounts(accounts: InstagramAccount[]) {
+  const merged = new Map<string, BatchIdentity>();
+  for (const account of accounts) {
+    const id = String(account.id ?? "");
+    if (!/^\d+$/.test(id)) continue;
+    const previous = merged.get(id);
+    const username = account.username?.trim().replace(/^@/, "");
+    const legacyId = /^\d+$/.test(account.legacy_instagram_user_id ?? "")
+      ? account.legacy_instagram_user_id
+      : previous?.legacyId;
+    merged.set(id, {
+      id,
+      name: username ? `@${username}` : (previous?.name ?? id),
+      ...(legacyId ? { legacyId } : {})
+    });
+  }
+  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
 async function loadIdentities(metaAccountId: string): Promise<BatchLaunchIdentities> {
   // Account edges, never business-wide or /me lists, keep the identity picker account-scoped.
-  const [pages, instagramAccounts] = await Promise.all([
-    metaLaunchList<{ id: string; name?: string }>(`${metaAccountId}/promote_pages?fields=id,name&limit=100`),
-    metaLaunchList<{ id: string; username?: string; legacy_instagram_user_id?: string }>(
-      `${metaAccountId}/instagram_accounts?fields=id,username,legacy_instagram_user_id&limit=100`
+  const [{ pages, instagramAvailable }, [direct, connected]] = await Promise.all([
+    loadPages(metaAccountId),
+    Promise.allSettled([
+      metaLaunchList<InstagramAccount>(`${metaAccountId}/instagram_accounts?fields=${instagramFields}&limit=100`),
+      metaLaunchList<InstagramAccount>(
+        `${metaAccountId}/connected_instagram_accounts?fields=${instagramFields}&limit=100`
+      )
+    ])
+  ]);
+  const warnings: NonNullable<BatchLaunchIdentities["warnings"]> = [];
+  if (!instagramAvailable) warnings.push("pageInstagramUnavailable");
+  if (direct.status === "rejected") warnings.push("directInstagramUnavailable");
+  if (connected.status === "rejected") warnings.push("connectedInstagramUnavailable");
+  const instagramAccounts = mergeInstagramAccounts([
+    ...(direct.status === "fulfilled" ? direct.value : []),
+    ...(connected.status === "fulfilled" ? connected.value : []),
+    ...pages.flatMap((page) =>
+      [page.instagram_business_account, page.connected_instagram_account].filter(
+        (account): account is InstagramAccount => Boolean(account)
+      )
     )
   ]);
-  const unique = (items: BatchIdentity[]) =>
-    [...new Map(items.filter((item) => /^\d+$/.test(item.id)).map((item) => [item.id, item])).values()].sort(
-      (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
-    );
+  if (!instagramAccounts.length && direct.status === "rejected" && connected.status === "rejected") throw direct.reason;
   return {
-    pages: unique(pages.map((page) => ({ id: String(page.id), name: page.name || String(page.id) }))),
-    instagramAccounts: unique(
-      instagramAccounts.map((account) => ({
-        id: String(account.id),
-        name: account.username ? `@${account.username}` : String(account.id),
-        ...(account.legacy_instagram_user_id ? { legacyId: String(account.legacy_instagram_user_id) } : {})
-      }))
-    )
+    pages: [
+      ...new Map(
+        pages
+          .filter((page) => /^\d+$/.test(String(page.id)))
+          .map((page) => [String(page.id), { id: String(page.id), name: page.name || String(page.id) }])
+      ).values()
+    ].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+    instagramAccounts,
+    ...(warnings.length ? { warnings } : {})
   };
 }

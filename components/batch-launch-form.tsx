@@ -1240,6 +1240,15 @@ export function BatchLaunchForm({
                     </AlertDescription>
                   </Alert>
                 ) : null}
+                {identities?.warnings?.length ? (
+                  <Alert variant="warning">
+                    <AlertDescription className="space-y-1">
+                      {identities.warnings.map((warning) => (
+                        <p key={warning}>{t(`identityWarnings.${warning}`)}</p>
+                      ))}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
                 <div className="grid min-w-0 gap-4 md:grid-cols-2">
                   <Field label={t("page")} id="launch-pageId">
                     <select

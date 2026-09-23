@@ -191,6 +191,7 @@ async function main() {
     let failCopy = false;
     let copyGate = null;
     let failIdentities = false;
+    let partialIdentities = false;
     let emptyIdentities = false;
     let identityGate = null;
     let mediaRequests = 0;
@@ -257,9 +258,11 @@ async function main() {
                 ],
                 instagramAccounts: [
                   { id: "456", name: "@herb" },
-                  { id: "457", name: "@herb_design" }
+                  { id: "457", name: "@herb_design" },
+                  { id: "17841402245652920", name: "@kohl_test" }
                 ]
               };
+        if (partialIdentities) result.warnings = ["connectedInstagramUnavailable"];
         const gate = identityGate;
         if (gate?.accountId === requestedAccount) {
           gate.started();
@@ -1064,6 +1067,36 @@ async function main() {
     assert.equal(creationRequests, 6);
     job = null;
     visualFixture = false;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.waitForLoadState("networkidle");
+    await page.locator("#launch-instagramId").selectOption("17841402245652920");
+    assert.equal(
+      await page.locator("#launch-instagramId option:checked").textContent(),
+      "@kohl_test (17841402245652920)"
+    );
+    partialIdentities = true;
+    await refreshIdentities.click();
+    const partialIdentityWarning = page
+      .getByRole("alert")
+      .filter({ hasText: "Verbundene Instagram-Konten konnten nicht geladen werden" });
+    await partialIdentityWarning.waitFor();
+    assert.equal(await page.locator("#launch-instagramId").inputValue(), "17841402245652920");
+    assert(await pausedButton.isEnabled(), "Verified page-linked identities remain usable after a partial failure");
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.locator("#launch-identities").evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.screenshot({ path: path.join(output, `connected-instagram-${width}.png`) });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    partialIdentities = false;
+    await refreshIdentities.click();
+    await partialIdentityWarning.waitFor({ state: "hidden" });
+    await pausedButton.click();
+    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    assert.equal(submitted.copy.instagramId, "17841402245652920");
+    assert.equal(creationRequests, 7);
+    job = null;
     const queueClient = "11111111-1111-4111-8111-111111111111";
     const queueJobs = ["running", "pending", "paused", "failed", "review", "completed", "cancelled"].map(
       (status, index) => ({

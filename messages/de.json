@@ -21,6 +21,11 @@
     "identities": "Facebook und Instagram",
     "identitiesLoading": "Facebook-Seiten und Instagram-Konten werden geladen",
     "identitiesError": "Die verfügbaren Facebook-Seiten und Instagram-Konten konnten nicht geladen werden.",
+    "identityWarnings": {
+      "directInstagramUnavailable": "Direkt zugeordnete Instagram-Konten konnten nicht geladen werden. Die Auswahl kann unvollständig sein. Bitte aktualisieren.",
+      "connectedInstagramUnavailable": "Verbundene Instagram-Konten konnten nicht geladen werden. Die Auswahl kann unvollständig sein. Bitte aktualisieren.",
+      "pageInstagramUnavailable": "Instagram-Verknüpfungen der Facebook-Seiten konnten nicht geladen werden. Die Auswahl kann unvollständig sein. Bitte aktualisieren."
+    },
     "refreshIdentities": "Facebook- und Instagram-Auswahl aktualisieren",
     "choosePage": "Facebook-Seite auswählen",
     "noInstagram": "Kein separates Instagram-Konto",

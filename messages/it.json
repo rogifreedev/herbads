@@ -21,6 +21,11 @@
     "identities": "Facebook e Instagram",
     "identitiesLoading": "Caricamento delle pagine Facebook e degli account Instagram",
     "identitiesError": "Impossibile caricare le pagine Facebook e gli account Instagram disponibili.",
+    "identityWarnings": {
+      "directInstagramUnavailable": "Impossibile caricare gli account Instagram assegnati direttamente. La selezione potrebbe essere incompleta. Aggiorna l'elenco.",
+      "connectedInstagramUnavailable": "Impossibile caricare gli account Instagram collegati. La selezione potrebbe essere incompleta. Aggiorna l'elenco.",
+      "pageInstagramUnavailable": "Impossibile caricare i collegamenti Instagram delle pagine Facebook. La selezione potrebbe essere incompleta. Aggiorna l'elenco."
+    },
     "refreshIdentities": "Aggiorna la selezione Facebook e Instagram",
     "choosePage": "Seleziona una pagina Facebook",
     "noInstagram": "Nessun account Instagram separato",

@@ -79,6 +79,7 @@ export type BatchIdentity = { id: string; name: string; legacyId?: string };
 export type BatchLaunchIdentities = {
   pages: BatchIdentity[];
   instagramAccounts: BatchIdentity[];
+  warnings?: ("directInstagramUnavailable" | "connectedInstagramUnavailable" | "pageInstagramUnavailable")[];
 };
 
 export type BatchLaunchAccountContext = {
