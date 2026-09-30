@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getBatchLaunchJob, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { downloadBatchMedia } from "@/lib/batch-launch-drive";
+import { prepareBatchImage } from "@/lib/batch-image-upload";
 import { buildCreativePayload } from "@/lib/batch-launch-plan";
 import { MetaLaunchError, metaLaunchRequest } from "@/lib/meta/batch-launch";
 import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
@@ -71,10 +72,10 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
         state.step = "upload";
         const media = (state.media[nextFile.id] ??= {});
         if (nextFile.kind === "image") {
-          const bytes = await downloadBatchMedia(nextFile);
+          const image = await prepareBatchImage(nextFile);
           const result = await metaLaunchRequest<{ images?: Record<string, { hash?: string }> }>(
             `${metaAccountId}/adimages`,
-            { bytes: bytes.toString("base64"), name: nextFile.name }
+            { bytes: image.bytes.toString("base64"), name: image.name }
           );
           const hash = Object.values(result.images ?? {})[0]?.hash;
           if (!hash) throw new Error("Meta hat keinen Bild-Hash geliefert.");

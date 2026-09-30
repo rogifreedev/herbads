@@ -8,11 +8,13 @@ const mocks = vi.hoisted(() => ({
   getJob: vi.fn(),
   request: vi.fn(),
   download: vi.fn(),
+  prepareImage: vi.fn(),
   database: vi.fn(),
   revalidate: vi.fn()
 }));
 vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient: mocks.database }));
 vi.mock("@/lib/batch-launch-drive", () => ({ downloadBatchMedia: mocks.download }));
+vi.mock("@/lib/batch-image-upload", () => ({ prepareBatchImage: mocks.prepareImage }));
 vi.mock("@/lib/batch-launch", async (original) => ({
   ...(await original<typeof import("@/lib/batch-launch")>()),
   getBatchLaunchJob: mocks.getJob
@@ -144,6 +146,7 @@ beforeEach(() => {
     }
   }));
   mocks.download.mockResolvedValue(Buffer.from("file"));
+  mocks.prepareImage.mockResolvedValue({ bytes: Buffer.from("optimized image"), name: "Motif_1_1x1.jpg" });
   mocks.request.mockImplementation(async (path: string, values?: Record<string, unknown>) =>
     path.includes("?fields=status,daily_budget")
       ? { status: "ACTIVE" }
@@ -235,10 +238,23 @@ describe("resumable paused batch worker", () => {
   it("does not activate any object when media upload fails", async () => {
     row.payload.input.activate = true;
     await processBatchLaunch("client", "job");
-    mocks.download.mockRejectedValueOnce(new Error("Drive unavailable"));
+    mocks.prepareImage.mockRejectedValueOnce(new Error("Image preparation failed"));
     await processBatchLaunch("client", "job");
     expect(row.status).toBe("failed");
+    expect(row.error).toBe("Image preparation failed");
+    expect(mocks.request.mock.calls.some(([path]) => path.endsWith("/adimages"))).toBe(false);
     expect(mocks.request.mock.calls.some(([, values]) => values?.status === "ACTIVE")).toBe(false);
+  });
+  it("uploads the prepared image with its actual format and persists its hash", async () => {
+    row.state.adsetId = "100";
+    await processBatchLaunch("client", "job");
+    expect(mocks.prepareImage).toHaveBeenCalledWith(feed);
+    expect(mocks.download).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledWith("act_111/adimages", {
+      bytes: Buffer.from("optimized image").toString("base64"),
+      name: "Motif_1_1x1.jpg"
+    });
+    expect(row.state.media.feed.imageHash).toBe("hash");
   });
   it("stops if the campaign is paused before the final activation", async () => {
     row.payload.input.activate = true;

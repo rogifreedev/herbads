@@ -9,6 +9,9 @@ vi.mock("@/lib/batch-launch", async (original) => ({
   getBatchLaunchJob: mocks.getJob
 }));
 vi.mock("@/lib/batch-launch-drive", () => ({ downloadBatchMedia: mocks.download }));
+vi.mock("@/lib/batch-image-upload", () => ({
+  prepareBatchImage: async (file: { name: string }) => ({ bytes: await mocks.download(file), name: file.name })
+}));
 vi.mock("@/lib/meta/batch-launch", async (original) => ({
   ...(await original<typeof import("@/lib/meta/batch-launch")>()),
   metaLaunchRequest: mocks.meta

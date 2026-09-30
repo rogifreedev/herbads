@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { downloadBatchMedia, listBatchMedia } from "@/lib/batch-launch-drive";
+import { mkdtemp, readFile, rmdir, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { downloadBatchImage, downloadBatchMedia, listBatchMedia } from "@/lib/batch-launch-drive";
+import { MAX_SOURCE_IMAGE_BYTES, MAX_TRANSFER_BYTES, MAX_VIDEO_BYTES } from "@/lib/batch-media-limits";
 import { MetaLaunchError, metaLaunchRequest } from "@/lib/meta/batch-launch";
 import { feed } from "./batch-launch-fixtures";
 
@@ -67,6 +71,137 @@ describe("bounded Drive transfers", () => {
     const result = await listBatchMedia("root");
     expect(result.files[0]).toMatchObject({ id: "image", path: "feed/ad.png", placement: "feed" });
     expect(result.ignoredFiles).toEqual(["notes.pdf"]);
+  });
+  it.each([40_000_000, MAX_SOURCE_IMAGE_BYTES])("accepts a %i-byte source image", async (size) => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ files: [{ id: "image", name: "v3_9/16", mimeType: "image/png", size: String(size) }] })
+        )
+    );
+    expect((await listBatchMedia("root")).files[0].size).toBe(size);
+  });
+  it("reports the image size limit separately from missing metadata", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({
+            files: [{ id: "image", name: "v3_9/16", mimeType: "image/png", size: String(MAX_SOURCE_IMAGE_BYTES + 1) }]
+          })
+        )
+    );
+    await expect(listBatchMedia("root")).rejects.toThrow(/Bild zu gross: v3_9\/16.*200 MB pro Bild/);
+  });
+  it("retains the 4 GiB video limit", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    for (const size of [MAX_VIDEO_BYTES, MAX_VIDEO_BYTES + 1]) {
+      fetch.mockResolvedValueOnce(
+        Response.json({ files: [{ id: "video", name: "ad.mp4", mimeType: "video/mp4", size: String(size) }] })
+      );
+      if (size === MAX_VIDEO_BYTES) expect((await listBatchMedia("root")).files[0].size).toBe(size);
+      else await expect(listBatchMedia("root")).rejects.toThrow(/4 GiB pro Video/);
+    }
+  });
+  it.each([undefined, "", "0", "NaN"])("resolves missing/invalid Drive size %s from a one-byte range", async (size) => {
+    const cancel = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ files: [{ id: "image", name: "ad.png", mimeType: "image/png", size }] }))
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream({ cancel }), {
+          status: 206,
+          headers: { "Content-Range": "bytes 0-0/40000000" }
+        })
+      );
+    vi.stubGlobal("fetch", fetch);
+    expect((await listBatchMedia("root")).files[0].size).toBe(40_000_000);
+    expect(fetch.mock.calls[1][1].headers.Range).toBe("bytes=0-0");
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+  it("uses Content-Length when Drive ignores the size probe, without reading the full body", async () => {
+    const cancel = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ files: [{ id: "image", name: "ad.png", mimeType: "image/png" }] }))
+      .mockResolvedValueOnce(
+        new Response(new ReadableStream({ cancel }), {
+          status: 200,
+          headers: { "Content-Length": "40000000" }
+        })
+      );
+    vi.stubGlobal("fetch", fetch);
+    expect((await listBatchMedia("root")).files[0].size).toBe(40_000_000);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+  it.each<ResponseInit>([
+    { status: 206, headers: { "Content-Range": "bytes 0-0/*" } },
+    { status: 200, headers: { "Content-Length": "0" } },
+    { status: 200, headers: { "Content-Length": "100", "Content-Encoding": "gzip" } },
+    { status: 403, headers: { "Content-Length": "100" } }
+  ])("reports an unusable size probe instead of a misleading size-limit error: %j", async (init) => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ files: [{ id: "image", name: "ad.png", mimeType: "image/png" }] }))
+        .mockResolvedValueOnce(new Response("", init))
+    );
+    await expect(listBatchMedia("root")).rejects.toThrow(/keine gueltige Dateigroesse: ad.png/);
+  });
+  it("streams large images to disk in order while retaining the buffered transfer cap", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "herbads-transfer-test-"));
+    const destination = join(directory, "image");
+    const first = Buffer.alloc(17 * 1024 * 1024, 1);
+    const second = Buffer.alloc(17 * 1024 * 1024, 2);
+    const file = { ...feed, size: first.length + second.length };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(first);
+            controller.enqueue(second);
+            controller.close();
+          }
+        }),
+        { status: 206, headers: { "Content-Range": `bytes 0-${file.size - 1}/${file.size}` } }
+      )
+    );
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await expect(downloadBatchMedia(file)).rejects.toThrow(/Upload-Abschnitt/);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(file.size).toBeGreaterThan(MAX_TRANSFER_BYTES);
+      await downloadBatchImage(file, destination);
+      const bytes = await readFile(destination);
+      expect(bytes.length).toBe(file.size);
+      expect(bytes.subarray(0, first.length).equals(first)).toBe(true);
+      expect(bytes.subarray(first.length).equals(second)).toBe(true);
+    } finally {
+      await unlink(destination);
+      await rmdir(directory);
+    }
+  });
+  it.each([
+    { body: "a", size: 4, error: /unvollstaendig/ },
+    { body: "abcde", size: 4, error: /grossen Dateiabschnitt/ },
+    { body: "", size: MAX_SOURCE_IMAGE_BYTES + 1, error: /Upload-Abschnitt/ }
+  ])("enforces disk download bounds: %j", async ({ body, size, error }) => {
+    const directory = await mkdtemp(join(tmpdir(), "herbads-transfer-test-"));
+    const destination = join(directory, "image");
+    const fetch = vi.fn().mockResolvedValue(new Response(body));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await expect(downloadBatchImage({ ...feed, size }, destination)).rejects.toThrow(error);
+      if (size > MAX_SOURCE_IMAGE_BYTES) expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      await unlink(destination);
+      await rmdir(directory);
+    }
   });
 });
 

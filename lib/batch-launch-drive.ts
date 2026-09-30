@@ -1,6 +1,8 @@
 import "server-only";
+import { open } from "node:fs/promises";
 import { getRequiredEnv } from "@/lib/env";
 import { MAX_BATCH_FILES, mediaPlacement } from "@/lib/batch-launch-plan";
+import { MAX_SOURCE_IMAGE_BYTES, MAX_TRANSFER_BYTES, MAX_VIDEO_BYTES } from "@/lib/batch-media-limits";
 import type { BatchMediaFile } from "@/lib/batch-launch-types";
 
 type DriveFile = {
@@ -20,6 +22,31 @@ function driveUrl(fileId?: string) {
   url.searchParams.set("key", getRequiredEnv("GOOGLE_DRIVE_API_KEY"));
   url.searchParams.set("supportsAllDrives", "true");
   return url;
+}
+
+async function missingFileSize(file: DriveFile, path: string) {
+  const url = driveUrl(file.id);
+  url.searchParams.set("alt", "media");
+  const response = await fetch(url, {
+    headers: { Range: "bytes=0-0" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000)
+  });
+  try {
+    const range = /^bytes 0-0\/(\d+)$/.exec(response.headers.get("Content-Range") ?? "");
+    const size =
+      response.status === 206 && range
+        ? Number(range[1])
+        : response.status === 200 && !response.headers.get("Content-Encoding")
+          ? Number(response.headers.get("Content-Length"))
+          : NaN;
+    if (!Number.isSafeInteger(size) || size <= 0)
+      throw new Error(`Drive liefert keine gueltige Dateigroesse: ${path}. Bitte die Datei in Drive pruefen.`);
+    return size;
+  } finally {
+    // Even if Range is ignored, never buffer the file merely to discover its size.
+    await response.body?.cancel();
+  }
 }
 
 export async function listBatchMedia(rootId: string) {
@@ -67,9 +94,12 @@ export async function listBatchMedia(rootId: string) {
           ignoredFiles.push(path);
           continue;
         }
-        const size = Number(file.size);
-        if (!Number.isSafeInteger(size) || size <= 0 || size > (kind === "image" ? 30 * 1024 * 1024 : 4 * 1024 ** 3))
-          throw new Error(`Datei zu gross oder ohne gueltige Groesse: ${path}`);
+        let size = Number(file.size);
+        if (!Number.isSafeInteger(size) || size <= 0) size = await missingFileSize(file, path);
+        if (size > (kind === "image" ? MAX_SOURCE_IMAGE_BYTES : MAX_VIDEO_BYTES))
+          throw new Error(
+            `${kind === "image" ? "Bild" : "Video"} zu gross: ${path} (${Math.ceil(size / 1_000_000)} MB). Maximal ${kind === "image" ? "200 MB pro Bild" : "4 GiB pro Video"}.`
+          );
         const dimensions = kind === "image" ? file.imageMediaMetadata : file.videoMediaMetadata;
         const width = dimensions?.width ?? null;
         const height = dimensions?.height ?? null;
@@ -96,13 +126,40 @@ export async function listBatchMedia(rootId: string) {
 }
 
 export async function downloadBatchMedia(file: BatchMediaFile, start = 0, end = file.size) {
+  const chunks: Uint8Array[] = [];
+  await readDriveRange(file, start, end, MAX_TRANSFER_BYTES, async (value) => {
+    chunks.push(value);
+  });
+  return Buffer.concat(chunks);
+}
+
+export async function downloadBatchImage(file: BatchMediaFile, destination: string) {
+  if (file.kind !== "image" || !["image/jpeg", "image/png"].includes(file.mimeType))
+    throw new Error("Nur JPEG- und PNG-Bilder koennen vorbereitet werden.");
+  const output = await open(destination, "wx");
+  try {
+    await readDriveRange(file, 0, file.size, MAX_SOURCE_IMAGE_BYTES, async (value) => {
+      await output.writeFile(value);
+    });
+  } finally {
+    await output.close();
+  }
+}
+
+async function readDriveRange(
+  file: BatchMediaFile,
+  start: number,
+  end: number,
+  maxBytes: number,
+  consume: (value: Uint8Array) => Promise<void>
+) {
   if (
     !Number.isSafeInteger(start) ||
     !Number.isSafeInteger(end) ||
     start < 0 ||
     end <= start ||
     end > file.size ||
-    end - start > 32 * 1024 * 1024
+    end - start > maxBytes
   )
     throw new Error("Ungueltiger Upload-Abschnitt.");
   const url = driveUrl(file.id);
@@ -123,7 +180,6 @@ export async function downloadBatchMedia(file: BatchMediaFile, start = 0, end = 
   // Read with a hard limit even if Drive ignores Range or reports an incorrect Content-Length.
   const reader = response.body?.getReader();
   if (!reader) throw new Error("Leere Drive-Antwort.");
-  const chunks: Uint8Array[] = [];
   let total = 0;
   try {
     while (true) {
@@ -131,11 +187,10 @@ export async function downloadBatchMedia(file: BatchMediaFile, start = 0, end = 
       if (done) break;
       total += value.byteLength;
       if (total > end - start) throw new Error("Drive lieferte einen unerwartet grossen Dateiabschnitt.");
-      chunks.push(value);
+      await consume(value);
     }
   } finally {
     await reader.cancel();
   }
   if (total !== end - start) throw new Error("Drive-Download ist unvollstaendig.");
-  return Buffer.concat(chunks);
 }
