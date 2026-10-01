@@ -37,9 +37,16 @@ describe("Drive download recovery", () => {
     });
     Object.defineProperty(response, "url", { value: String(url) });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response).mockResolvedValueOnce(new Response("media")));
-    const result = fetchDriveDownload(url, name, range);
+    const blocked = gateway === "automated-queries" || gateway === "unusual-traffic";
+    const result = fetchDriveDownload(url, name, range).catch((error: Error) => error);
     await vi.runAllTimersAsync();
-    await result;
+    const outcome = await result;
+    if (blocked) {
+      expect(outcome).toBeInstanceOf(Error);
+      expect((outcome as Error).message).toMatch(/Google blockiert derzeit automatisierte Download-Anfragen/);
+      expect((outcome as Error).message).not.toContain("secret-api-key");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } else expect(outcome).toBeInstanceOf(Response);
     expect(console.warn).toHaveBeenCalledExactlyOnceWith("Drive download gateway rejection", {
       status: 403,
       gateway,
@@ -49,6 +56,21 @@ describe("Drive download recovery", () => {
     });
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("secret-api-key");
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(message);
+  });
+  it("stops an existing retry sequence as soon as an explicit automated-traffic block is reported", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 403 }))
+      .mockResolvedValueOnce(
+        new Response("<html>Your network may be sending automated queries</html>", { status: 403 })
+      );
+    vi.stubGlobal("fetch", fetch);
+    const result = expect(fetchDriveDownload(url, name, range)).rejects.toThrow(
+      /Google blockiert derzeit automatisierte/
+    );
+    await vi.runAllTimersAsync();
+    await result;
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it.each(["rateLimitExceeded", "userRateLimitExceeded"])(
     "retries a 403 %s at the exact same offset",
@@ -217,22 +239,20 @@ describe("Drive download recovery", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
   it("prioritizes explicit restrictions over transient or new reason codes", async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        Response.json(
-          {
-            error: {
-              errors: [
-                { reason: "newGoogleReason" },
-                { reason: "rateLimitExceeded" },
-                { reason: "insufficientFilePermissions" }
-              ]
-            }
-          },
-          { status: 403 }
-        )
-      );
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            errors: [
+              { reason: "newGoogleReason" },
+              { reason: "rateLimitExceeded" },
+              { reason: "insufficientFilePermissions" }
+            ]
+          }
+        },
+        { status: 403 }
+      )
+    );
     vi.stubGlobal("fetch", fetch);
     await expect(fetchDriveDownload(url, name, range)).rejects.toThrow(/insufficientFilePermissions/);
     expect(fetch).toHaveBeenCalledOnce();

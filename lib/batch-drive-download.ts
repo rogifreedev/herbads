@@ -79,10 +79,18 @@ async function errorDetails(response: Response, apiKey: string | null): Promise<
   }
 }
 
-function downloadError(name: string, status: number, { reason, format }: DriveFailure) {
+function isAutomatedTrafficBlock(status: number, { gateway }: DriveFailure) {
+  return status === 403 && (gateway === "automated-queries" || gateway === "unusual-traffic");
+}
+
+function downloadError(name: string, status: number, details: DriveFailure) {
+  const { reason, format } = details;
   let hint =
     "Google Drive hat keinen eindeutig zugeordneten Fehlergrund geliefert. Bitte spaeter fortsetzen; eine fehlende Dateifreigabe ist damit nicht bestaetigt.";
-  if (reason === "downloadQuotaExceeded")
+  if (isAutomatedTrafficBlock(status, details))
+    hint =
+      "Google blockiert derzeit automatisierte Download-Anfragen vom Upload-Server. Bitte spaeter fortsetzen und die Drive-Anbindung mit autorisiertem Lesezugriff pruefen. Eine fehlende Dateifreigabe ist damit nicht bestaetigt.";
+  else if (reason === "downloadQuotaExceeded")
     hint = "Das Drive-Download-Limit dieser Datei ist erreicht. Bitte spaeter fortsetzen.";
   else if (reason === "dailyLimitExceeded")
     hint = "Das Tageslimit der Drive-Anbindung ist erreicht. Bitte das API-Kontingent pruefen oder spaeter fortsetzen.";
@@ -144,6 +152,7 @@ export async function fetchDriveDownload(url: URL, name: string, range: string, 
       const { reason } = details;
       unclassified =
         response.status === 403 &&
+        !isAutomatedTrafficBlock(response.status, details) &&
         (reason === null || (!RETRYABLE_REASONS.has(reason) && !NON_RETRYABLE_REASONS.has(reason)));
       retryable =
         [429, 500, 502, 503, 504].includes(response.status) ||
