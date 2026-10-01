@@ -63,7 +63,6 @@ describe("Drive download recovery", () => {
     [403, "dailyLimitExceeded", /Tageslimit/],
     [403, "API_KEY_HTTP_REFERRER_BLOCKED", /Zugangsdaten/],
     [403, "cannotDownloadAbusiveFile", /Download-Freigabe/],
-    [403, "unexpectedReason", /Download-Freigabe/],
     [404, "notFound", /nicht mehr erreichbar/],
     [401, "authError", /nicht ausreichend autorisiert/]
   ] as const)("does not retry HTTP %i / %s", async (status, reason, hint) => {
@@ -114,11 +113,10 @@ describe("Drive download recovery", () => {
     await result;
     expect(fetch).toHaveBeenCalledTimes(3);
   });
-  it("cancels an oversized error body and handles non-JSON without leaking it", async () => {
+  it("cancels every oversized error body without leaking it or retrying indefinitely", async () => {
     const cancel = vi.fn();
-    const fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
+    const fetch = vi.fn().mockImplementation(
+      () =>
         new Response(
           new ReadableStream({
             start(controller) {
@@ -128,13 +126,90 @@ describe("Drive download recovery", () => {
           }),
           { status: 403 }
         )
-      )
-      .mockResolvedValueOnce(new Response("<html>secret-api-key</html>", { status: 403 }));
+    );
     vi.stubGlobal("fetch", fetch);
-    await expect(fetchDriveDownload(url, name, range)).rejects.toThrow(/HTTP 403\)/);
-    expect(cancel).toHaveBeenCalledOnce();
-    await expect(fetchDriveDownload(url, name, range)).rejects.toThrow(/HTTP 403\)/);
+    const result = expect(fetchDriveDownload(url, name, range)).rejects.toThrow(
+      /HTTP 403, Fehlerantwort: zu gross.*Nach 3 Download-Versuchen/
+    );
+    await vi.runAllTimersAsync();
+    await result;
+    expect(cancel).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it.each([
+    ["<html>secret-api-key</html>", "text/html"],
+    ["", "application/json"],
+    [JSON.stringify({ error: { code: 403, message: String(url) } }), "application/json"],
+    [JSON.stringify({ error: { errors: [{ reason: "newGoogleReason" }] } }), "application/json"]
+  ])(
+    "recovers an unclassified 403 without advancing the range or changing credentials: %s",
+    async (body, contentType) => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(body, { status: 403, headers: { "Content-Type": contentType } }))
+        .mockResolvedValueOnce(new Response("media", { status: 206 }));
+      vi.stubGlobal("fetch", fetch);
+      const result = fetchDriveDownload(url, name, range);
+      await vi.runAllTimersAsync();
+      expect((await result).status).toBe(206);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch.mock.calls[1]).toEqual(fetch.mock.calls[0]);
+      expect(Date.now()).toBe(Date.parse("2026-10-01T08:00:02Z"));
+    }
+  );
+  it.each([
+    ["<html>secret-api-key</html>", /Fehlerantwort: HTML/],
+    ["not JSON, secret-api-key", /Fehlerantwort: Text/],
+    [JSON.stringify({ error: { errors: [{ reason: "newGoogleReason" }] } }), /newGoogleReason/],
+    [JSON.stringify({ error: { errors: [{ reason: "secret-api-key" }] } }), /Fehlerantwort: JSON/]
+  ] as const)(
+    "reports unclassified failures accurately without exposing provider bodies: %s",
+    async (body, diagnostic) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(() => new Response(body, { status: 403 }))
+      );
+      const result = fetchDriveDownload(url, name, range).catch((error: Error) => error);
+      await vi.runAllTimersAsync();
+      const error = (await result) as Error;
+      expect(error.message).toMatch(diagnostic);
+      expect(error.message).toMatch(/fehlende Dateifreigabe ist damit nicht bestaetigt/);
+      expect(error.message).toContain("Nach 3 Download-Versuchen");
+      expect(error.message).not.toContain("secret-api-key");
+      expect(error.message).not.toContain("<html>");
+    }
+  );
+  it("stops retries as soon as Google returns a definite permission error", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 403 }))
+      .mockResolvedValueOnce(errorResponse(403, "insufficientFilePermissions"));
+    vi.stubGlobal("fetch", fetch);
+    const result = expect(fetchDriveDownload(url, name, range)).rejects.toThrow(/insufficientFilePermissions/);
+    await vi.runAllTimersAsync();
+    await result;
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it("prioritizes explicit restrictions over transient or new reason codes", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              errors: [
+                { reason: "newGoogleReason" },
+                { reason: "rateLimitExceeded" },
+                { reason: "insufficientFilePermissions" }
+              ]
+            }
+          },
+          { status: 403 }
+        )
+      );
+    vi.stubGlobal("fetch", fetch);
+    await expect(fetchDriveDownload(url, name, range)).rejects.toThrow(/insufficientFilePermissions/);
+    expect(fetch).toHaveBeenCalledOnce();
   });
   it("recognizes structured Google ErrorInfo without exposing its metadata", async () => {
     vi.stubGlobal(
