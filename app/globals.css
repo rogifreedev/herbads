@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes upload-progress-activity {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(334%);
+  }
+}
+
+.upload-progress-activity {
+  animation: upload-progress-activity 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-progress-activity {
+    animation: none;
+    transform: translateX(115%);
+  }
+}
+
 @layer base {
   :root {
     --font-sans: var(--font-work-sans), ui-sans-serif, system-ui, sans-serif;

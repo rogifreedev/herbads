@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { BatchTemplateSelect } from "@/components/batch-template-select";
 import { MAX_COPY_VARIANTS, normalizeBatchCopy } from "@/lib/batch-launch-copy";
 import { batchLaunchBlockerTargets, getBatchLaunchBlockers } from "@/lib/batch-launch-readiness";
@@ -112,6 +113,7 @@ export function BatchLaunchForm({
   initialJob?: BatchLaunchJob;
 }) {
   const t = useTranslations("batchLaunch");
+  const uploads = useTranslations("batchUploads");
   const locale = useLocale();
   const endpoint = `/api/clients/${clientId}/batches`;
   const [accountContext, setContext] = useState<BatchLaunchAccountContext | null>(null);
@@ -442,6 +444,16 @@ export function BatchLaunchForm({
   const jobRunning = Boolean(
     job?.queueEnabled && ["pending", "running"].includes(job.status) && job.controlStatus === "run"
   );
+  const adsDone = Object.values(job?.state.ads ?? {}).filter((ad) => ad.adId).length;
+  const filesDone = Object.values(job?.state.media ?? {}).filter((media) => media.imageHash || media.ready).length;
+  const jobProgressText = job
+    ? `${job.state.step === "activate" ? t("activateStep") : t(`steps.${job.state.step as "adset"}`)} · ${t("progress", {
+        ads: adsDone,
+        total: job.adCount,
+        files: filesDone,
+        fileTotal: job.fileCount
+      })}`
+    : "";
 
   async function controlUpload(action: "pause" | "resume") {
     if (!job) return;
@@ -784,19 +796,13 @@ export function BatchLaunchForm({
                   {job.status === "completed" && job.state.activated ? t("activated") : t(`status.${job.status}`)}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {job.state.step === "activate" ? t("activateStep") : t(`steps.${job.state.step as "adset"}`)} ·{" "}
-                {t("progress", {
-                  ads: Object.values(job.state.ads).filter((ad) => ad.adId).length,
-                  total: job.adCount,
-                  files: Object.values(job.state.media).filter((media) => media.imageHash || media.ready).length,
-                  fileTotal: job.fileCount
-                })}
-              </p>
-              <progress
-                className="h-2 w-full accent-primary"
-                value={Object.values(job.state.ads).filter((ad) => ad.adId).length}
-                max={job.adCount || 1}
+              <p className="text-sm text-muted-foreground">{jobProgressText}</p>
+              <Progress
+                value={job.status === "completed" ? job.fileCount + job.adCount : filesDone + adsDone}
+                max={job.fileCount + job.adCount}
+                active={jobRunning && job.status === "running"}
+                label={uploads("progress")}
+                valueText={jobProgressText}
               />
               {job.error ? (
                 <Alert variant="warning">

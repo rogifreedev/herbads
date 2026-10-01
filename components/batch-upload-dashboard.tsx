@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -181,6 +182,14 @@ export function BatchUploadDashboard({ initialClientId = "" }: { initialClientId
                   const terminal = ["completed", "cancelled", "review"].includes(job.status);
                   const progress = job.files_done + job.ads_done;
                   const total = job.file_count + job.ad_count;
+                  const progressText = launch("progress", {
+                    ads: job.ads_done,
+                    total: job.ad_count,
+                    files: job.files_done,
+                    fileTotal: job.file_count
+                  });
+                  const stepText =
+                    job.step === "activate" ? launch("activateStep") : launch(`steps.${job.step as "adset"}`);
                   const pendingControl = job.status === "running" && job.control_status !== "run";
                   return (
                     <tr
@@ -233,23 +242,16 @@ export function BatchUploadDashboard({ initialClientId = "" }: { initialClientId
                         ) : null}
                       </td>
                       <td className="block min-w-0 md:table-cell md:py-4 md:pr-4">
-                        <p className="break-words">
-                          {job.step === "activate" ? launch("activateStep") : launch(`steps.${job.step as "adset"}`)}
-                        </p>
-                        <progress
-                          className="my-2 h-2 w-full accent-primary"
+                        <p className="break-words">{stepText}</p>
+                        <Progress
+                          className="my-2"
                           value={job.status === "completed" ? total : progress}
                           max={total || 1}
-                          aria-label={t("progress")}
+                          active={running && job.status === "running"}
+                          label={t("progress")}
+                          valueText={`${stepText} · ${progressText}`}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          {launch("progress", {
-                            ads: job.ads_done,
-                            total: job.ad_count,
-                            files: job.files_done,
-                            fileTotal: job.file_count
-                          })}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{progressText}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {launch(job.activate ? "activationRequested" : "paused")}
                         </p>

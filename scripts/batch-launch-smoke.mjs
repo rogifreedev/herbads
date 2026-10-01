@@ -183,6 +183,7 @@ async function main() {
       failOnce = true,
       steps = 0;
     let creationRequests = 0;
+    let holdJobUpdates = false;
     let visualFixture = false;
     let regionalFixture = false;
     let liveLanguageIds = [5];
@@ -351,7 +352,7 @@ async function main() {
           job.controlStatus = action === "resume" ? "run" : action;
           job.status = action === "resume" ? "pending" : "paused";
           job.error = null;
-        } else if (["failed", "paused", "cancelled", "review", "completed"].includes(job.status)) {
+        } else if (holdJobUpdates || ["failed", "paused", "cancelled", "review", "completed"].includes(job.status)) {
           // Read-only polling cannot implicitly resume a job.
         } else if (failOnce) {
           failOnce = false;
@@ -1096,6 +1097,52 @@ async function main() {
     await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
     assert.equal(submitted.copy.instagramId, "17841402245652920");
     assert.equal(creationRequests, 7);
+    holdJobUpdates = true;
+    job = {
+      ...job,
+      name: "01.10.2026_102 - 3 Gr\u00fcnde VSL",
+      status: "running",
+      controlStatus: "run",
+      adCount: 3,
+      fileCount: 3,
+      state: { adsetId: "100", step: "processing", media: { video: { videoId: "123", finished: true } }, ads: {} }
+    };
+    await page.goto(`${origin}/clients/test-client/batches/create?folderId=folder`, { waitUntil: "networkidle" });
+    const progress = page.getByRole("progressbar", { name: "Fortschritt", exact: true });
+    await progress.waitFor();
+    assert.equal(await progress.getAttribute("aria-valuenow"), "0");
+    assert.equal(await progress.getAttribute("aria-valuemax"), "6");
+    assert.match(await progress.getAttribute("aria-valuetext"), /Meta verarbeitet das Video/);
+    const activity = progress.locator(".upload-progress-activity");
+    const firstTransform = await activity.evaluate((node) => getComputedStyle(node).transform);
+    await page.waitForTimeout(250);
+    assert.notEqual(await activity.evaluate((node) => getComputedStyle(node).transform), firstTransform);
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await progress.scrollIntoViewIfNeeded();
+      const box = await progress.boundingBox();
+      assert(box.height >= 8 && box.width > 100, "Visible, stable progress track");
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(output, `video-processing-${width}.png`) });
+    }
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    assert.equal(await activity.evaluate((node) => getComputedStyle(node).animationName), "none");
+    assert(await activity.isVisible(), "Reduced motion keeps a static activity indicator");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    job.state.media = { first: { ready: true }, second: { ready: true }, third: { ready: true } };
+    job.state.step = "creative";
+    await page.waitForFunction(() => document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow") === "3");
+    assert.equal(await progress.locator(":scope > div").first().evaluate((node) => node.style.width), "50%");
+    job.status = "paused";
+    job.controlStatus = "pause";
+    await activity.waitFor({ state: "hidden" });
+    assert.equal(await progress.getAttribute("aria-valuenow"), "3", "Pausing preserves progress");
+    job.status = "completed";
+    job.state.step = "done";
+    await page.reload({ waitUntil: "networkidle" });
+    assert.equal(await progress.getAttribute("aria-valuenow"), "6");
+    assert.equal(await activity.count(), 0);
+    holdJobUpdates = false;
     job = null;
     const queueClient = "11111111-1111-4111-8111-111111111111";
     const queueJobs = ["running", "pending", "paused", "failed", "review", "completed", "cancelled"].map(
@@ -1129,7 +1176,7 @@ async function main() {
         ad_count: 3,
         file_count: 6,
         ads_done: status === "completed" ? 3 : 0,
-        files_done: status === "completed" ? 6 : 2,
+        files_done: status === "completed" ? 6 : status === "running" ? 0 : 2,
         queue_position: index < 2 ? index + 1 : null
       })
     );
@@ -1178,10 +1225,20 @@ async function main() {
     await page.getByText("Worker bereit", { exact: true }).waitFor();
     const firstQueueRow = page.getByRole("row").filter({ hasText: "18.09.2026_Batch 1" });
     assert.equal(await page.locator("tbody tr").count(), 2);
+    const queueProgress = firstQueueRow.getByRole("progressbar", { name: "Fortschritt" });
+    assert.equal(await queueProgress.getAttribute("aria-valuenow"), "0");
+    assert.equal(await queueProgress.locator(".upload-progress-activity").count(), 1);
+    assert.equal(await page.locator(".upload-progress-activity").count(), 1, "Queued jobs do not look active");
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await queueProgress.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(output, `upload-active-${width}.png`) });
+    }
     await firstQueueRow.getByRole("button", { name: "Upload anhalten", exact: true }).click();
     await firstQueueRow.waitFor({ state: "hidden" });
     await page.getByRole("tab", { name: "Handlungsbedarf", exact: true }).click();
     await firstQueueRow.waitFor();
+    assert.equal(await queueProgress.locator(".upload-progress-activity").count(), 0, "Paused jobs do not animate");
     await firstQueueRow.getByRole("button", { name: "Upload fortsetzen", exact: true }).click();
     await firstQueueRow.waitFor({ state: "hidden" });
     const reviewRow = page.getByRole("row").filter({ hasText: "18.09.2026_Batch 5" });
