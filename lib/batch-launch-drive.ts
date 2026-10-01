@@ -1,6 +1,7 @@
 import "server-only";
 import { open } from "node:fs/promises";
 import { getRequiredEnv } from "@/lib/env";
+import { fetchDriveDownload } from "@/lib/batch-drive-download";
 import { MAX_BATCH_FILES, mediaPlacement } from "@/lib/batch-launch-plan";
 import { MAX_SOURCE_IMAGE_BYTES, MAX_TRANSFER_BYTES, MAX_VIDEO_BYTES } from "@/lib/batch-media-limits";
 import type { BatchMediaFile } from "@/lib/batch-launch-types";
@@ -27,11 +28,7 @@ function driveUrl(fileId?: string) {
 async function missingFileSize(file: DriveFile, path: string) {
   const url = driveUrl(file.id);
   url.searchParams.set("alt", "media");
-  const response = await fetch(url, {
-    headers: { Range: "bytes=0-0" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(10000)
-  });
+  const response = await fetchDriveDownload(url, path, "bytes=0-0", 10000);
   try {
     const range = /^bytes 0-0\/(\d+)$/.exec(response.headers.get("Content-Range") ?? "");
     const size =
@@ -164,11 +161,7 @@ async function readDriveRange(
     throw new Error("Ungueltiger Upload-Abschnitt.");
   const url = driveUrl(file.id);
   url.searchParams.set("alt", "media");
-  const response = await fetch(url, {
-    headers: { Range: `bytes=${start}-${end - 1}` },
-    cache: "no-store",
-    signal: AbortSignal.timeout(30000)
-  });
+  const response = await fetchDriveDownload(url, file.name, `bytes=${start}-${end - 1}`);
   if (response.status !== 206 && !(response.status === 200 && start === 0 && end === file.size)) {
     await response.body?.cancel();
     throw new Error(`Drive-Download fehlgeschlagen: ${file.name} (${response.status}).`);

@@ -86,13 +86,11 @@ describe("bounded Drive transfers", () => {
   it("reports the image size limit separately from missing metadata", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json({
-            files: [{ id: "image", name: "v3_9/16", mimeType: "image/png", size: String(MAX_SOURCE_IMAGE_BYTES + 1) }]
-          })
-        )
+      vi.fn().mockResolvedValue(
+        Response.json({
+          files: [{ id: "image", name: "v3_9/16", mimeType: "image/png", size: String(MAX_SOURCE_IMAGE_BYTES + 1) }]
+        })
+      )
     );
     await expect(listBatchMedia("root")).rejects.toThrow(/Bild zu gross: v3_9\/16.*200 MB pro Bild/);
   });
@@ -141,8 +139,7 @@ describe("bounded Drive transfers", () => {
   it.each<ResponseInit>([
     { status: 206, headers: { "Content-Range": "bytes 0-0/*" } },
     { status: 200, headers: { "Content-Length": "0" } },
-    { status: 200, headers: { "Content-Length": "100", "Content-Encoding": "gzip" } },
-    { status: 403, headers: { "Content-Length": "100" } }
+    { status: 200, headers: { "Content-Length": "100", "Content-Encoding": "gzip" } }
   ])("reports an unusable size probe instead of a misleading size-limit error: %j", async (init) => {
     vi.stubGlobal(
       "fetch",

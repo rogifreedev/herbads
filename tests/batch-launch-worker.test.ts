@@ -373,6 +373,29 @@ describe("resumable paused batch worker", () => {
     expect(row.status).toBe("running");
     expect(mocks.download).toHaveBeenCalledWith(row.payload.files[0], 0, 10);
   });
+  it("preserves video IDs and offsets after a Drive failure and resumes without recreating the adset", async () => {
+    row.state.adsetId = "100";
+    row.payload.files = [{ ...feed, kind: "video", mimeType: "video/mp4", size: 131615479 }];
+    row.state.media.feed = { videoId: "500", uploadSessionId: "600", startOffset: 105906176, endOffset: 111149056 };
+    const progress = structuredClone(row.state.media);
+    mocks.download.mockRejectedValueOnce(new Error("Drive-Download fehlgeschlagen (HTTP 403, rateLimitExceeded)."));
+    await processBatchLaunch("client", "job");
+    expect(row.status).toBe("failed");
+    expect(row.state.media).toEqual(progress);
+    expect(row.state.adsetId).toBe("100");
+    expect(row.state.ads).toEqual({});
+    expect(mocks.request).not.toHaveBeenCalled();
+    row.status = "pending"; // Explicit user resume after Drive recovers.
+    mocks.request.mockResolvedValueOnce({ start_offset: "111149056", end_offset: "116391936" });
+    await processBatchLaunch("client", "job");
+    expect(mocks.download).toHaveBeenLastCalledWith(row.payload.files[0], 105906176, 111149056);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][0]).toBe("act_111/advideos");
+    expect(mocks.request.mock.calls[0][1].get("upload_phase")).toBe("transfer");
+    expect(mocks.request.mock.calls[0][1].get("upload_session_id")).toBe("600");
+    expect(row.state.media.feed).toMatchObject({ videoId: "500", uploadSessionId: "600", startOffset: 111149056 });
+    expect(row.status).toBe("running");
+  });
   it("waits for video processing before creating any ad", async () => {
     row.state.adsetId = "100";
     row.payload.files = [{ ...feed, kind: "video", mimeType: "video/mp4" }];
