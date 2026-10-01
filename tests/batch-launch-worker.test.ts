@@ -248,7 +248,7 @@ describe("resumable paused batch worker", () => {
   it("uploads the prepared image with its actual format and persists its hash", async () => {
     row.state.adsetId = "100";
     await processBatchLaunch("client", "job");
-    expect(mocks.prepareImage).toHaveBeenCalledWith(feed);
+    expect(mocks.prepareImage).toHaveBeenCalledWith(feed, "client");
     expect(mocks.download).not.toHaveBeenCalled();
     expect(mocks.request).toHaveBeenCalledWith("act_111/adimages", {
       bytes: Buffer.from("optimized image").toString("base64"),
@@ -371,7 +371,7 @@ describe("resumable paused batch worker", () => {
     await processBatchLaunch("client", "job");
     expect(row.state.media.feed).toMatchObject({ startOffset: 10, endOffset: 20 });
     expect(row.status).toBe("running");
-    expect(mocks.download).toHaveBeenCalledWith(row.payload.files[0], 0, 10);
+    expect(mocks.download).toHaveBeenCalledWith(row.payload.files[0], 0, 10, "client");
   });
   it("preserves video IDs and offsets after a Drive failure and resumes without recreating the adset", async () => {
     row.state.adsetId = "100";
@@ -388,7 +388,7 @@ describe("resumable paused batch worker", () => {
     row.status = "pending"; // Explicit user resume after Drive recovers.
     mocks.request.mockResolvedValueOnce({ start_offset: "111149056", end_offset: "116391936" });
     await processBatchLaunch("client", "job");
-    expect(mocks.download).toHaveBeenLastCalledWith(row.payload.files[0], 105906176, 111149056);
+    expect(mocks.download).toHaveBeenLastCalledWith(row.payload.files[0], 105906176, 111149056, "client");
     expect(mocks.request).toHaveBeenCalledTimes(1);
     expect(mocks.request.mock.calls[0][0]).toBe("act_111/advideos");
     expect(mocks.request.mock.calls[0][1].get("upload_phase")).toBe("transfer");

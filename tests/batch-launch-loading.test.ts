@@ -104,7 +104,7 @@ describe("progressive batch loading", () => {
       groups: [],
       matchingUnavailable: false
     });
-    expect(mocks.media).toHaveBeenCalledWith("folder");
+    expect(mocks.media).toHaveBeenCalledWith("folder", "client");
     expect(mocks.matching).toHaveBeenCalledWith([]);
     expect(mocks.tables).toEqual(["batch_folder_checks"]);
   });

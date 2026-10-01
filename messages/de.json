@@ -397,7 +397,7 @@
     "metaStatusLine": "Meta Status: {status}",
     "open": "Öffnen",
     "settingsSubtitle": "Mehrere Google Drive Root- oder Partnerordner, unter denen Batch-Ordner gesucht werden.",
-    "apiKeyMissing": "GOOGLE_DRIVE_API_KEY fehlt. Speichern ist möglich, der automatische Drive-Check startet nach dem Setzen des Keys.",
+    "apiKeyMissing": "Drive-Zugangsdaten fehlen. Speichern ist möglich, der automatische Drive-Check startet nach dem Einrichten der Anbindung.",
     "driveFoldersTitle": "Google Drive Ordner",
     "driveFoldersDescription": "Füge beliebig viele Root-Ordner hinzu. Der Check sucht darunter rekursiv nach Batch-Ordnern.",
     "matchingTitle": "Abgleich",

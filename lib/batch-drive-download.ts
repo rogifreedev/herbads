@@ -27,7 +27,7 @@ type DriveFailure = {
   gateway?: "client-forbidden" | "unusual-traffic" | "automated-queries" | "unknown";
 };
 
-async function errorDetails(response: Response, apiKey: string | null): Promise<DriveFailure> {
+async function errorDetails(response: Response, secrets: string[]): Promise<DriveFailure> {
   const reader = response.body?.getReader();
   if (!reader) return { reason: null, format: "leer" };
   const chunks: Uint8Array[] = [];
@@ -68,7 +68,7 @@ async function errorDetails(response: Response, apiKey: string | null): Promise<
         (reason: unknown): reason is string =>
           typeof reason === "string" &&
           /^[a-zA-Z][a-zA-Z0-9_.-]{0,79}$/.test(reason) &&
-          (!apiKey || !reason.includes(apiKey))
+          !secrets.some((secret) => reason.includes(secret))
       );
     // Retain new Google reason codes, but never raw messages, URLs or request credentials.
     return { reason: codes.find((reason) => NON_RETRYABLE_REASONS.has(reason)) ?? codes[0] ?? null, format: "JSON" };
@@ -121,7 +121,16 @@ function retryDelay(attempt: number, retryAfter: string | null, unclassified: bo
   );
 }
 
-export async function fetchDriveDownload(url: URL, name: string, range: string, timeoutMs = 30_000) {
+export async function fetchDriveDownload(
+  url: URL,
+  name: string,
+  range: string,
+  timeoutMs = 30_000,
+  authHeaders: Record<string, string> = {}
+) {
+  const secrets = [url.searchParams.get("key"), authHeaders.Authorization?.replace(/^Bearer /, "")].filter(
+    (value): value is string => Boolean(value)
+  );
   // Only retry GET responses before handing any bytes to the caller. All attempts share one time budget.
   const deadline = Date.now() + timeoutMs;
   const signal = AbortSignal.timeout(timeoutMs);
@@ -131,13 +140,13 @@ export async function fetchDriveDownload(url: URL, name: string, range: string, 
     let retryable = true;
     let unclassified = false;
     try {
-      response = await fetch(url, { headers: { Range: range }, cache: "no-store", signal });
-    } catch (cause) {
-      failure = new Error(`Drive-Download unterbrochen: ${name}. Bitte spaeter fortsetzen.`, { cause });
+      response = await fetch(url, { headers: { ...authHeaders, Range: range }, cache: "no-store", signal });
+    } catch {
+      failure = new Error(`Drive-Download unterbrochen: ${name}. Bitte spaeter fortsetzen.`);
     }
     if (response) {
       if (response.ok) return response;
-      const details = await errorDetails(response, url.searchParams.get("key"));
+      const details = await errorDetails(response, secrets);
       if (response.status === 403 && details.format === "HTML") {
         // Fixed classifications only: provider bodies and request URLs can contain credentials.
         console.warn("Drive download gateway rejection", {

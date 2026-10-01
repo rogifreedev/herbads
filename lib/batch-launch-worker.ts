@@ -72,7 +72,7 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
         state.step = "upload";
         const media = (state.media[nextFile.id] ??= {});
         if (nextFile.kind === "image") {
-          const image = await prepareBatchImage(nextFile);
+          const image = await prepareBatchImage(nextFile, clientId);
           const result = await metaLaunchRequest<{ images?: Record<string, { hash?: string }> }>(
             `${metaAccountId}/adimages`,
             { bytes: image.bytes.toString("base64"), name: image.name }
@@ -94,7 +94,7 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
           media.startOffset = Number(result.start_offset);
           media.endOffset = Number(result.end_offset);
         } else if (media.startOffset !== media.endOffset) {
-          const bytes = await downloadBatchMedia(nextFile, media.startOffset!, media.endOffset!);
+          const bytes = await downloadBatchMedia(nextFile, media.startOffset!, media.endOffset!, clientId);
           const form = new FormData();
           form.set("upload_phase", "transfer");
           form.set("upload_session_id", media.uploadSessionId!);

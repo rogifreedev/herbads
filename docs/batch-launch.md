@@ -7,7 +7,12 @@ The adset and every ad are initially created with `status: PAUSED`. Paused is th
 
 ## Configuration
 
-- `GOOGLE_DRIVE_API_KEY`: the same public/shared Drive folders used by Batch Check.
+- `GOOGLE_DRIVE_AUTH_MODE`: `api_key` (backward-compatible default/manual backup) or `service_account`.
+- `GOOGLE_DRIVE_API_KEY`: retained access to the same public/shared folders used by Batch Check. This is not OAuth; Google sign-in is separate and unchanged.
+- `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`: server-only sensitive environment variable containing a service-account JSON key. Never commit the file, put it in `NEXT_PUBLIC_*`, log it, or store credentials/tokens in job payloads. Enable the Drive API in its project and share the relevant Drive folders with its email as Viewer. No domain-wide delegation or project Editor role is needed.
+- `GOOGLE_DRIVE_SERVICE_ACCOUNT_CLIENT_IDS`: optional comma-separated client IDs limiting service-account mode to a pilot. Other clients continue using the existing API key; empty enables service-account mode for all clients. This is explicit routing, not an error-triggered fallback.
+- Service-account tokens use Google's official auth library, `drive.readonly`, cached tokens with refresh, a bounded token request and sanitized failures. Folder discovery, batch media listing, size probes, streamed images and resumed video ranges use the same selected identity. Failed requests never switch identities, especially for permission, quota or automated-traffic blocks. Service-account authentication does not guarantee that Google will lift a traffic block.
+- Rollback: set `GOOGLE_DRIVE_AUTH_MODE=api_key` and redeploy. Keep the existing API key unchanged. Existing Meta IDs, upload offsets, queue controls and paused/activation state are not rewritten when changing modes.
 - `META_SYSTEM_USER_ACCESS_TOKEN`: server-only token with `ads_management` and access to the selected account and Facebook page.
 - `META_API_VERSION`: optional Graph version override; batch creation defaults to `v25.0`.
 - Supabase migration `20260915193915_add_batch_meta_launches.sql` adds account presets, resumable jobs and the copy statistics function. Tables and RPC are service-role only; API routes use the existing employee authentication middleware and validate account/client ownership.

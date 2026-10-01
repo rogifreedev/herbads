@@ -357,7 +357,7 @@ async function storedBatchOptions(accountId: string) {
 
 export async function getBatchLaunchMedia(clientId: string, folderId: string): Promise<BatchLaunchMedia> {
   await launchFolder(clientId, folderId);
-  const media = await listBatchMedia(folderId);
+  const media = await listBatchMedia(folderId, clientId);
   const { matchBatchMedia } = await import("@/lib/batch-media-matching");
   return { ...media, ...(await matchBatchMedia(media.files)) };
 }
@@ -384,7 +384,7 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   validateCopy(input.copy);
   input = { ...input, copy: normalizeBatchCopy(input.copy) };
   const [media, rawCampaign, template, identities] = await Promise.all([
-    listBatchMedia(input.folderId),
+    listBatchMedia(input.folderId, clientId),
     metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
     metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
     getLiveBatchIdentities(account.meta_account_id, true)

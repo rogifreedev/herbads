@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getBatchSettings } from "@/lib/batches";
+import { hasDriveCredentials } from "@/lib/google-drive-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function BatchSettingsPage({ params }: { params: Promise<{ 
   const { clientId } = await params;
   const t = await getTranslations("batches");
   const { settings, error } = await getBatchSettings(clientId);
-  const hasDriveApiKey = Boolean(process.env.GOOGLE_DRIVE_API_KEY);
+  const hasDriveAccess = hasDriveCredentials(clientId);
 
   return (
     <div className="space-y-6">
@@ -27,7 +28,7 @@ export default async function BatchSettingsPage({ params }: { params: Promise<{ 
       </div>
 
       {error ? <Alert variant="warning"><AlertDescription>{error}</AlertDescription></Alert> : null}
-      {!hasDriveApiKey ? (
+      {!hasDriveAccess ? (
         <Alert variant="warning">
           <AlertDescription>{t("apiKeyMissing")}</AlertDescription>
         </Alert>

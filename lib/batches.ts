@@ -2,6 +2,7 @@ import "server-only";
 
 import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
+import { driveRequest, fetchDriveMetadata, hasDriveCredentials } from "@/lib/google-drive-auth";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type BatchCheckStatus = "idle" | "running" | "completed" | "failed";
@@ -328,12 +329,11 @@ function findMetaMatch(folderName: string, entities: MetaEntity[]) {
   return containsMatches[0] ?? null;
 }
 
-async function listGoogleDriveBatchFolders(folderId: string): Promise<{ folders: DriveBatchFolder[]; error: string | null }> {
-  const apiKey = getOptionalEnv("GOOGLE_DRIVE_API_KEY");
-  if (!apiKey) {
+async function listGoogleDriveBatchFolders(folderId: string, clientId: string): Promise<{ folders: DriveBatchFolder[]; error: string | null }> {
+  if (!hasDriveCredentials(clientId)) {
     return {
       folders: [],
-      error: "GOOGLE_DRIVE_API_KEY fehlt. Die Batch Settings sind gespeichert, aber der Drive-Check kann noch nicht laufen."
+      error: "Drive-Zugangsdaten fehlen. Die Batch Settings sind gespeichert, aber der Drive-Check kann noch nicht laufen."
     };
   }
 
@@ -355,7 +355,7 @@ async function listGoogleDriveBatchFolders(folderId: string): Promise<{ folders:
       }
 
       const parent = queue.shift()!;
-      const childResult = await listGoogleDriveChildFolders(parent.id, apiKey);
+      const childResult = await listGoogleDriveChildFolders(parent.id, clientId);
       if (childResult.error) {
         return {
           folders: sortDriveFolders(Array.from(batchCandidatesById.values())),
@@ -410,13 +410,13 @@ async function listGoogleDriveBatchFolders(folderId: string): Promise<{ folders:
   }
 }
 
-async function listGoogleDriveChildFolders(folderId: string, apiKey: string): Promise<{ folders: Omit<DriveBatchFolder, "path" | "depth">[]; error: string | null }> {
+async function listGoogleDriveChildFolders(folderId: string, clientId: string): Promise<{ folders: Omit<DriveBatchFolder, "path" | "depth">[]; error: string | null }> {
   const folders: Array<Omit<DriveBatchFolder, "path" | "depth">> = [];
   let pageToken: string | undefined;
 
   do {
+    const { url, headers } = await driveRequest(undefined, clientId);
     const params = new URLSearchParams({
-      key: apiKey,
       q: `'${folderId.replace(/'/g, "\\'")}' in parents and mimeType = '${DRIVE_FOLDER_MIME_TYPE}' and trashed = false`,
       fields: "nextPageToken,files(id,name,webViewLink,modifiedTime)",
       pageSize: "1000",
@@ -426,17 +426,8 @@ async function listGoogleDriveChildFolders(folderId: string, apiKey: string): Pr
 
     if (pageToken) params.set("pageToken", pageToken);
 
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
-      cache: "no-store"
-    });
-    const data = (await response.json().catch(() => ({}))) as DriveFilesResponse;
-
-    if (!response.ok) {
-      return {
-        folders,
-        error: data.error?.message ?? "Google Drive Ordner konnten nicht geladen werden."
-      };
-    }
+    params.forEach((value, key) => url.searchParams.set(key, value));
+    const data = await fetchDriveMetadata<DriveFilesResponse>(url, headers);
 
     folders.push(
       ...(data.files ?? [])
@@ -663,7 +654,7 @@ export async function runBatchCheck(clientId: string) {
     let driveFolderCount = 0;
 
     for (const source of activeFolders) {
-      const driveResult = await listGoogleDriveBatchFolders(source.googleDriveFolderId);
+      const driveResult = await listGoogleDriveBatchFolders(source.googleDriveFolderId, clientId);
       if (driveResult.error) {
         errors.push(`${source.label}: ${driveResult.error}`);
         await updateSourceCheckStatus(clientId, source.id, {

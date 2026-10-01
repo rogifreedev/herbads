@@ -397,7 +397,7 @@
     "metaStatusLine": "Stato Meta: {status}",
     "open": "Apri",
     "settingsSubtitle": "Più cartelle root o cartelle partner di Google Drive in cui cercare le cartelle batch.",
-    "apiKeyMissing": "GOOGLE_DRIVE_API_KEY mancante. Il salvataggio è possibile, il check automatico di Drive parte dopo aver impostato la chiave.",
+    "apiKeyMissing": "Credenziali Drive mancanti. Il salvataggio è possibile, il check automatico di Drive parte dopo aver configurato il collegamento.",
     "driveFoldersTitle": "Cartelle Google Drive",
     "driveFoldersDescription": "Aggiungi tutte le cartelle root che vuoi. Il check cerca al loro interno in modo ricorsivo le cartelle batch.",
     "matchingTitle": "Confronto",

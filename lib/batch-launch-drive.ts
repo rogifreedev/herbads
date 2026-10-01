@@ -1,6 +1,6 @@
 import "server-only";
 import { open } from "node:fs/promises";
-import { getRequiredEnv } from "@/lib/env";
+import { driveRequest, fetchDriveMetadata } from "@/lib/google-drive-auth";
 import { fetchDriveDownload } from "@/lib/batch-drive-download";
 import { MAX_BATCH_FILES, mediaPlacement } from "@/lib/batch-launch-plan";
 import { MAX_SOURCE_IMAGE_BYTES, MAX_TRANSFER_BYTES, MAX_VIDEO_BYTES } from "@/lib/batch-media-limits";
@@ -18,17 +18,10 @@ type DriveFile = {
   capabilities?: { canDownload?: boolean };
 };
 
-function driveUrl(fileId?: string) {
-  const url = new URL(`https://www.googleapis.com/drive/v3/files${fileId ? `/${encodeURIComponent(fileId)}` : ""}`);
-  url.searchParams.set("key", getRequiredEnv("GOOGLE_DRIVE_API_KEY"));
-  url.searchParams.set("supportsAllDrives", "true");
-  return url;
-}
-
-async function missingFileSize(file: DriveFile, path: string) {
-  const url = driveUrl(file.id);
+async function missingFileSize(file: DriveFile, path: string, clientId?: string) {
+  const { url, headers } = await driveRequest(file.id, clientId);
   url.searchParams.set("alt", "media");
-  const response = await fetchDriveDownload(url, path, "bytes=0-0", 10000);
+  const response = await fetchDriveDownload(url, path, "bytes=0-0", 10000, headers);
   try {
     const range = /^bytes 0-0\/(\d+)$/.exec(response.headers.get("Content-Range") ?? "");
     const size =
@@ -46,7 +39,7 @@ async function missingFileSize(file: DriveFile, path: string) {
   }
 }
 
-export async function listBatchMedia(rootId: string) {
+export async function listBatchMedia(rootId: string, clientId?: string) {
   const files: BatchMediaFile[] = [];
   const ignoredFiles: string[] = [];
   const queue = [{ id: rootId, path: "", depth: 0 }];
@@ -59,7 +52,7 @@ export async function listBatchMedia(rootId: string) {
       throw new Error("Der Batch enthaelt zu viele Unterordner. Bitte einen konkreten Batch-Ordner auswaehlen.");
     let pageToken: string | undefined;
     do {
-      const url = driveUrl();
+      const { url, headers } = await driveRequest(undefined, clientId);
       url.searchParams.set("q", `'${folder.id.replace(/'/g, "\\'")}' in parents and trashed = false`);
       url.searchParams.set(
         "fields",
@@ -68,14 +61,10 @@ export async function listBatchMedia(rootId: string) {
       url.searchParams.set("pageSize", "100");
       url.searchParams.set("includeItemsFromAllDrives", "true");
       if (pageToken) url.searchParams.set("pageToken", pageToken);
-      const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20000) });
-      const data = (await response.json()) as {
+      const data = await fetchDriveMetadata<{
         files?: DriveFile[];
         nextPageToken?: string;
-        error?: { message?: string };
-      };
-      if (!response.ok || data.error)
-        throw new Error(data.error?.message ?? "Drive-Dateien konnten nicht geladen werden.");
+      }>(url, headers);
       for (const file of data.files ?? []) {
         const path = folder.path ? `${folder.path}/${file.name}` : file.name;
         if (file.mimeType === "application/vnd.google-apps.folder") {
@@ -92,7 +81,7 @@ export async function listBatchMedia(rootId: string) {
           continue;
         }
         let size = Number(file.size);
-        if (!Number.isSafeInteger(size) || size <= 0) size = await missingFileSize(file, path);
+        if (!Number.isSafeInteger(size) || size <= 0) size = await missingFileSize(file, path, clientId);
         if (size > (kind === "image" ? MAX_SOURCE_IMAGE_BYTES : MAX_VIDEO_BYTES))
           throw new Error(
             `${kind === "image" ? "Bild" : "Video"} zu gross: ${path} (${Math.ceil(size / 1_000_000)} MB). Maximal ${kind === "image" ? "200 MB pro Bild" : "4 GiB pro Video"}.`
@@ -122,20 +111,20 @@ export async function listBatchMedia(rootId: string) {
   return { files, ignoredFiles };
 }
 
-export async function downloadBatchMedia(file: BatchMediaFile, start = 0, end = file.size) {
+export async function downloadBatchMedia(file: BatchMediaFile, start = 0, end = file.size, clientId?: string) {
   const chunks: Uint8Array[] = [];
-  await readDriveRange(file, start, end, MAX_TRANSFER_BYTES, async (value) => {
+  await readDriveRange(file, start, end, MAX_TRANSFER_BYTES, clientId, async (value) => {
     chunks.push(value);
   });
   return Buffer.concat(chunks);
 }
 
-export async function downloadBatchImage(file: BatchMediaFile, destination: string) {
+export async function downloadBatchImage(file: BatchMediaFile, destination: string, clientId?: string) {
   if (file.kind !== "image" || !["image/jpeg", "image/png"].includes(file.mimeType))
     throw new Error("Nur JPEG- und PNG-Bilder koennen vorbereitet werden.");
   const output = await open(destination, "wx");
   try {
-    await readDriveRange(file, 0, file.size, MAX_SOURCE_IMAGE_BYTES, async (value) => {
+    await readDriveRange(file, 0, file.size, MAX_SOURCE_IMAGE_BYTES, clientId, async (value) => {
       await output.writeFile(value);
     });
   } finally {
@@ -148,6 +137,7 @@ async function readDriveRange(
   start: number,
   end: number,
   maxBytes: number,
+  clientId: string | undefined,
   consume: (value: Uint8Array) => Promise<void>
 ) {
   if (
@@ -159,9 +149,9 @@ async function readDriveRange(
     end - start > maxBytes
   )
     throw new Error("Ungueltiger Upload-Abschnitt.");
-  const url = driveUrl(file.id);
+  const { url, headers } = await driveRequest(file.id, clientId);
   url.searchParams.set("alt", "media");
-  const response = await fetchDriveDownload(url, file.name, `bytes=${start}-${end - 1}`);
+  const response = await fetchDriveDownload(url, file.name, `bytes=${start}-${end - 1}`, 30_000, headers);
   if (response.status !== 206 && !(response.status === 200 && start === 0 && end === file.size)) {
     await response.body?.cancel();
     throw new Error(`Drive-Download fehlgeschlagen: ${file.name} (${response.status}).`);

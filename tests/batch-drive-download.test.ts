@@ -25,6 +25,39 @@ afterEach(() => {
 });
 
 describe("Drive download recovery", () => {
+  it("keeps bearer authentication on bounded retries and redacts tokens in provider reason codes", async () => {
+    const requestUrl = new URL("https://www.googleapis.com/drive/v3/files/test?alt=media");
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(503, "backendError"))
+      .mockResolvedValueOnce(errorResponse(401, "prefix-secret-bearer-suffix"));
+    vi.stubGlobal("fetch", fetch);
+    const result = fetchDriveDownload(requestUrl, name, range, 30_000, { Authorization: "Bearer secret-bearer" }).catch(
+      (error: Error) => error
+    );
+    await vi.runAllTimersAsync();
+    const error = await result;
+    expect(String(error)).toContain("HTTP 401");
+    expect(String(error)).not.toContain("secret-bearer");
+    expect(error).not.toHaveProperty("cause");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    for (const [url, options] of fetch.mock.calls) {
+      expect(url.searchParams.has("key")).toBe(false);
+      expect(options.headers).toEqual({ Authorization: "Bearer secret-bearer", Range: range });
+    }
+  });
+  it("never changes credentials or retries an explicit automated-traffic block", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("<html>automated queries secret-bearer</html>", { status: 403 }));
+    vi.stubGlobal("fetch", fetch);
+    const requestUrl = new URL("https://www.googleapis.com/drive/v3/files/test?alt=media");
+    await expect(
+      fetchDriveDownload(requestUrl, name, range, 30_000, { Authorization: "Bearer secret-bearer" })
+    ).rejects.toThrow(/Google blockiert/);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("secret-bearer");
+  });
   it.each([
     ["Your client does not have permission to get URL", "client-forbidden"],
     ["Our systems have detected unusual traffic", "unusual-traffic"],

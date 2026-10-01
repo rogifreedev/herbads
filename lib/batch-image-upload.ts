@@ -7,11 +7,11 @@ import { downloadBatchImage } from "@/lib/batch-launch-drive";
 import { MAX_IMAGE_EDGE, MAX_IMAGE_PIXELS, MAX_META_IMAGE_BYTES } from "@/lib/batch-media-limits";
 import type { BatchMediaFile } from "@/lib/batch-launch-types";
 
-export async function prepareBatchImage(file: BatchMediaFile) {
+export async function prepareBatchImage(file: BatchMediaFile, clientId?: string) {
   const directory = await mkdtemp(join(tmpdir(), "herbads-meta-image-"));
   const source = join(directory, "source");
   try {
-    await downloadBatchImage(file, source);
+    await downloadBatchImage(file, source, clientId);
     // Restrict the native decoder to the supported formats, regardless of Drive's MIME label.
     const handle = await open(source, "r");
     const signature = Buffer.alloc(8);
