@@ -406,7 +406,7 @@ async function main() {
     await page.locator("#launch-text").fill("Text edited while sources load");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: path.join(output, "progressive-loading.png"), fullPage: true });
-    const pausedButton = page.getByRole("button", { name: "Pausiert auf Meta erstellen", exact: true });
+    const pausedButton = page.getByRole("button", { name: "Mit pausiertem Adset erstellen", exact: true });
     assert(await pausedButton.isDisabled());
     releaseMedia();
     await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
@@ -593,7 +593,8 @@ async function main() {
       await page.screenshot({ path: path.join(output, `dropdown-${width}.png`) });
       await search.press("Escape");
     }
-    await page.getByRole("button", { name: "Pausiert auf Meta erstellen", exact: true }).click();
+    await page.getByText("1 pausiertes Adset · 1 aktive Anzeigen · 2 Mediendateien", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Mit pausiertem Adset erstellen", exact: true }).click();
     await page.getByText("Test-Unterbrechung", { exact: true }).waitFor();
     assert.equal(submitted.groups.length, 1);
     assert.equal(submitted.name, expectedName);
@@ -602,7 +603,7 @@ async function main() {
     assert(!("spend" in submitted.copy), "Suggestion statistics must not leak into text payload");
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Upload fortsetzen", exact: true }).click();
-    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.equal(
       await page.getByRole("link", { name: "In Meta öffnen", exact: true }).getAttribute("href"),
       "https://adsmanager.facebook.com/adsmanager/manage/adsets?act=111&selected_adset_ids=100"
@@ -758,7 +759,7 @@ async function main() {
       .waitFor({ state: "hidden" });
     assert(await pausedButton.isEnabled());
     await pausedButton.click();
-    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.deepEqual(submitted.settings.countries, ["IT"]);
     assert.equal(submitted.settings.dailyBudget, "15.00");
     assert.deepEqual(submitted.settings.locales, [
@@ -838,7 +839,7 @@ async function main() {
     await page.locator("#launch-description-5").fill("Manuelle Beschreibung 5");
     assert.equal(await sourcePicker.inputValue(), "");
     await pausedButton.click();
-    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.deepEqual(submitted.copy.primaryTexts, [
       ...variantCopy.primaryTexts.slice(0, 4),
       "Manuell bearbeiteter Text 5"
@@ -961,7 +962,7 @@ async function main() {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     }
     await pausedButton.click();
-    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.equal(submitted.copy.pageId, "124");
     assert.equal(submitted.copy.instagramId, "");
     job = null;
@@ -1054,7 +1055,7 @@ async function main() {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     }
     await pausedButton.click();
-    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.equal(submitted.activate, false, "Old activation choice is never silently reused");
     assert.equal(submitted.campaignId, cancelledJob.campaignId);
     assert.equal(submitted.copy.instagramId, "457");
@@ -1094,7 +1095,7 @@ async function main() {
     await refreshIdentities.click();
     await partialIdentityWarning.waitFor({ state: "hidden" });
     await pausedButton.click();
-    await page.getByText("Pausiert erstellt", { exact: true }).waitFor();
+    await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.equal(submitted.copy.instagramId, "17841402245652920");
     assert.equal(creationRequests, 7);
     holdJobUpdates = true;

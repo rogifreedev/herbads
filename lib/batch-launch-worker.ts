@@ -58,7 +58,7 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
     if (state.inFlight) {
       job.status = "review";
       job.error =
-        "Ein Erstellungsschritt wurde unterbrochen. Bitte die bereits pausiert erstellten Objekte in Meta pruefen; es werden keine Duplikate automatisch angelegt.";
+        "Ein Erstellungsschritt wurde unterbrochen. Bitte das Adset und die bereits erstellten Anzeigen in Meta pruefen; es werden keine Duplikate automatisch angelegt.";
     } else if (!state.adsetId) {
       state.step = "adset";
       state.adsetId = await createObject("adset", `${metaAccountId}/adsets`, payload.adsetPayload);
@@ -158,19 +158,25 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
             );
           } else {
             state.step = "ad";
+            const parent = await metaLaunchRequest<{ status?: string }>(`${state.adsetId}?fields=status`);
+            if (parent.status !== "PAUSED")
+              throw new Error(
+                "Das neue Adset ist nicht als pausiert bestaetigt. Anzeigenerstellung angehalten; bitte das Adset in Meta pausieren und danach fortsetzen."
+              );
             ad.adId = await createObject(`ad:${group.id}`, `${metaAccountId}/ads`, {
               name: group.name,
               adset_id: state.adsetId,
               creative: { creative_id: ad.creativeId },
-              status: "PAUSED"
+              status: "ACTIVE"
             });
+            ad.activated = true;
           }
           delete state.inFlight;
         } else if (input.activate && !state.activated) {
           state.step = "activate";
           const nextAd = input.groups.map((item) => state.ads[item.id]).find((ad) => !ad.activated);
           if (nextAd) {
-            // Ads can be enabled safely while their new parent adset remains paused.
+            // Resume older jobs whose ads were originally created paused.
             const result = await metaLaunchRequest<{ success: boolean }>(nextAd.adId!, { status: "ACTIVE" });
             if (!result.success) throw new Error("Meta hat die Anzeigen-Aktivierung nicht bestaetigt.");
             nextAd.activated = true;
@@ -299,8 +305,8 @@ async function storeCreatedBatch(job: BatchLaunchJobRow) {
         meta_ad_id: external.adId,
         meta_creative_id: external.creativeId,
         name: group.name,
-        status,
-        effective_status: status
+        status: external.activated ? "ACTIVE" : "PAUSED",
+        effective_status: external.activated ? (state.activated ? "ACTIVE" : "ADSET_PAUSED") : "PAUSED"
       },
       { onConflict: "ad_account_id,meta_ad_id" }
     );

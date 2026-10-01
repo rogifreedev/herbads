@@ -63,6 +63,7 @@ beforeEach(() => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1));
       if (path.endsWith("/adsets")) sequence.push(String(body?.name));
+      if (path.endsWith("?fields=status")) return { status: "PAUSED" };
       if (path.endsWith("/adimages")) return { images: { a: { hash: "hash" } } };
       return { id: String(++counter) };
     } finally {
@@ -128,6 +129,10 @@ describe("complete browser-independent upload queue", () => {
     expect(sequence).toEqual(["a", "b", "c"]);
     expect(maxWrites).toBe(1);
     expect(mocks.meta.mock.calls.filter(([path]) => path.endsWith("/ads"))).toHaveLength(3);
+    expect(
+      mocks.meta.mock.calls.filter(([path]) => path.endsWith("/ads")).every(([, body]) => body.status === "ACTIVE")
+    ).toBe(true);
+    expect(jobs.every((job) => !job.state.activated && !job.state.activationStarted)).toBe(true);
     expect(
       mocks.meta.mock.calls.filter(([path]) => path.endsWith("/adsets")).every(([, body]) => body.status === "PAUSED")
     ).toBe(true);

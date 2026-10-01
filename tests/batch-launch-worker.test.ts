@@ -150,11 +150,15 @@ beforeEach(() => {
   mocks.request.mockImplementation(async (path: string, values?: Record<string, unknown>) =>
     path.includes("?fields=status,daily_budget")
       ? { status: "ACTIVE" }
-      : values?.status === "ACTIVE"
-        ? { success: true }
-        : path.endsWith("/adimages")
-          ? { images: { image: { hash: "hash" } } }
-          : { id: path.endsWith("/adsets") ? "100" : path.endsWith("/adcreatives") ? "200" : "300" }
+      : path === "100?fields=status"
+        ? { status: "PAUSED" }
+        : path.endsWith("/ads")
+          ? { id: "300" }
+          : values?.status === "ACTIVE"
+            ? { success: true }
+            : path.endsWith("/adimages")
+              ? { images: { image: { hash: "hash" } } }
+              : { id: path.endsWith("/adsets") ? "100" : "200" }
   );
 });
 
@@ -175,7 +179,7 @@ describe("resumable paused batch worker", () => {
     await processBatchLaunch("client", "job");
     expect(mocks.request).toHaveBeenCalledTimes(1);
   });
-  it("creates one paused ad with all 15 text variants and retains them in the stored creative", async () => {
+  it("creates one active ad with all 15 text variants and retains them in the stored creative", async () => {
     row.payload.input.copy = normalizeBatchCopy({
       ...row.payload.input.copy,
       primaryTexts: Array.from({ length: 5 }, (_, i) => `Body ${i}`),
@@ -188,7 +192,7 @@ describe("resumable paused batch worker", () => {
     const adCalls = mocks.request.mock.calls.filter(([path]) => path.endsWith("/ads"));
     expect(creativeCalls).toHaveLength(1);
     expect(adCalls).toHaveLength(1);
-    expect(adCalls[0][1].status).toBe("PAUSED");
+    expect(adCalls[0][1].status).toBe("ACTIVE");
     for (const key of ["bodies", "titles", "descriptions"])
       expect(creativeCalls[0][1].asset_feed_spec[key]).toHaveLength(5);
     expect(writes.find((write) => write.table === "creatives")?.values).toMatchObject({
@@ -197,42 +201,53 @@ describe("resumable paused batch worker", () => {
       raw: creativeCalls[0][1]
     });
   });
-  it("finishes every ad before enabling any of them, with the parent always last", async () => {
+  it("creates every ad active before enabling the parent last", async () => {
     row.payload.input.activate = true;
     row.payload.files.push({ ...feed, id: "second" });
     row.payload.input.groups.push({ id: "ad-2", name: "Second", feedFileId: "second", storyFileId: null });
     let adCount = 0;
     mocks.request.mockImplementation(async (path: string, values?: Record<string, unknown>) => {
+      if (path === "100?fields=status") return { status: "PAUSED" };
+      if (path.endsWith("/ads")) {
+        expect(values?.status).toBe("ACTIVE");
+        expect(row.state.activated).not.toBe(true);
+        return { id: String(300 + ++adCount) };
+      }
       if (values?.status === "ACTIVE") {
         expect(adCount).toBe(2);
         return { success: true };
       }
       if (path.includes("?fields=status,daily_budget")) return { status: "ACTIVE" };
       if (path.endsWith("/adimages")) return { images: { image: { hash: "hash" } } };
-      if (path.endsWith("/ads")) return { id: String(300 + ++adCount) };
       return { id: path.endsWith("/adsets") ? "100" : "200" };
     });
     for (let i = 0; i < 11; i++) await processBatchLaunch("client", "job");
     expect(row.status).toBe("completed");
     expect(mocks.request.mock.calls.filter(([, values]) => values?.status === "ACTIVE").map(([path]) => path)).toEqual([
-      "301",
-      "302",
+      "act_111/ads",
+      "act_111/ads",
       "100"
     ]);
   });
-  it("creates everything paused and activates the new parent only after all ads", async () => {
+  it("creates active ads in the paused adset and activates only the new parent on request", async () => {
     row.payload.input.activate = true;
     for (let i = 0; i < 7; i++) await processBatchLaunch("client", "job");
     expect(row.status).toBe("completed");
     expect(row.state.activated).toBe(true);
     const calls = mocks.request.mock.calls;
     expect(calls.find(([path]) => path.endsWith("/adsets"))?.[1].status).toBe("PAUSED");
-    expect(calls.find(([path]) => path.endsWith("/ads"))?.[1].status).toBe("PAUSED");
-    expect(calls.filter(([, values]) => values?.status === "ACTIVE").map(([path]) => path)).toEqual(["300", "100"]);
+    expect(calls.find(([path]) => path.endsWith("/ads"))?.[1].status).toBe("ACTIVE");
+    expect(calls.filter(([, values]) => values?.status === "ACTIVE").map(([path]) => path)).toEqual([
+      "act_111/ads", "100"
+    ]);
     expect(calls.some(([path, values]) => path === campaign.id && values)).toBe(false);
     expect(writes.find((write) => write.table === "batch_folder_checks")?.values).toMatchObject({
       status: "live",
       match_status: "ACTIVE"
+    });
+    expect(writes.find((write) => write.table === "meta_ads")?.values).toMatchObject({
+      status: "ACTIVE",
+      effective_status: "ACTIVE"
     });
   });
   it("does not activate any object when media upload fails", async () => {
@@ -258,7 +273,7 @@ describe("resumable paused batch worker", () => {
   });
   it("stops if the campaign is paused before the final activation", async () => {
     row.payload.input.activate = true;
-    for (let i = 0; i < 5; i++) await processBatchLaunch("client", "job");
+    for (let i = 0; i < 4; i++) await processBatchLaunch("client", "job");
     mocks.request.mockResolvedValueOnce({ status: "PAUSED" });
     await processBatchLaunch("client", "job");
     expect(row.status).toBe("failed");
@@ -269,7 +284,7 @@ describe("resumable paused batch worker", () => {
   });
   it("stops if the campaign budget changes during the upload", async () => {
     row.payload.input.activate = true;
-    for (let i = 0; i < 5; i++) await processBatchLaunch("client", "job");
+    for (let i = 0; i < 4; i++) await processBatchLaunch("client", "job");
     mocks.request.mockResolvedValueOnce({ status: "ACTIVE", daily_budget: "99999" });
     await processBatchLaunch("client", "job");
     expect(row.status).toBe("failed");
@@ -278,7 +293,7 @@ describe("resumable paused batch worker", () => {
   });
   it("retries an uncertain activation on the same ID without creating more objects", async () => {
     row.payload.input.activate = true;
-    for (let i = 0; i < 5; i++) await processBatchLaunch("client", "job");
+    for (let i = 0; i < 4; i++) await processBatchLaunch("client", "job");
     mocks.request
       .mockResolvedValueOnce({ status: "ACTIVE" })
       .mockRejectedValueOnce(new MetaLaunchError("Timeout", true));
@@ -295,15 +310,26 @@ describe("resumable paused batch worker", () => {
       mocks.request.mock.calls.filter(([path, values]) => path === "100" && values?.status === "ACTIVE")
     ).toHaveLength(2);
   });
-  it("creates one adset and one paused ad across persistent steps", async () => {
+  it("creates one paused adset and one active ad without enabling delivery by default", async () => {
     for (let i = 0; i < 5; i++) await processBatchLaunch("client", "job");
     expect(row.status).toBe("completed");
-    expect(row.state.ads["ad-1"]).toEqual({ creativeId: "200", adId: "300" });
+    expect(row.state.ads["ad-1"]).toEqual({ creativeId: "200", adId: "300", activated: true });
     expect(mocks.request.mock.calls.filter(([path]) => path.endsWith("/adsets"))).toHaveLength(1);
     expect(mocks.request.mock.calls.find(([path]) => path.endsWith("/adsets"))?.[1]).toHaveProperty("status", "PAUSED");
     expect(mocks.request.mock.calls.find(([path]) => path.endsWith("/ads"))?.[1]).toMatchObject({
-      status: "PAUSED",
+      status: "ACTIVE",
       adset_id: "100"
+    });
+    expect(row.state.activated).toBeUndefined();
+    expect(row.state.activationStarted).toBeUndefined();
+    expect(mocks.request.mock.calls.some(([path, values]) => path === "100" && values)).toBe(false);
+    expect(writes.find((write) => write.table === "meta_ads")?.values).toMatchObject({
+      status: "ACTIVE",
+      effective_status: "ADSET_PAUSED"
+    });
+    expect(writes.find((write) => write.table === "meta_ad_sets")?.values).toMatchObject({
+      status: "PAUSED",
+      effective_status: "PAUSED"
     });
     expect(writes.find((write) => write.table === "batch_folder_checks")?.values).toMatchObject({
       status: "found",
@@ -311,7 +337,56 @@ describe("resumable paused batch worker", () => {
     });
     expect(row.lease_token).toBeNull();
     await processBatchLaunch("client", "job");
-    expect(mocks.request).toHaveBeenCalledTimes(4);
+    expect(mocks.request).toHaveBeenCalledTimes(5);
+  });
+  it.each(["ACTIVE", "ARCHIVED", undefined])("stops before creating an active ad if its parent is %s", async (status) => {
+    for (let i = 0; i < 3; i++) await processBatchLaunch("client", "job");
+    mocks.request.mockResolvedValueOnce({ status });
+    await processBatchLaunch("client", "job");
+    expect(row.status).toBe("failed");
+    expect(row.error).toMatch(/Adset.*pausiert/);
+    expect(row.state.inFlight).toBeUndefined();
+    expect(mocks.request.mock.calls.some(([path]) => path.endsWith("/ads"))).toBe(false);
+    expect(row.state.ads["ad-1"].activated).toBeUndefined();
+  });
+  it("does not write an active ad after the parent status lookup fails", async () => {
+    for (let i = 0; i < 3; i++) await processBatchLaunch("client", "job");
+    mocks.request.mockRejectedValueOnce(new MetaLaunchError("Status unavailable", false));
+    await processBatchLaunch("client", "job");
+    expect(row.status).toBe("failed");
+    expect(row.state.inFlight).toBeUndefined();
+    expect(mocks.request.mock.calls.some(([path]) => path.endsWith("/ads"))).toBe(false);
+  });
+  it("requires review after an uncertain active-ad creation without duplicating the ad", async () => {
+    for (let i = 0; i < 3; i++) await processBatchLaunch("client", "job");
+    mocks.request
+      .mockResolvedValueOnce({ status: "PAUSED" })
+      .mockRejectedValueOnce(new MetaLaunchError("Timeout", true));
+    await processBatchLaunch("client", "job");
+    expect(row.status).toBe("review");
+    expect(row.state.inFlight).toBe("ad:ad-1");
+    expect(row.state.ads["ad-1"].activated).toBeUndefined();
+    await processBatchLaunch("client", "job");
+    expect(mocks.request.mock.calls.filter(([path]) => path.endsWith("/ads"))).toHaveLength(1);
+  });
+  it.each([false, true])("resumes old paused ads without changing their requested activation (%s)", async (activate) => {
+    row.payload.input.activate = activate;
+    row.state = {
+      adsetId: "100",
+      media: { feed: { imageHash: "hash" } },
+      ads: { "ad-1": { creativeId: "200", adId: "300" } },
+      step: "ad"
+    };
+    for (let i = 0; i < 4; i++) await processBatchLaunch("client", "job");
+    expect(row.status).toBe("completed");
+    expect(mocks.request.mock.calls.some(([path]) => path.endsWith("/ads"))).toBe(false);
+    expect(mocks.request.mock.calls.filter(([, values]) => values?.status === "ACTIVE").map(([path]) => path)).toEqual(
+      activate ? ["300", "100"] : []
+    );
+    expect(writes.find((write) => write.table === "meta_ads")?.values).toMatchObject({
+      status: activate ? "ACTIVE" : "PAUSED",
+      effective_status: activate ? "ACTIVE" : "PAUSED"
+    });
   });
   it("serializes competing requests through the database lease", async () => {
     let release!: () => void;
