@@ -2,7 +2,7 @@
 
 The action on a missing Drive batch opens `/clients/[clientId]/batches/create?folderId=...`.
 One batch creates one adset in an active existing campaign. The destination picker hides inactive campaigns, and creation rechecks the live status. Every selected motif becomes one ad.
-New adset names are generated as `DD.MM.YYYY_<Drive batch name>` using the current date in `Europe/Berlin`, enforced server-side. Resumed jobs keep their original name.
+New adset names use the Drive batch name, including its existing numbering, without an added date prefix (for example `102 - 3 Gruende VSL`). This is enforced server-side and also used in the form preview. Resumed jobs and existing Meta adsets keep their original name.
 The adset is initially created with `status: PAUSED`; new ads are created with `status: ACTIVE`. Before each active ad is created, the worker verifies that the parent adset is still paused and stops without creating the ad if that cannot be confirmed. The default final state is an inactive adset containing enabled ads, ready for manual adset activation. Users may explicitly choose direct activation and confirm the account, campaign and budget in a separate dialog. Only after all media, creatives and ads exist is the new adset enabled. The existing campaign is never modified or activated.
 
 Each confirmed active ad is marked in the persisted job state. Local ad records distinguish configured `ACTIVE` from inherited `ADSET_PAUSED`; adset and Batch Check records remain paused until explicit direct activation completes. Previously created paused ads are not changed retroactively; older jobs can still enable those ads in their explicitly requested direct-activation step. Completed jobs are untouched.

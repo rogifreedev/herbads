@@ -9,14 +9,8 @@ import type {
 import type { BatchTemplate } from "@/lib/batch-launch-types";
 import { MAX_COPY_VARIANTS, copyVariants, normalizeBatchCopy } from "@/lib/batch-launch-copy";
 
-export function batchAdsetName(folderName: string, date = new Date()) {
-  const day = new Intl.DateTimeFormat("de-DE", {
-    timeZone: "Europe/Berlin",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(date);
-  return `${day}_${folderName.trim()}`;
+export function batchAdsetName(folderName: string) {
+  return folderName.trim();
 }
 
 export function adsetGeography(targeting: unknown) {

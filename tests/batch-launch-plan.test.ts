@@ -17,13 +17,13 @@ import type { BatchAdGroup, BatchLaunchCopy } from "@/lib/batch-launch-types";
 import { campaign, copy, feed, media, settings, story, template } from "./batch-launch-fixtures";
 
 describe("batch adset names", () => {
-  it("prefixes the batch name with the German date and an underscore", () => {
-    expect(batchAdsetName(" 01_Batch ", new Date("2026-09-16T10:00:00Z"))).toBe("16.09.2026_01_Batch");
+  it("uses only the batch name and preserves its numbering", () => {
+    expect(batchAdsetName(" 01_Batch ")).toBe("01_Batch");
+    expect(batchAdsetName("102 - 3 Gr\u00fcnde VSL")).toBe("102 - 3 Gr\u00fcnde VSL");
   });
-  it("uses the Berlin day across midnight, year boundaries and daylight saving time", () => {
-    expect(batchAdsetName("Batch", new Date("2026-09-15T22:30:00Z"))).toBe("16.09.2026_Batch");
-    expect(batchAdsetName("Batch", new Date("2026-12-31T23:30:00Z"))).toBe("01.01.2027_Batch");
-    expect(batchAdsetName("Batch", new Date("2026-12-31T22:30:00Z"))).toBe("31.12.2026_Batch");
+  it("does not rewrite dates or separators that are part of the folder name", () => {
+    expect(batchAdsetName("09_Karlo Batch 8")).toBe("09_Karlo Batch 8");
+    expect(batchAdsetName("103 - Aktion 01.10.2026")).toBe("103 - Aktion 01.10.2026");
   });
 });
 

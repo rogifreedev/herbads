@@ -426,7 +426,7 @@ async function main() {
     assert(await pausedButton.isEnabled());
     await page.locator("#launch-campaign").selectOption("");
     await page.locator("#launch-text").fill(copy.primaryText);
-    const expectedName = `${new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date())}_Batch 01 - Herbstkampagne`;
+    const expectedName = "Batch 01 - Herbstkampagne";
     assert.equal(await page.locator("#launch-name").inputValue(), expectedName);
     assert(await page.locator("#launch-name").evaluate((input) => input.readOnly));
     assert.deepEqual(

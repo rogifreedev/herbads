@@ -138,9 +138,10 @@ describe("batch creation defaults", () => {
     });
     expect(copy.primaryTexts).toEqual(["", "Second body", "Third body"]);
   });
-  it("uses the server date and authoritative folder name for validation, persistence and Meta", async () => {
-    const job = await createBatchLaunch("client", { ...launchInput, name: "untrusted or stale browser name" });
-    const name = "16.09.2026_01_Batch";
+  it.each(["2026-09-15T22:30:00Z", "2026-12-31T23:30:00Z"])("uses only the authoritative folder name on %s", async (date) => {
+    vi.setSystemTime(new Date(date));
+    const job = await createBatchLaunch("client", { ...launchInput, name: "16.09.2026_01_Batch" });
+    const name = "01_Batch";
     expect(job.name).toBe(name);
     expect(mocks.insert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,6 +161,10 @@ describe("batch creation defaults", () => {
       })
     );
     expect(launchInput.name).toBe("Batch 01");
+  });
+  it("preserves the original name of an existing job", () => {
+    const row = { ...previous("running"), name: "16.09.2026_01_Batch" };
+    expect(mapLaunchJob(row).name).toBe("16.09.2026_01_Batch");
   });
   it.each(["PAUSED", "ARCHIVED", "DELETED"])(
     "rejects a destination that is now %s before any write",
