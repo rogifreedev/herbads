@@ -21,7 +21,11 @@ const NON_RETRYABLE_REASONS = new Set([
   "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
 ]);
 
-type DriveFailure = { reason: string | null; format: "JSON" | "HTML" | "Text" | "leer" | "zu gross" | "unlesbar" };
+type DriveFailure = {
+  reason: string | null;
+  format: "JSON" | "HTML" | "Text" | "leer" | "zu gross" | "unlesbar";
+  gateway?: "client-forbidden" | "unusual-traffic" | "automated-queries" | "unknown";
+};
 
 async function errorDetails(response: Response, apiKey: string | null): Promise<DriveFailure> {
   const reader = response.body?.getReader();
@@ -38,8 +42,16 @@ async function errorDetails(response: Response, apiKey: string | null): Promise<
     }
     const text = Buffer.concat(chunks).toString("utf8").trim();
     if (!text) return { reason: null, format: "leer" };
-    if (response.headers.get("Content-Type")?.includes("text/html") || /^<(?:!doctype|html)\b/i.test(text))
-      return { reason: null, format: "HTML" };
+    if (response.headers.get("Content-Type")?.includes("text/html") || /^<(?:!doctype|html)\b/i.test(text)) {
+      const gateway = /unusual traffic/i.test(text)
+        ? "unusual-traffic"
+        : /automated queries/i.test(text)
+          ? "automated-queries"
+          : /client does not have permission/i.test(text)
+            ? "client-forbidden"
+            : "unknown";
+      return { reason: null, format: "HTML", gateway };
+    }
     let data;
     try {
       data = JSON.parse(text);
@@ -118,6 +130,16 @@ export async function fetchDriveDownload(url: URL, name: string, range: string, 
     if (response) {
       if (response.ok) return response;
       const details = await errorDetails(response, url.searchParams.get("key"));
+      if (response.status === 403 && details.format === "HTML") {
+        // Fixed classifications only: provider bodies and request URLs can contain credentials.
+        console.warn("Drive download gateway rejection", {
+          status: response.status,
+          gateway: details.gateway,
+          redirected: response.redirected,
+          sameOrigin: response.url ? new URL(response.url).origin === url.origin : null,
+          attempt: attempt + 1
+        });
+      }
       failure = downloadError(name, response.status, details);
       const { reason } = details;
       unclassified =

@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-01T08:00:00Z"));
   vi.spyOn(Math, "random").mockReturnValue(0);
+  vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -24,6 +25,31 @@ afterEach(() => {
 });
 
 describe("Drive download recovery", () => {
+  it.each([
+    ["Your client does not have permission to get URL", "client-forbidden"],
+    ["Our systems have detected unusual traffic", "unusual-traffic"],
+    ["Your network may be sending automated queries", "automated-queries"],
+    ["Unknown provider message", "unknown"]
+  ])("logs only fixed classifications for HTML rejections: %s", async (message, gateway) => {
+    const response = new Response(`<html>${message}: ${url}</html>`, {
+      status: 403,
+      headers: { "Content-Type": "text/html" }
+    });
+    Object.defineProperty(response, "url", { value: String(url) });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response).mockResolvedValueOnce(new Response("media")));
+    const result = fetchDriveDownload(url, name, range);
+    await vi.runAllTimersAsync();
+    await result;
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Drive download gateway rejection", {
+      status: 403,
+      gateway,
+      redirected: false,
+      sameOrigin: true,
+      attempt: 1
+    });
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("secret-api-key");
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(message);
+  });
   it.each(["rateLimitExceeded", "userRateLimitExceeded"])(
     "retries a 403 %s at the exact same offset",
     async (reason) => {
