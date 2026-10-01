@@ -3,7 +3,46 @@ import { createHash } from "node:crypto";
 import { JWT } from "google-auth-library";
 
 type DriveAuthMode = "api_key" | "service_account";
-let cachedClient: { fingerprint: string; client: JWT } | undefined;
+type ServiceAccountState = { fingerprint: string; client: JWT; backupUntil: number };
+let cachedClient: ServiceAccountState | undefined;
+const BACKUP_INTERVAL_MS = 60_000;
+const NETWORK_FAILURE_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET"
+]);
+
+function technicalTokenFailure(error: unknown): "network" | "server" | null {
+  if (!error || typeof error !== "object") return null;
+  const failure = error as {
+    name?: string;
+    code?: string;
+    cause?: { code?: string };
+    response?: { status?: number; data?: unknown };
+  };
+  if (failure.response) {
+    if (![500, 502, 503, 504].includes(failure.response.status ?? 0)) return null;
+    const data = failure.response.data;
+    // Unknown bodies and explicit OAuth denials never qualify, even with a misleading server status.
+    if (typeof data === "string" && data.trim()) return null;
+    const oauthError = data && typeof data === "object" ? (data as { error?: unknown }).error : undefined;
+    if (oauthError !== undefined && oauthError !== "server_error" && oauthError !== "temporarily_unavailable")
+      return null;
+    return "server";
+  }
+  return NETWORK_FAILURE_CODES.has(failure.code ?? failure.cause?.code ?? "") ||
+    failure.name === "TimeoutError" ||
+    failure.name === "AbortError"
+    ? "network"
+    : null;
+}
 
 export function getDriveAuthMode(clientId?: string): DriveAuthMode {
   const mode = process.env.GOOGLE_DRIVE_AUTH_MODE?.trim() || "api_key";
@@ -35,7 +74,7 @@ function serviceAccountClient() {
   const raw = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON?.trim();
   if (!raw) throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON fehlt. Bitte das Drive-Dienstkonto konfigurieren.");
   const fingerprint = createHash("sha256").update(raw).digest("hex");
-  if (cachedClient?.fingerprint === fingerprint) return cachedClient.client;
+  if (cachedClient?.fingerprint === fingerprint) return cachedClient;
   try {
     const key = JSON.parse(raw);
     if (
@@ -53,8 +92,8 @@ function serviceAccountClient() {
       scopes: ["https://www.googleapis.com/auth/drive.readonly"],
       transporterOptions: { timeout: 10_000, retryConfig: { retry: 0 } }
     });
-    cachedClient = { fingerprint, client };
-    return client;
+    cachedClient = { fingerprint, client, backupUntil: 0 };
+    return cachedClient;
   } catch {
     throw new Error("Die JSON-Konfiguration des Drive-Dienstkontos ist ungueltig.");
   }
@@ -69,13 +108,33 @@ export async function driveRequest(fileId?: string, clientId?: string) {
     if (!apiKey) throw new Error("GOOGLE_DRIVE_API_KEY fehlt. Bitte die Drive-Anbindung konfigurieren.");
     url.searchParams.set("key", apiKey);
   } else {
-    const client = serviceAccountClient();
+    const account = serviceAccountClient();
+    const backupKey =
+      process.env.GOOGLE_DRIVE_AUTO_BACKUP?.trim() === "true" ? process.env.GOOGLE_DRIVE_API_KEY?.trim() : undefined;
+    if (backupKey && account.backupUntil > Date.now()) {
+      url.searchParams.set("key", backupKey);
+      return { url, headers };
+    }
     try {
-      const { token } = await client.getAccessToken();
+      const { token } = await account.client.getAccessToken();
       if (!token) throw new Error();
+      account.backupUntil = 0;
       headers.Authorization = `Bearer ${token}`;
-    } catch {
+    } catch (error) {
       // SDK errors may contain the signed assertion or private key in their request configuration.
+      const reason = technicalTokenFailure(error);
+      if (backupKey && reason) {
+        if (account.backupUntil <= Date.now()) {
+          console.warn("Drive API-key backup enabled", {
+            reason,
+            retryServiceAccountAfterSeconds: BACKUP_INTERVAL_MS / 1000
+          });
+        }
+        account.backupUntil = Date.now() + BACKUP_INTERVAL_MS;
+        url.searchParams.set("key", backupKey);
+        return { url, headers };
+      }
+      account.backupUntil = 0;
       throw new Error("Drive-Dienstkonto konnte nicht angemeldet werden. Bitte Schluessel und Dienstkonto pruefen.");
     }
   }

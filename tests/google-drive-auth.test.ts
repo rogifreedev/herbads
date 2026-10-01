@@ -28,8 +28,12 @@ beforeEach(() => {
   vi.stubEnv("GOOGLE_DRIVE_SERVICE_ACCOUNT_CLIENT_IDS", "pilot");
   vi.stubEnv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON", JSON.stringify(key));
   vi.stubEnv("GOOGLE_DRIVE_API_KEY", "backup-key");
+  vi.stubEnv("GOOGLE_DRIVE_AUTO_BACKUP", "false");
+  vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -69,6 +73,8 @@ describe("server-only Drive credentials", () => {
     await expect(driveRequest()).rejects.toThrow(/Kundenzuordnung/);
     vi.stubEnv("GOOGLE_DRIVE_SERVICE_ACCOUNT_CLIENT_IDS", "");
     expect((await driveRequest()).headers.Authorization).toBe("Bearer secret-bearer");
+    expect((await driveRequest("file", "any-other-client")).headers.Authorization).toBe("Bearer secret-bearer");
+    expect(mocks.options).toHaveBeenCalledTimes(1);
   });
   it("never silently falls back for invalid mode, absent credentials or invalid JSON", async () => {
     const { driveRequest, hasDriveCredentials } = await import("@/lib/google-drive-auth");
@@ -128,6 +134,7 @@ describe("server-only Drive credentials", () => {
     await expect(driveRequest("file", "pilot")).rejects.toThrow(/nicht angemeldet/);
   });
   it.each([401, 403, 404, 429, 500])("does not retry metadata HTTP %i with alternate credentials", async (status) => {
+    vi.stubEnv("GOOGLE_DRIVE_AUTO_BACKUP", "true");
     const fetch = vi.fn().mockResolvedValue(Response.json({ error: { message: key.private_key } }, { status }));
     vi.stubGlobal("fetch", fetch);
     const { listBatchMedia } = await import("@/lib/batch-launch-drive");
@@ -175,5 +182,130 @@ describe("server-only Drive credentials", () => {
       { Authorization: "Bearer secret-bearer", Range: "bytes=1-2" },
       { Authorization: "Bearer secret-bearer", Range: "bytes=0-3" }
     ]);
+  });
+});
+
+describe("automatic Drive backup for technical token-service outages", () => {
+  beforeEach(() => {
+    vi.stubEnv("GOOGLE_DRIVE_AUTO_BACKUP", "true");
+    vi.stubEnv("GOOGLE_DRIVE_SERVICE_ACCOUNT_CLIENT_IDS", "");
+  });
+
+  it.each([
+    { code: "ECONNRESET" },
+    { code: "ETIMEDOUT" },
+    { cause: { code: "EAI_AGAIN" } },
+    { name: "TimeoutError" },
+    { name: "AbortError" },
+    { response: { status: 500 } },
+    { response: { status: 502, data: { error: "server_error" } } },
+    { response: { status: 503, data: { error: "temporarily_unavailable", error_description: key.private_key } } },
+    { response: { status: 504 } }
+  ])("switches before the Drive request, without mixing credentials or exposing secrets: %#", async (failure) => {
+    mocks.token.mockRejectedValue(failure);
+    const { driveRequest } = await import("@/lib/google-drive-auth");
+    for (const clientId of ["first-client", "second-client"]) {
+      const { url, headers } = await driveRequest("file", clientId);
+      expect(url.origin).toBe("https://www.googleapis.com");
+      expect(url.searchParams.get("key")).toBe("backup-key");
+      expect(headers).toEqual({});
+    }
+    expect(mocks.token).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Drive API-key backup enabled", {
+      reason: "response" in failure ? "server" : "network",
+      retryServiceAccountAfterSeconds: 60
+    });
+    const logs = JSON.stringify(vi.mocked(console.warn).mock.calls);
+    for (const secret of ["backup-key", "secret-bearer", "TEST-ONLY", "PRIVATE KEY"])
+      expect(logs).not.toContain(secret);
+  });
+
+  it("returns to the service account automatically after a bounded cooldown", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+    mocks.token.mockRejectedValueOnce({ code: "ECONNRESET" });
+    const { driveRequest } = await import("@/lib/google-drive-auth");
+    expect((await driveRequest("file")).url.searchParams.get("key")).toBe("backup-key");
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect((await driveRequest("file")).url.searchParams.get("key")).toBe("backup-key");
+    expect(mocks.token).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const restored = await driveRequest("file");
+    expect(restored.url.searchParams.has("key")).toBe(false);
+    expect(restored.headers).toEqual({ Authorization: "Bearer secret-bearer" });
+    expect(mocks.token).toHaveBeenCalledTimes(2);
+  });
+
+  it("rechecks immediately after credential rotation instead of retaining a stale fallback", async () => {
+    mocks.token.mockRejectedValueOnce({ response: { status: 503 } });
+    const { driveRequest } = await import("@/lib/google-drive-auth");
+    expect((await driveRequest("file")).url.searchParams.has("key")).toBe(true);
+    vi.stubEnv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON", JSON.stringify({ ...key, private_key: key.private_key + "\n" }));
+    expect((await driveRequest("file")).headers.Authorization).toBe("Bearer secret-bearer");
+    expect(mocks.options).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { response: { status: 400, data: { error: "invalid_grant" } } },
+    { response: { status: 401 }, code: "ECONNRESET" },
+    { response: { status: 403 } },
+    { response: { status: 404 } },
+    { response: { status: 429 } },
+    { response: { status: 503, data: { error: "access_denied" } } },
+    { response: { status: 503, data: "<html>automated queries</html>" } },
+    { response: { status: 503, data: { error: { status: "PERMISSION_DENIED" } } } },
+    { code: "CERT_HAS_EXPIRED" },
+    new Error("invalid grant: secret-bearer"),
+    null
+  ])("never switches for rejected credentials, quotas, safety blocks or unclassified errors: %#", async (failure) => {
+    mocks.token.mockRejectedValueOnce(failure);
+    const { driveRequest } = await import("@/lib/google-drive-auth");
+    await expect(driveRequest("file")).rejects.toThrow(/Dienstkonto konnte nicht angemeldet/);
+    expect(console.warn).not.toHaveBeenCalled();
+    expect((await driveRequest("file")).headers.Authorization).toBe("Bearer secret-bearer");
+  });
+
+  it.each(["disabled", "missing-key"])("does not fall back when the backup is %s", async (setup) => {
+    if (setup === "disabled") vi.stubEnv("GOOGLE_DRIVE_AUTO_BACKUP", "false");
+    else vi.stubEnv("GOOGLE_DRIVE_API_KEY", "");
+    mocks.token.mockRejectedValue({ response: { status: 503 } });
+    const { driveRequest } = await import("@/lib/google-drive-auth");
+    await expect(driveRequest("file")).rejects.toThrow(/nicht angemeldet/);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "invalid-json"])("does not mask invalid service-account configuration: %#", async (raw) => {
+    vi.stubEnv("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON", raw);
+    const { driveRequest } = await import("@/lib/google-drive-auth");
+    await expect(driveRequest("file")).rejects.toThrow(/fehlt|ungueltig/);
+    expect(mocks.token).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it("retains the exact resumed video offset while using the backup", async () => {
+    mocks.token.mockRejectedValue({ code: "ETIMEDOUT" });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("bc", { status: 206, headers: { "Content-Range": "bytes 1-2/4" } }));
+    vi.stubGlobal("fetch", fetch);
+    const { downloadBatchMedia } = await import("@/lib/batch-launch-drive");
+    expect((await downloadBatchMedia({ ...feed, kind: "video" }, 1, 3, "any-client")).toString()).toBe("bc");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0].searchParams.get("key")).toBe("backup-key");
+    expect(fetch.mock.calls[0][1].headers).toEqual({ Range: "bytes=1-2" });
+  });
+
+  it("does not switch identities again when the backup itself is denied", async () => {
+    mocks.token.mockRejectedValueOnce({ response: { status: 503 } });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ error: { errors: [{ reason: "insufficientFilePermissions" }] } }, { status: 403 })
+      );
+    vi.stubGlobal("fetch", fetch);
+    const { downloadBatchMedia } = await import("@/lib/batch-launch-drive");
+    await expect(downloadBatchMedia({ ...feed, kind: "video" }, 1, 3, "any-client")).rejects.toThrow(/HTTP 403/);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.token).toHaveBeenCalledTimes(1);
   });
 });
