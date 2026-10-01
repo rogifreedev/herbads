@@ -1,17 +1,15 @@
 import Link from "next/link";
-import { ExternalLink, Settings, UploadCloud } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { Settings } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { BatchCheckButton } from "@/components/batch-check-button";
+import { BatchCheckTable } from "@/components/batch-check-table";
 import { BatchesSectionNav } from "@/components/batches-section-nav";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { batchMetaMatchLabel, getBatchOverview, isBatchSnapshotStale, type BatchOverviewItem } from "@/lib/batches";
-import { formatDate, formatNumber } from "@/lib/metrics";
+import { getBatchOverview, isBatchSnapshotStale } from "@/lib/batches";
+import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +99,7 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
                   action={<BatchCheckButton clientId={clientId} disabled={settings.lastCheckStatus === "running"} />}
                 />
               ) : (
-                <BatchTable rows={overview.items} clientId={clientId} />
+                <BatchCheckTable key={clientId} rows={overview.items} clientId={clientId} />
               )}
             </CardContent>
           </Card>
@@ -127,92 +125,4 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
       </CardContent>
     </Card>
   );
-}
-
-function BatchTable({ rows, clientId }: { rows: BatchOverviewItem[]; clientId: string }) {
-  const t = useTranslations("batches");
-  const tLaunch = useTranslations("batchLaunch");
-  const locale = useLocale();
-  const statusLabels: Record<BatchOverviewItem["status"], string> = {
-    live: t("statusLive"),
-    found: t("statusFoundInactive"),
-    missing: t("statusMissing")
-  };
-
-  return (
-    <div className="overflow-x-auto rounded-xl border border-herb-border">
-      <Table className="min-w-[1120px]">
-        <TableHeader className="bg-white/[0.03]">
-          <TableRow className="hover:bg-transparent">
-            <TableHead>Root</TableHead>
-            <TableHead>{t("folderColumn")}</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Meta Match</TableHead>
-            <TableHead>{t("driveModified")}</TableHead>
-            <TableHead>{t("checkedColumn")}</TableHead>
-            <TableHead>Drive</TableHead>
-            <TableHead>Meta</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={`${row.sourceFolderId ?? "root"}-${row.id}`} className="align-top">
-              <TableCell>
-                <Badge variant="outline">{row.sourceFolderLabel ?? t("driveFolderFallback")}</Badge>
-              </TableCell>
-              <TableCell>
-                <p className="line-clamp-2 min-w-[260px] font-medium text-white">{row.name}</p>
-                {row.path !== row.name ? <p className="mt-1 line-clamp-1 text-xs text-white/45">{row.path}</p> : null}
-                <p className="mt-1 font-mono text-xs text-white/40">{row.id}</p>
-              </TableCell>
-              <TableCell>
-                <Badge variant={statusVariant(row.status)}>{statusLabels[row.status]}</Badge>
-              </TableCell>
-              <TableCell>
-                {row.match ? (
-                  row.match.href ? (
-                    <Link href={row.match.href} className="line-clamp-2 max-w-[360px] font-medium text-primary hover:text-white">
-                      {batchMetaMatchLabel(row.match)}
-                    </Link>
-                  ) : (
-                    <span className="line-clamp-2 max-w-[360px] text-white/75">{batchMetaMatchLabel(row.match)}</span>
-                  )
-                ) : (
-                  <span className="text-white/45">-</span>
-                )}
-                {row.match ? (
-                  <p className="mt-1 text-xs text-white/40">
-                    {t("statusLine", { status: row.match.effectiveStatus ?? row.match.status ?? "-" })}
-                  </p>
-                ) : null}
-              </TableCell>
-              <TableCell className="text-white/60">{formatDate(row.modifiedTime)}</TableCell>
-              <TableCell className="text-white/60">{formatDateTime(row.checkedAt, locale)}</TableCell>
-              <TableCell>
-                {row.webViewLink ? (
-                  <Button asChild variant="outline" size="sm" className="border-herb-border">
-                    <Link href={row.webViewLink} target="_blank">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      {t("open")}
-                    </Link>
-                  </Button>
-                ) : (
-                  <span className="text-white/45">-</span>
-                )}
-              </TableCell>
-              <TableCell>
-                {row.status === "missing" ? <Button asChild variant="outline" size="sm"><Link href={`/clients/${clientId}/batches/create?folderId=${encodeURIComponent(row.id)}`}><UploadCloud className="mr-2 h-4 w-4" />{tLaunch("create")}</Link></Button> : null}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function statusVariant(status: BatchOverviewItem["status"]): "success" | "warning" | "destructive" {
-  if (status === "live") return "success";
-  if (status === "found") return "warning";
-  return "destructive";
 }

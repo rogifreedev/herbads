@@ -7,6 +7,11 @@ The adset and every ad are initially created with `status: PAUSED`. Paused is th
 
 ## Configuration
 
+The Batch Check overview numbers its snapshot in natural root/path order (2 before 10).
+Numbers remain stable while filtering; Drive folder names and Meta objects are never renamed.
+Its client-side, deferred live search matches words across batch names, paths, roots, Drive IDs
+and Meta match names without Enter, navigation or additional Drive/Meta/Supabase requests.
+
 - `GOOGLE_DRIVE_AUTH_MODE`: `api_key` (backward-compatible default/manual backup) or `service_account`.
 - `GOOGLE_DRIVE_API_KEY`: retained access to the same public/shared folders used by Batch Check. This is not OAuth; Google sign-in is separate and unchanged.
 - `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`: server-only sensitive environment variable containing a service-account JSON key. Never commit the file, put it in `NEXT_PUBLIC_*`, log it, or store credentials/tokens in job payloads. Enable the Drive API in its project and share the relevant Drive folders with its email as Viewer. No domain-wide delegation or project Editor role is needed.
@@ -73,6 +78,7 @@ npm test
 npm run typecheck
 npm run build
 node scripts/batch-launch-smoke.mjs
+node scripts/batch-check-smoke.mjs
 node scripts/test-batch-upload-sql.mjs
 node scripts/test-batch-upload-sql.mjs --retry
 ```
