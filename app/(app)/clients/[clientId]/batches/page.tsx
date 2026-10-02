@@ -3,6 +3,7 @@ import { Settings } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { BatchCheckButton } from "@/components/batch-check-button";
 import { BatchCheckTable } from "@/components/batch-check-table";
+import { BatchStatusRefresh } from "@/components/batch-status-refresh";
 import { BatchesSectionNav } from "@/components/batches-section-nav";
 import { EmptyState } from "@/components/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -45,6 +46,7 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
         </Card>
       ) : (
         <>
+          {overview.items.some((item) => item.match?.id) ? <BatchStatusRefresh key={clientId} clientId={clientId} /> : null}
           {settings.lastCheckError ? (
             <Alert variant="warning">
               <AlertDescription>{settings.lastCheckError}</AlertDescription>

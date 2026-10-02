@@ -40,6 +40,10 @@ const checks = names.map((name, index) => ({
   match_status: index === 2 ? "ACTIVE" : "PAUSED",
   match_effective_status: null
 }));
+const adsets = [2, 5].map((index) => ({
+  id: `adset-${index}`, client_id: "test-client", meta_adset_id: String(1000 + index),
+  status: index === 2 ? "ACTIVE" : "PAUSED", effective_status: index === 2 ? "ACTIVE" : "PAUSED"
+}));
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -82,6 +86,7 @@ async function main() {
       snapshotReads++;
       rows = checks;
     }
+    if (table === "meta_ad_sets") rows = adsets;
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify(
@@ -137,6 +142,8 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     assert(ready, "Next.js readiness");
+    const unauthenticated = await fetch(`${origin}/api/clients/test-client/batches/status`, { method: "POST" });
+    assert.equal(unauthenticated.status, 401, "Live status endpoint must require an authenticated session");
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
@@ -156,6 +163,17 @@ async function main() {
       new URL(route.request().url()).origin === origin ? route.continue() : route.abort()
     );
     const page = await context.newPage();
+    await page.clock.install();
+    let statusRequests = 0;
+    let statusMode = "unchanged";
+    await page.route("**/api/clients/test-client/batches/status", async (route) => {
+      assert.equal(route.request().method(), "POST");
+      statusRequests++;
+      if (statusMode === "failure") return route.fulfill({ status: 503, json: { error: "Meta unavailable" } });
+      if (statusMode === "active") Object.assign(adsets[1], { status: "ACTIVE", effective_status: "ACTIVE" });
+      if (statusMode === "campaign-paused") Object.assign(adsets[1], { status: "ACTIVE", effective_status: "CAMPAIGN_PAUSED" });
+      await route.fulfill({ json: { changed: statusMode !== "unchanged", checked: 2, unavailable: 0, checkedAt: new Date().toISOString() } });
+    });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${origin}/clients/test-client/batches`, { waitUntil: "networkidle", timeout: 90000 });
@@ -220,6 +238,43 @@ async function main() {
     page.off("request", countRequests);
     assert.equal(searchRequests, 0, "Typing must not navigate or refetch provider/snapshot data");
     assert.equal(snapshotReads, initialReads, "Search must reuse the snapshot");
+    await page.getByRole("status").filter({ hasText: "Meta-Status aktualisiert:" }).waitFor();
+    assert.equal(statusRequests, 1, "Refresh once on mount without a refresh loop");
+    await search.fill("101");
+    await waitForCount(1);
+    assert.equal(await rows.locator("td:nth-child(4)").innerText(), "Gefunden, nicht aktiv");
+    statusMode = "active";
+    await page.clock.fastForward(60_001);
+    await rows.locator("td:nth-child(4)").getByText("Geschaltet", { exact: true }).waitFor();
+    assert.equal(await search.inputValue(), "101", "Status refresh must preserve the search");
+    assert.equal(await rows.locator("td:first-child").innerText(), "5", "Row numbering must remain stable");
+    const liveTotal = page.locator("section > div").filter({ has: page.getByText("Geschaltet", { exact: true }) }).locator("p").last();
+    assert.equal(await liveTotal.innerText(), "2", "Summary totals refresh with row badges");
+    assert(await rows.locator("td:nth-child(4) .bg-emerald-50").count(), "Active badge uses the success color");
+    await page.clock.runFor(200);
+    await page.screenshot({ path: path.join(output, "status-active-desktop.png"), animations: "disabled" });
+    statusMode = "failure";
+    await page.clock.fastForward(60_001);
+    await page.getByRole("status").filter({ hasText: "Meta-Status nicht vollst" }).waitFor();
+    assert.equal(await rows.locator("td:nth-child(4)").innerText(), "Geschaltet", "Failure must preserve the last known status");
+    statusMode = "campaign-paused";
+    await page.clock.fastForward(60_001);
+    await rows.locator("td:nth-child(4)").getByText("Gefunden, nicht aktiv", { exact: true }).waitFor();
+    assert.equal(await liveTotal.innerText(), "1");
+    assert.equal(await search.inputValue(), "101");
+    statusMode = "unchanged";
+    const beforeHidden = statusRequests;
+    await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
+    await page.clock.fastForward(60_001);
+    assert.equal(statusRequests, beforeHidden, "Hidden tabs do not poll Meta");
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.getByRole("status").filter({ hasText: "Meta-Status aktualisiert:" }).waitFor();
+    assert.equal(statusRequests, beforeHidden + 1, "Returning to the tab refreshes Meta");
+    await search.fill("");
+    await waitForCount(6);
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await search.scrollIntoViewIfNeeded();
@@ -236,7 +291,7 @@ async function main() {
       await waitForCount(6);
     }
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, snapshotReads, searchRequests, screenshots: output }));
+    console.log(JSON.stringify({ passed: true, snapshotReads, searchRequests, statusRequests, screenshots: output }));
   } catch (error) {
     const page = browser?.contexts()[0]?.pages()[0];
     if (page) {

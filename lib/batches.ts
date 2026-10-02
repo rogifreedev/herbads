@@ -4,6 +4,7 @@ import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { driveRequest, fetchDriveMetadata, hasDriveCredentials } from "@/lib/google-drive-auth";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { applyBatchAdsetStatuses, isBatchMetaLive, readBatchAdsetStatuses } from "@/lib/batch-status";
 
 export type BatchCheckStatus = "idle" | "running" | "completed" | "failed";
 
@@ -147,7 +148,6 @@ type DriveFilesResponse = {
 };
 
 const DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
-const LIVE_STATUSES = new Set(["ACTIVE"]);
 const DEFAULT_DRIVE_SEARCH_DEPTH = 6;
 const DEFAULT_DRIVE_SEARCH_LIMIT = 1500;
 const BATCH_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -301,8 +301,7 @@ function toPositiveInt(value: string, fallback: number) {
 }
 
 function isLive(status: string | null, effectiveStatus: string | null) {
-  const values = [status, effectiveStatus].map((value) => value?.toUpperCase()).filter(Boolean);
-  return values.some((value) => LIVE_STATUSES.has(value as string));
+  return isBatchMetaLive(status, effectiveStatus);
 }
 
 function sortMatches(left: MetaEntity, right: MetaEntity) {
@@ -578,7 +577,7 @@ export async function getBatchOverview(clientId: string): Promise<BatchOverview>
   }
 
   const { items, error } = await listStoredBatchItems(clientId);
-  const overviewItems = error ? [] : items;
+  const overviewItems = items;
 
   return {
     settings: {
@@ -607,7 +606,13 @@ async function listStoredBatchItems(clientId: string): Promise<{ items: BatchOve
       .order("path", { ascending: true });
 
     if (error) return { items: [], error: error.message };
-    return { items: ((data ?? []) as BatchFolderCheckRow[]).map(mapStoredItem), error: null };
+    const items = ((data ?? []) as BatchFolderCheckRow[]).map(mapStoredItem);
+    try {
+      const adsets = await readBatchAdsetStatuses(clientId, items.flatMap((item) => item.match?.id ? [item.match.id] : []));
+      return { items: applyBatchAdsetStatuses(items, adsets), error: null };
+    } catch {
+      return { items, error: "Gespeicherter Meta-Status konnte nicht aktualisiert werden." };
+    }
   } catch (error) {
     return {
       items: [],
