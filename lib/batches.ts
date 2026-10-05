@@ -266,7 +266,7 @@ function normalizeName(value: string) {
 }
 
 function hasBatchToken(value: string) {
-  return /\bbatches?\b/.test(normalizeName(value));
+  return /\bbatch(?:es)?(?:\b|(?=\d))/.test(normalizeName(value));
 }
 
 function isGenericBatchContainerName(value: string) {
@@ -282,8 +282,8 @@ function isGenericBatchContainerName(value: string) {
     normalized === "ad batches" ||
     normalized === "meta batch" ||
     normalized === "meta batches" ||
-    /^batches? \d{4}$/.test(normalized) ||
-    /^\d{4} batches?$/.test(normalized)
+    /^batch(?:es)? \d{4}$/.test(normalized) ||
+    /^\d{4} batch(?:es)?$/.test(normalized)
   );
 }
 
@@ -328,7 +328,7 @@ function findMetaMatch(folderName: string, entities: MetaEntity[]) {
   return containsMatches[0] ?? null;
 }
 
-async function listGoogleDriveBatchFolders(folderId: string, clientId: string): Promise<{ folders: DriveBatchFolder[]; error: string | null }> {
+export async function listGoogleDriveBatchFolders(folderId: string, clientId: string): Promise<{ folders: DriveBatchFolder[]; error: string | null }> {
   if (!hasDriveCredentials(clientId)) {
     return {
       folders: [],
@@ -340,8 +340,9 @@ async function listGoogleDriveBatchFolders(folderId: string, clientId: string): 
   const maxFolders = toPositiveInt(getOptionalEnv("BATCH_DRIVE_SEARCH_LIMIT"), DEFAULT_DRIVE_SEARCH_LIMIT);
   const directChildren: DriveBatchFolder[] = [];
   const batchCandidatesById = new Map<string, DriveBatchFolder>();
-  const queue: Array<{ id: string; path: string; depth: number; childrenAreBatchCandidates: boolean }> = [
-    { id: folderId, path: "", depth: 0, childrenAreBatchCandidates: false }
+  const rootsWithCandidates = new Set<string>();
+  const queue: Array<{ id: string; rootId: string; path: string; depth: number; childrenAreBatchCandidates: boolean }> = [
+    { id: folderId, rootId: folderId, path: "", depth: 0, childrenAreBatchCandidates: false }
   ];
   let scannedFolders = 0;
   let limitReached = false;
@@ -378,16 +379,25 @@ async function listGoogleDriveBatchFolders(folderId: string, clientId: string): 
 
         if (parent.depth === 0) directChildren.push(folder);
 
+        const rootId = parent.depth === 0 ? folder.id : parent.rootId;
         const nameHasBatch = hasBatchToken(folder.name);
+        const numberedBatch = /^\d+\s+[a-z]/.test(normalizeName(folder.name));
         const genericBatchContainer = isGenericBatchContainerName(folder.name);
         const groupingFolder = isGroupingFolderName(folder.name);
-        const shouldInclude = (parent.childrenAreBatchCandidates && !groupingFolder) || (nameHasBatch && !genericBatchContainer);
-        if (shouldInclude) batchCandidatesById.set(folder.id, folder);
+        const shouldInclude = !genericBatchContainer && !groupingFolder &&
+          (parent.childrenAreBatchCandidates || nameHasBatch || numberedBatch);
+        if (shouldInclude) {
+          batchCandidatesById.set(folder.id, folder);
+          rootsWithCandidates.add(rootId);
+          // A batch owns its media/format subfolders; do not list those as separate batches.
+          continue;
+        }
 
         const childrenAreBatchCandidates = genericBatchContainer || (parent.childrenAreBatchCandidates && groupingFolder);
         if (folder.depth < maxDepth) {
           queue.push({
             id: folder.id,
+            rootId,
             path: folder.path,
             depth: folder.depth,
             childrenAreBatchCandidates
@@ -396,7 +406,12 @@ async function listGoogleDriveBatchFolders(folderId: string, clientId: string): 
       }
     }
 
-    const folders = batchCandidatesById.size > 0 ? Array.from(batchCandidatesById.values()) : directChildren;
+    // A match in one branch must not hide unrelated direct batch folders in another branch.
+    const folders = [
+      ...batchCandidatesById.values(),
+      ...directChildren.filter((folder) => !rootsWithCandidates.has(folder.id) &&
+        !isGenericBatchContainerName(folder.name) && !isGroupingFolderName(folder.name))
+    ];
     return {
       folders: sortDriveFolders(folders),
       error: limitReached ? `Drive-Suche wurde nach ${maxFolders} Ordnern begrenzt. Erhoehe BATCH_DRIVE_SEARCH_LIMIT, falls Treffer fehlen.` : null
@@ -621,7 +636,7 @@ async function listStoredBatchItems(clientId: string): Promise<{ items: BatchOve
   }
 }
 
-export async function runBatchCheck(clientId: string) {
+export async function runBatchCheck(clientId: string, options: { revalidateCache?: boolean } = {}) {
   const { settings, error: settingsError } = await getBatchSettings(clientId);
   if (settingsError) throw new Error(settingsError);
   if (!settings || settings.folders.length === 0) throw new Error("Kein Google Drive Batch-Ordner gespeichert.");
@@ -725,7 +740,7 @@ export async function runBatchCheck(clientId: string) {
 
     if (updateError) throw new Error(updateError.message);
 
-    revalidateCacheTags(...BATCH_CACHE_TAGS);
+    if (options.revalidateCache !== false) revalidateCacheTags(...BATCH_CACHE_TAGS);
     const refreshedFolders = await listBatchDriveFolders(clientId);
     return {
       settings: buildSettings(clientId, data as BatchSettingsRow, refreshedFolders.folders, refreshedFolders.error),
@@ -757,7 +772,7 @@ export async function runBatchCheck(clientId: string) {
       })
       .eq("client_id", clientId)
       .eq("enabled", true);
-    revalidateCacheTags(...BATCH_CACHE_TAGS);
+    if (options.revalidateCache !== false) revalidateCacheTags(...BATCH_CACHE_TAGS);
     throw new Error(message);
   }
 }
