@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import type { Mat, KeyPointVector } from "@techstark/opencv-js";
-import { batchMediaScope, groupBatchMedia } from "@/lib/batch-launch-plan";
+import { batchMediaScope, batchMediaVersion, groupBatchMedia } from "@/lib/batch-launch-plan";
 import type { BatchAdGroup, BatchMediaFile } from "@/lib/batch-launch-types";
 
 type CV = typeof import("@techstark/opencv-js");
@@ -154,7 +154,7 @@ export async function matchBatchMedia(files: BatchMediaFile[]): Promise<MatchRes
   const scopes = new Map<string, BatchMediaFile[]>();
   for (const file of files) {
     if (file.kind !== "image" || file.placement === "unknown" || paired.has(file.id)) continue;
-    const scope = batchMediaScope(file);
+    const scope = JSON.stringify([batchMediaScope(file), batchMediaVersion(file)]);
     scopes.set(scope, [...(scopes.get(scope) ?? []), file]);
   }
   const candidates = [...scopes.values()].filter(
@@ -164,9 +164,12 @@ export async function matchBatchMedia(files: BatchMediaFile[]): Promise<MatchRes
   const key = createHash("sha256")
     .update(
       JSON.stringify(
-        files.map(({ id, path, modifiedTime, width, height, size }) => ({
+        files.map(({ id, name, path, kind, placement, modifiedTime, width, height, size }) => ({
           id,
+          name,
           path,
+          kind,
+          placement,
           modifiedTime,
           width,
           height,

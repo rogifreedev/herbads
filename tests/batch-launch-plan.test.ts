@@ -5,6 +5,7 @@ import {
   buildAdSetPayload,
   buildCreativePayload,
   groupBatchMedia,
+  batchMediaScope,
   mediaPlacement,
   validateCopy,
   validateGroups,
@@ -28,6 +29,49 @@ describe("batch adset names", () => {
 });
 
 describe("batch media matching", () => {
+  it.each([
+    ["v1_1/1", "v1_9/16"],
+    ["v1_1/1.png", "v1_9/16.jpg"],
+    ["V1_1/1.JPG", "v1_9/16.PNG"],
+    ["v1_4/5", "v1_9/16"],
+    ["104_v2_1/1", "104_v2_9/16"],
+    ["v1_1:1.png", "v1_9/16.png"],
+    ["v1_1x1.png", "v1_9/16.png"]
+  ])("pairs literal Drive ratio names: %s", (feedName, storyName) => {
+    for (const parent of ["", "Motif A/", "DE/Batch 01/"]) {
+      const a = { ...feed, name: feedName, path: parent + feedName, width: 1485, height: 1856 };
+      const b = { ...story, name: storyName, path: parent + storyName, width: 1485, height: 2640 };
+      const groups = groupBatchMedia([a, b]);
+      expect(groups).toHaveLength(1);
+      expect(groups[0]).toMatchObject({ feedFileId: "feed", storyFileId: "story" });
+      expect(batchMediaScope(a)).toBe(batchMediaScope(b));
+      expect(validateGroups(groups, [a, b])).toHaveLength(2);
+    }
+  });
+  it("pairs several versioned videos by version instead of listing/export order", () => {
+    const files = [
+      { ...story, id: "s2", name: "v2_9/16.mp4", path: "v2_9/16.mp4", kind: "video" as const },
+      { ...feed, id: "f1", name: "v1_1/1.mp4", path: "v1_1/1.mp4", kind: "video" as const },
+      { ...story, id: "s1", name: "v1_9/16.mp4", path: "v1_9/16.mp4", kind: "video" as const },
+      { ...feed, id: "f2", name: "v2_1/1.mp4", path: "v2_1/1.mp4", kind: "video" as const }
+    ];
+    expect(groupBatchMedia(files)).toEqual([
+      expect.objectContaining({ feedFileId: "f2", storyFileId: "s2" }),
+      expect.objectContaining({ feedFileId: "f1", storyFileId: "s1" })
+    ]);
+  });
+  it("preserves versions, motif names, real numeric folders and duplicate ambiguity", () => {
+    const a = { ...feed, name: "v1_1/1", path: "v1_1/1" };
+    const b = { ...story, name: "v1_9/16", path: "v1_9/16" };
+    expect(groupBatchMedia([a, { ...b, name: "v2_9/16", path: "v2_9/16" }])).toHaveLength(2);
+    expect(groupBatchMedia([a, { ...b, name: "Other_v1_9/16", path: "Other_v1_9/16" }])).toHaveLength(2);
+    expect(groupBatchMedia([{ ...a, path: "DE/" + a.name }, { ...b, path: "IT/" + b.name }])).toHaveLength(2);
+    expect(groupBatchMedia([{ ...a, path: "1/1/" + a.name }, { ...b, path: "9/16/" + b.name }])).toHaveLength(2);
+    expect(groupBatchMedia([a, { ...a, id: "duplicate" }, b])).toHaveLength(3);
+    expect(groupBatchMedia([a, { ...b, kind: "video" }])).toHaveLength(2);
+    expect(groupBatchMedia([{ ...a, placement: "unknown" }, b])).toHaveLength(2);
+    expect(groupBatchMedia([{ ...a, placement: "story" }, b])).toHaveLength(2);
+  });
   it.each([
     ["Feed/Motif 1 (1x1).png", "Stories/Motif 1 [9x16].png"],
     ["1_1/Motif 1.jpg", "9_16/Motif 1.png"],

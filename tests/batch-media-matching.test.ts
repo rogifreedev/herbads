@@ -17,6 +17,31 @@ describe("conservative visual pair selection", () => {
 });
 
 describe("visual batch matching", () => {
+  it("pairs slash-labelled versions without thumbnails or visual confirmation", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const result = await matchBatchMedia([
+      { ...feed, name: "v1_1/1", path: "v1_1/1", width: 1485, height: 1856 },
+      { ...story, name: "v1_9/16", path: "v1_9/16", width: 1485, height: 2640 }
+    ]);
+    expect(result.groups).toEqual([expect.objectContaining({ feedFileId: "feed", storyFileId: "story" })]);
+    expect(result.groups[0].matchMethod).toBeUndefined();
+    expect(result.matchingUnavailable).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it.each([["v1", "v2"], ["v1.1", "v1.2"], ["v1", "export"]])(
+    "does not visually combine contradictory or missing version labels: %s and %s", async (a, b) => {
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      const result = await matchBatchMedia([
+        { ...feed, name: `${a}_1/1`, path: `${a}_1/1` },
+        { ...story, name: `${b}_9/16`, path: `${b}_9/16` }
+      ]);
+      expect(result.groups).toHaveLength(2);
+      expect(result.matchingUnavailable).toBe(false);
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  );
   it("keeps exact name pairs without downloading thumbnails", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

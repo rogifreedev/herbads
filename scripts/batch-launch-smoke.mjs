@@ -33,13 +33,13 @@ const variantCopy = {
   descriptions: Array.from({ length: 5 }, (_, i) => `Beschreibung ${i + 1} aus Vorlage`)
 };
 const files = [
-  { id: "feed", name: "Motif_1_1x1.png", path: "Feed/Motif_1_1x1.png", width: 1080, height: 1080, placement: "feed" },
+  { id: "feed", name: "v1_1/1", path: "v1_1/1", width: 1485, height: 1856, placement: "feed" },
   {
     id: "story",
-    name: "Motif_1_9x16.png",
-    path: "Story/Motif_1_9x16.png",
-    width: 1080,
-    height: 1920,
+    name: "v1_9/16",
+    path: "v1_9/16",
+    width: 1485,
+    height: 2640,
     placement: "story"
   }
 ].map((file) => ({
@@ -50,7 +50,7 @@ const files = [
   thumbnailUrl: "/assets/herb-logo.png",
   modifiedTime: "2026-09-15T10:00:00Z"
 }));
-const initialGroups = [{ id: "ad-1", name: "Motif 1", feedFileId: "feed", storyFileId: "story" }];
+const initialGroups = [{ id: "ad-1", name: "v1_1/1", feedFileId: "feed", storyFileId: "story" }];
 function fixture(accountId = "account-a", presets = [], jobs = [], favoriteTemplateIds = []) {
   return {
     folder: { id: "folder", name: "Batch 01 - Herbstkampagne" },
@@ -537,7 +537,7 @@ async function main() {
     await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
     await page.getByText("Eigener Primaertext (optional)", { exact: true }).click();
     await page
-      .getByRole("textbox", { name: "Primärer Text: Motif 1", exact: true })
+      .getByRole("textbox", { name: `Primärer Text: ${initialGroups[0].name}`, exact: true })
       .fill("Individueller Text nur fuer dieses Motiv.");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: path.join(output, "desktop.png"), fullPage: true });
@@ -547,7 +547,7 @@ async function main() {
       const measurements = await page.evaluate(() => ({
         width: innerWidth,
         content: document.documentElement.scrollWidth,
-        missingImages: [...document.querySelectorAll('img[alt="Motif_1_1x1.png"], img[alt="Motif_1_9x16.png"]')].filter(
+        missingImages: [...document.querySelectorAll('img[alt="v1_1/1"], img[alt="v1_9/16"]')].filter(
           (image) => !image.complete || !image.naturalWidth
         ).length
       }));

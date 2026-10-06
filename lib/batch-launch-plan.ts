@@ -112,15 +112,22 @@ export function mediaPlacement(width: number | null, height: number | null): Bat
   return "unknown";
 }
 
-function normalizeMediaPath(path: string) {
-  return path
-    .normalize("NFKC")
-    .toLowerCase()
-    .split("/")
+function mediaPathParts(file: BatchMediaFile) {
+  // Drive names may contain literal slashes, e.g. v1_9/16. Only the prefix is a folder path.
+  if (file.path === file.name) return [file.name];
+  if (file.path.endsWith(`/${file.name}`))
+    return [...file.path.slice(0, -file.name.length - 1).split("/"), file.name];
+  return file.path.split("/");
+}
+
+function normalizeMediaParts(parts: string[]) {
+  return parts
     .map((part) =>
       part
+        .normalize("NFKC")
+        .toLowerCase()
         .replace(
-          /(?<![\p{L}\p{N}])(?:1[\s_:x\u00d7-]+1|4[\s_:x\u00d7-]+5|9[\s_:x\u00d7-]+16|1080\s*[x\u00d7]\s*(?:1080|1350|1920))(?![\p{L}\p{N}])/gu,
+          /(?<![\p{L}\p{N}])(?:1[\s_/:x\u00d7-]+1|4[\s_/:x\u00d7-]+5|9[\s_/:x\u00d7-]+16|1080\s*[x\u00d7]\s*(?:1080|1350|1920))(?![\p{L}\p{N}])/gu,
           " "
         )
         .replace(/(?<![\p{L}\p{N}])(?:feed|stories|story|reels|square|portrait)(?![\p{L}\p{N}])/gu, " ")
@@ -132,12 +139,19 @@ function normalizeMediaPath(path: string) {
 }
 
 export function batchMediaScope(file: BatchMediaFile) {
-  return normalizeMediaPath(file.path.split("/").slice(0, -1).join("/"));
+  return normalizeMediaParts(mediaPathParts(file).slice(0, -1));
+}
+
+export function batchMediaVersion(file: BatchMediaFile) {
+  const name = mediaPathParts(file).at(-1)!.normalize("NFKC");
+  return name.match(/(?<![\p{L}\p{N}])v\s*(\d+(?:\.\d+)*)(?![\p{L}\p{N}])/iu)?.[1] ?? null;
 }
 
 function motifKey(file: BatchMediaFile) {
   // Keep motif/version numbers and non-format folders; never infer pairs from export order.
-  return normalizeMediaPath(file.path.replace(/\.[^.\/]+$/, ""));
+  const parts = mediaPathParts(file);
+  parts[parts.length - 1] = parts.at(-1)!.replace(/\.(?:jpe?g|png|mp4|mov)$/i, "");
+  return normalizeMediaParts(parts);
 }
 
 export function groupBatchMedia(files: BatchMediaFile[]): BatchAdGroup[] {

@@ -6,6 +6,7 @@ import { downloadBatchImage, downloadBatchMedia, listBatchMedia } from "@/lib/ba
 import { MAX_SOURCE_IMAGE_BYTES, MAX_TRANSFER_BYTES, MAX_VIDEO_BYTES } from "@/lib/batch-media-limits";
 import { MetaLaunchError, metaLaunchRequest } from "@/lib/meta/batch-launch";
 import { feed } from "./batch-launch-fixtures";
+import { groupBatchMedia } from "@/lib/batch-launch-plan";
 
 beforeEach(() => {
   vi.stubEnv("GOOGLE_DRIVE_API_KEY", "test-key");
@@ -18,6 +19,15 @@ afterEach(() => {
 });
 
 describe("bounded Drive transfers", () => {
+  it("keeps literal slash filenames through Drive discovery and matches 4:5 to 9:16", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ files: [
+      { id: "feed", name: "v1_1/1", mimeType: "image/png", size: "4", imageMediaMetadata: { width: 1485, height: 1856 } },
+      { id: "story", name: "v1_9/16", mimeType: "image/png", size: "4", imageMediaMetadata: { width: 1485, height: 2640 } }
+    ] })));
+    const { files } = await listBatchMedia("root");
+    expect(files.map((file) => file.placement)).toEqual(["feed", "story"]);
+    expect(groupBatchMedia(files)).toEqual([expect.objectContaining({ feedFileId: "feed", storyFileId: "story" })]);
+  });
   it("downloads exactly the requested range", async () => {
     const fetch = vi
       .fn()
