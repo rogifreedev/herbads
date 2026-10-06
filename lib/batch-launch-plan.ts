@@ -319,6 +319,23 @@ export function buildAdSetPayload(
   if (!template.optimization_goal || !template.billing_event)
     throw new Error("Optimierungsziel oder Abrechnungsart fehlt in der Vorlage.");
   const targeting = structuredClone(template.targeting ?? {}) as Record<string, unknown>;
+  const automation = targeting.targeting_automation as { advantage_audience?: unknown } | undefined;
+  if ((automation?.advantage_audience === 0 || automation?.advantage_audience === "0") && "age_range" in targeting) {
+    // Meta can return age_range for manual audiences but rejects it on creation. Keep their hard age limits.
+    if (targeting.age_min == null || targeting.age_max == null) {
+      const range = targeting.age_range;
+      if (
+        !Array.isArray(range) ||
+        range.length !== 2 ||
+        !range.every((age) => Number.isInteger(age) && age >= 13 && age <= 65) ||
+        range[0] > range[1]
+      )
+        throw new Error("Die Altersgrenzen der Referenz-Zielgruppe sind unvollstaendig. Bitte das Referenz-Adset pruefen.");
+      targeting.age_min ??= range[0];
+      targeting.age_max ??= range[1];
+    }
+    delete targeting.age_range;
+  }
   const originalCountries = adsetGeography(targeting).countries;
   const sameCountries = sameCountrySelection(originalCountries, settings.countries);
   if (!sameCountries) {

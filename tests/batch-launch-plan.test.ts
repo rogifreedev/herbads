@@ -136,6 +136,78 @@ describe("batch media matching", () => {
 });
 
 describe("paused adset payloads", () => {
+  it.each([0, "0"])("omits Meta's read-back age_range with Advantage+ disabled (%s)", (flag) => {
+    const raw = {
+      ...template,
+      targeting: {
+        ...template.targeting,
+        age_min: 40,
+        age_max: 60,
+        age_range: [18, 65],
+        targeting_automation: { advantage_audience: flag, individual_setting: { age: 1, gender: 0 } },
+        excluded_custom_audiences: [{ id: "321" }],
+        targeting_relaxation_types: { lookalike: 0, custom_audience: 0 }
+      }
+    };
+    const original = structuredClone(raw);
+    const payload = buildAdSetPayload("183 - Bundle Offer", campaign, raw, settings, "EUR");
+    expect(payload.targeting).not.toHaveProperty("age_range");
+    expect(payload.targeting).toMatchObject({
+      age_min: 40,
+      age_max: 60,
+      genders: [2],
+      targeting_automation: raw.targeting.targeting_automation,
+      excluded_custom_audiences: [{ id: "321" }],
+      targeting_relaxation_types: { lookalike: 0, custom_audience: 0 }
+    });
+    expect(payload.status).toBe("PAUSED");
+    expect(raw).toEqual(original);
+  });
+  it.each([1, "1"])("preserves the age suggestion and automation settings with Advantage+ enabled (%s)", (flag) => {
+    const raw = {
+      ...template,
+      targeting: {
+        ...template.targeting,
+        age_range: [40, 60],
+        targeting_automation: { advantage_audience: flag, individual_setting: { age: 1, gender: 1 } }
+      }
+    };
+    const payload = buildAdSetPayload("Batch", campaign, raw, settings, "EUR");
+    expect(payload.targeting).toMatchObject({
+      age_min: 25,
+      age_max: 65,
+      age_range: [40, 60],
+      targeting_automation: raw.targeting.targeting_automation
+    });
+  });
+  it("recovers only missing manual age limits from a valid range without overwriting explicit limits", () => {
+    const raw = {
+      ...template,
+      targeting: { ...template.targeting, age_min: 40, age_max: undefined, age_range: [18, 60] }
+    };
+    const payload = buildAdSetPayload("Batch", campaign, raw, settings, "EUR");
+    expect(payload.targeting).toMatchObject({ age_min: 40, age_max: 60, targeting_automation: { advantage_audience: 0 } });
+    expect(payload.targeting).not.toHaveProperty("age_range");
+    expect(raw.targeting.age_max).toBeUndefined();
+  });
+  it.each([null, [], [40], [60, 40], ["40", "60"], [18, 70]].map((range) => [range]))(
+    "does not silently drop incomplete manual age restrictions: %j", (ageRange) => {
+      const raw = {
+        ...template,
+        targeting: { ...template.targeting, age_min: undefined, age_max: undefined, age_range: ageRange }
+      };
+      expect(() => buildAdSetPayload("Batch", campaign, raw, settings, "EUR")).toThrow(/Altersgrenzen/);
+    }
+  );
+  it("does not infer or enable automation when the source has no explicit flag", () => {
+    const raw = {
+      ...template,
+      targeting: { ...template.targeting, age_range: [25, 65], targeting_automation: undefined }
+    };
+    const payload = buildAdSetPayload("Batch", campaign, raw, settings, "EUR");
+    expect(payload.targeting).toMatchObject({ age_min: 25, age_max: 65, age_range: [25, 65] });
+    expect(payload.targeting).not.toHaveProperty("targeting_automation.advantage_audience");
+  });
   it("inherits conversion configuration but replaces geographic/language settings", () => {
     const payload = buildAdSetPayload("Batch", campaign, template, settings, "EUR");
     expect(payload).toMatchObject({

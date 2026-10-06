@@ -73,6 +73,28 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("batch creation defaults", () => {
+  it("validates and queues the same normalized manual targeting without creating a Meta adset", async () => {
+    const raw = {
+      ...template,
+      targeting: { ...template.targeting, age_min: 40, age_range: [18, 65] }
+    };
+    mocks.meta.mockImplementation(async (path: string, body?: Record<string, unknown>) => {
+      if (path.startsWith(`${campaign.id}?`)) return { ...campaign, account_id: "111" };
+      if (path.startsWith(`${template.id}?`)) return raw;
+      expect(path).toBe("act_111/adsets");
+      expect(body).toMatchObject({ status: "PAUSED", execution_options: ["validate_only"] });
+      expect(body?.targeting).not.toHaveProperty("age_range");
+      expect(body?.targeting).toMatchObject({ age_min: 40, age_max: 65, targeting_automation: { advantage_audience: 0 } });
+      return { success: true };
+    });
+    await createBatchLaunch("client", launchInput);
+    const queued = mocks.insert.mock.calls[0][0].payload.adsetPayload;
+    expect(queued.targeting).toEqual(mocks.meta.mock.calls.at(-1)![1].targeting);
+    expect(queued.status).toBe("PAUSED");
+    expect(queued).not.toHaveProperty("execution_options");
+    expect(raw.targeting.age_range).toEqual([18, 65]);
+    expect(mocks.meta.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(1);
+  });
   const previous = (status: BatchLaunchJobRow["status"]): BatchLaunchJobRow => ({
     id: status,
     client_id: "client",
