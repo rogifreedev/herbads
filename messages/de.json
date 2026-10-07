@@ -7,7 +7,7 @@
     "workerReady": "Worker bereit", "workerPaused": "Worker angehalten", "workerStale": "Worker nicht erreichbar",
     "workerPausedNotice": "Die Hintergrundverarbeitung ist derzeit deaktiviert. Eingereihte Uploads bleiben gespeichert.",
     "workerStaleNotice": "Der Hintergrund-Worker hat sich seit über zwei Minuten nicht gemeldet. Eingereihte Uploads bleiben gespeichert.",
-    "queuePosition": "Position {position}", "legacy": "Bestehender Upload: Fortsetzen erforderlich",
+    "queuePosition": "Position {position}", "retryAt": "Automatischer Versuch ab {time}", "legacy": "Bestehender Upload: Fortsetzen erforderlich",
     "loadError": "Upload-Status konnte nicht aktualisiert werden.", "actionError": "Upload-Aktion fehlgeschlagen.",
     "details": "Upload öffnen", "previous": "Vorherige Seite", "next": "Nächste Seite",
     "cancel": "Upload abbrechen", "cancelTitle": "Upload endgültig abbrechen?", "keep": "Beibehalten",
@@ -69,7 +69,7 @@
     "templateLocations": "Standorte aus Referenz-Adset: {locations}",
     "mediaLoading": "Drive-Medien werden geladen und Formatpaare abgeglichen",
     "optionsLoading": "Kampagnen und Adsets werden mit Meta aktualisiert",
-    "optionsError": "Meta-Aktualisierung fehlgeschlagen. Gespeicherte Einstellungen sind weiterhin sichtbar.",
+    "optionsError": "Meta-Aktualisierung fehlgeschlagen. Gespeicherte Einstellungen bleiben nutzbar; der Batch kann eingereiht und vor dem Upload erneut geprüft werden.",
     "selectionUnavailable": "Die ausgewählte Kampagne ist nicht mehr aktiv oder das Referenz-Adset ist nicht mehr verfügbar. Bitte neu auswählen.",
     "visualMatch": "Visueller Vorschlag",
     "matchingReviewed": "Formatpaare geprüft",
@@ -108,7 +108,7 @@
     "ads": "Anzeigen ({count})", "resetMatching": "Zuordnung zurücksetzen", "adName": "Anzeigenname", "matched": "Formatpaar", "single": "Einzelmotiv", "exclude": "Aus Batch ausschließen", "unpair": "Formatpaar trennen", "feed": "Feed · 1:1 / 4:5", "story": "Stories / Reels · 9:16", "noVariant": "Keine Variante", "unused": "Nicht ausgewählte Medien ({count})", "ignored": "Nicht unterstützte oder nicht herunterladbare Dateien ({count})", "summary": "1 pausiertes Adset · {ads} aktive Anzeigen · {files} Mediendateien", "createPaused": "Mit pausiertem Adset erstellen",
     "progress": "{ads} / {total} Anzeigen · {files} / {fileTotal} Medien", "stopUpload": "Upload anhalten", "resumeUpload": "Upload fortsetzen", "openMeta": "In Meta öffnen", "anotherCampaign": "Weitere Kampagne", "reviewHint": "Der letzte Erstellungsschritt ist nicht eindeutig bestätigt. Bitte das Adset und die bereits erstellten Anzeigen in Meta prüfen, bevor du erneut erstellst.",
     "status": { "pending": "In Warteschlange", "running": "In Bearbeitung", "paused": "Angehalten", "cancelled": "Abgebrochen", "failed": "Unterbrochen", "review": "Prüfung erforderlich", "completed": "Adset pausiert erstellt" },
-    "steps": { "adset": "Adset erstellen", "upload": "Medien hochladen", "processing": "Meta verarbeitet das Video", "creative": "Creative erstellen", "ad": "Anzeige erstellen", "saving": "Batch-Check aktualisieren", "done": "Fertig" }
+    "steps": { "validation": "Meta-Einstellungen prüfen", "adset": "Adset erstellen", "upload": "Medien hochladen", "processing": "Meta verarbeitet das Video", "creative": "Creative erstellen", "ad": "Anzeige erstellen", "saving": "Batch-Check aktualisieren", "done": "Fertig" }
   },
   "common": {
     "loading": "Lädt…",

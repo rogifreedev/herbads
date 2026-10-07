@@ -51,11 +51,7 @@ type Readiness = {
 export function getBatchLaunchBlockers(value: Readiness) {
   const reasons: (keyof typeof batchLaunchBlockerTargets)[] = [];
   if (!value.metaConfigured) reasons.push("meta");
-  if (value.identitiesLoading) reasons.push("identitiesLoading");
-  else if (value.identitiesError) reasons.push("identitiesError");
   if (!value.mediaReady) reasons.push(value.mediaError ? "mediaError" : "mediaLoading");
-  if (value.optionsLoading) reasons.push("optionsLoading");
-  else if (value.optionsError) reasons.push("optionsError");
   if (value.copyLoading) reasons.push("copyLoading");
   else if (value.copyError) reasons.push("copyError");
   if (!value.hasActiveCampaign) reasons.push("campaign");

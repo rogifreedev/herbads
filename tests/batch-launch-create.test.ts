@@ -15,6 +15,7 @@ vi.mock("@/lib/meta/batch-launch", async (original) => ({
   metaLaunchRequest: mocks.meta
 }));
 import { createBatchLaunch, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
+import { MetaLaunchError } from "@/lib/meta/batch-launch";
 import { campaign, feed, launchInput, template } from "./batch-launch-fixtures";
 
 beforeEach(() => {
@@ -43,6 +44,9 @@ beforeEach(() => {
         eq() {
           return query;
         },
+        in() {
+          return query;
+        },
         limit() {
           return query;
         },
@@ -50,7 +54,13 @@ beforeEach(() => {
           return query;
         },
         then(resolve: (value: unknown) => unknown) {
-          return Promise.resolve({ data: mocks.existing(), error: null }).then(resolve);
+          const data =
+            table === "meta_campaigns"
+              ? [{ meta_campaign_id: campaign.id, name: campaign.name, objective: campaign.objective, status: "ACTIVE", raw: campaign }]
+              : table === "meta_ad_sets"
+                ? [{ meta_adset_id: template.id, name: "Template", raw: template }]
+                : mocks.existing();
+          return Promise.resolve({ data, error: null }).then(resolve);
         },
         insert(value: Partial<BatchLaunchJobRow>) {
           inserted = value;
@@ -94,6 +104,17 @@ describe("batch creation defaults", () => {
     expect(queued).not.toHaveProperty("execution_options");
     expect(raw.targeting.age_range).toEqual([18, 65]);
     expect(mocks.meta.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(1);
+  });
+  it("queues from stored settings when Meta rate-limits the preflight", async () => {
+    mocks.meta.mockRejectedValue(new MetaLaunchError("Too many calls from this ad account", false, { code: 80004 }));
+    const job = await createBatchLaunch("client", launchInput);
+    expect(job.status).toBe("pending");
+    expect(mocks.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queue_enabled: true,
+        state: { media: {}, ads: {}, step: "validation", validated: false }
+      })
+    );
   });
   const previous = (status: BatchLaunchJobRow["status"]): BatchLaunchJobRow => ({
     id: status,

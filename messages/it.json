@@ -7,7 +7,7 @@
     "workerReady": "Worker pronto", "workerPaused": "Worker fermo", "workerStale": "Worker non raggiungibile",
     "workerPausedNotice": "L'elaborazione in background è disattivata. I caricamenti in coda restano salvati.",
     "workerStaleNotice": "Il worker non risponde da oltre due minuti. I caricamenti in coda restano salvati.",
-    "queuePosition": "Posizione {position}", "legacy": "Caricamento esistente: ripresa necessaria",
+    "queuePosition": "Posizione {position}", "retryAt": "Nuovo tentativo automatico dalle {time}", "legacy": "Caricamento esistente: ripresa necessaria",
     "loadError": "Impossibile aggiornare lo stato.", "actionError": "Azione non riuscita.",
     "details": "Apri caricamento", "previous": "Pagina precedente", "next": "Pagina successiva",
     "cancel": "Annulla caricamento", "cancelTitle": "Annullare definitivamente il caricamento?", "keep": "Mantieni",
@@ -69,7 +69,7 @@
     "templateLocations": "Località del gruppo di inserzioni di riferimento: {locations}",
     "mediaLoading": "Caricamento dei file Drive e abbinamento dei formati in corso",
     "optionsLoading": "Aggiornamento di campagne e gruppi di inserzioni da Meta",
-    "optionsError": "Aggiornamento da Meta non riuscito. Le impostazioni salvate sono ancora visibili.",
+    "optionsError": "Aggiornamento da Meta non riuscito. Le impostazioni salvate restano utilizzabili; il batch può essere messo in coda e verificato nuovamente prima del caricamento.",
     "selectionUnavailable": "La campagna selezionata non è più attiva o il gruppo di inserzioni di riferimento non è più disponibile. Selezionarne un altro.",
     "visualMatch": "Suggerimento visivo",
     "matchingReviewed": "Coppie di formato verificate",
@@ -108,7 +108,7 @@
     "ads": "Inserzioni ({count})", "resetMatching": "Ripristina abbinamenti", "adName": "Nome inserzione", "matched": "Coppia di formati", "single": "Singolo contenuto", "exclude": "Escludi dal batch", "unpair": "Separa i formati", "feed": "Feed · 1:1 / 4:5", "story": "Storie / Reels · 9:16", "noVariant": "Nessuna variante", "unused": "Contenuti non selezionati ({count})", "ignored": "File non supportati o non scaricabili ({count})", "summary": "1 gruppo in pausa · {ads} inserzioni attive · {files} file multimediali", "createPaused": "Crea con gruppo in pausa",
     "progress": "{ads} / {total} inserzioni · {files} / {fileTotal} contenuti", "stopUpload": "Interrompi caricamento", "resumeUpload": "Riprendi caricamento", "openMeta": "Apri in Meta", "anotherCampaign": "Altra campagna", "reviewHint": "L'ultimo passaggio non è stato confermato con certezza. Verifica il gruppo e le inserzioni già create in Meta prima di creare nuovamente.",
     "status": { "pending": "In coda", "running": "In elaborazione", "paused": "Fermo", "cancelled": "Annullato", "failed": "Interrotto", "review": "Verifica necessaria", "completed": "Gruppo creato in pausa" },
-    "steps": { "adset": "Creazione gruppo", "upload": "Caricamento contenuti", "processing": "Meta sta elaborando il video", "creative": "Creazione creatività", "ad": "Creazione inserzione", "saving": "Aggiornamento Batch Check", "done": "Completato" }
+    "steps": { "validation": "Verifica impostazioni Meta", "adset": "Creazione gruppo", "upload": "Caricamento contenuti", "processing": "Meta sta elaborando il video", "creative": "Creazione creatività", "ad": "Creazione inserzione", "saving": "Aggiornamento Batch Check", "done": "Completato" }
   },
   "common": {
     "loading": "Caricamento…",

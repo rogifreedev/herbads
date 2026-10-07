@@ -16,6 +16,7 @@ beforeEach(() => {
         select: () => query,
         eq: () => query,
         in: () => query,
+        or: () => query,
         order: () => query,
         limit: () => query,
         maybeSingle: async () => ({ data: mocks.heads.shift() ?? null, error: null })

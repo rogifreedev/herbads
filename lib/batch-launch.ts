@@ -18,6 +18,7 @@ import {
   BATCH_CAMPAIGN_FIELDS,
   BATCH_TEMPLATE_FIELDS,
   getLiveBatchOptions,
+  isMetaRateLimitError,
   mapBatchCampaign,
   metaLaunchRequest
 } from "@/lib/meta/batch-launch";
@@ -57,6 +58,8 @@ export type BatchLaunchJobRow = {
   updated_at: string;
   lease_token: string | null;
   lease_until: string | null;
+  retry_after?: string | null;
+  retry_count?: number;
 };
 
 export function mapLaunchJob(row: BatchLaunchJobRow): BatchLaunchJob {
@@ -85,7 +88,9 @@ export function mapLaunchJob(row: BatchLaunchJobRow): BatchLaunchJob {
     error: row.error,
     adCount: row.payload.input.groups.length,
     fileCount: row.payload.files.length,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    retryAfter: row.retry_after ?? null,
+    retryCount: row.retry_count ?? 0
   };
 }
 
@@ -383,27 +388,48 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   input = { ...input, name: batchAdsetName(folder.name) };
   validateCopy(input.copy);
   input = { ...input, copy: normalizeBatchCopy(input.copy) };
-  const [media, rawCampaign, template, identities] = await Promise.all([
-    listBatchMedia(input.folderId, clientId),
-    metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
-    metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
-    getLiveBatchIdentities(account.meta_account_id, true)
-  ]);
+  const media = await listBatchMedia(input.folderId, clientId);
+  let rawCampaign: Record<string, unknown>;
+  let template: Record<string, unknown>;
+  let validated = false;
+  try {
+    const [liveCampaign, liveTemplate, identities] = await Promise.all([
+      metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
+      metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
+      getLiveBatchIdentities(account.meta_account_id, true)
+    ]);
+    rawCampaign = liveCampaign;
+    template = liveTemplate;
+    validateBatchIdentity(input.copy, identities);
+  } catch (error) {
+    if (!isMetaRateLimitError(error)) throw error;
+    const stored = await storedBatchOptions(account.id);
+    const campaign = stored.campaigns.find((item) => item.id === input.campaignId);
+    const selectedTemplate = stored.templates.find((item) => item.id === input.templateId);
+    if (!campaign || !selectedTemplate)
+      throw new Error("Die gespeicherte Kampagne oder das Referenz-Adset ist nicht mehr verfuegbar.");
+    rawCampaign = { ...campaign, account_id: account.meta_account_id.replace(/^act_/, "") };
+    template = { ...selectedTemplate.raw, id: selectedTemplate.id, name: selectedTemplate.name };
+  }
   const metaId = account.meta_account_id.replace(/^act_/, "");
   if (String(rawCampaign.account_id) !== metaId || String(template.account_id) !== metaId)
     throw new Error("Kampagne oder Vorlage gehoert nicht zum Werbekonto.");
   if (rawCampaign.status !== "ACTIVE")
     throw new Error("Die Kampagne ist nicht mehr aktiv. Bitte eine aktive Kampagne auswaehlen.");
-  validateBatchIdentity(input.copy, identities);
   const files = validateGroups(input.groups, media.files);
   const campaign = mapBatchCampaign(rawCampaign);
   validateLaunchActivation(input.activate, campaign, input.activationBudget);
   const adsetPayload = buildAdSetPayload(input.name, campaign, template, input.settings, account.currency);
   // Validate with Meta before recording a job; this request creates no adset.
-  await metaLaunchRequest(`${account.meta_account_id}/adsets`, {
-    ...adsetPayload,
-    execution_options: ["validate_only"]
-  });
+  try {
+    await metaLaunchRequest(`${account.meta_account_id}/adsets`, {
+      ...adsetPayload,
+      execution_options: ["validate_only"]
+    });
+    validated = true;
+  } catch (error) {
+    if (!isMetaRateLimitError(error)) throw error;
+  }
   const payload: BatchLaunchPayload = { input, files, metaAccountId: account.meta_account_id, campaign, adsetPayload };
   const db = createSupabaseServiceRoleClient();
   const { data, error } = await db
@@ -415,7 +441,8 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
       meta_campaign_id: input.campaignId,
       queue_enabled: true,
       name: input.name,
-      payload
+      payload,
+      state: { media: {}, ads: {}, step: validated ? "adset" : "validation", validated }
     })
     .select("*")
     .single();

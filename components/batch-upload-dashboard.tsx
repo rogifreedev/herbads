@@ -233,6 +233,16 @@ export function BatchUploadDashboard({ initialClientId = "" }: { initialClientId
                             {t("queuePosition", { position: job.queue_position })}
                           </p>
                         ) : null}
+                        {job.retry_after && Date.parse(job.retry_after) > (snapshot?.receivedAt ?? 0) ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {t("retryAt", {
+                              time: new Intl.DateTimeFormat(locale, {
+                                dateStyle: "short",
+                                timeStyle: "short"
+                              }).format(new Date(job.retry_after))
+                            })}
+                          </p>
+                        ) : null}
                         {!job.queue_enabled && ["pending", "running"].includes(job.status) ? (
                           <p className="mt-2 text-xs text-muted-foreground">{t("legacy")}</p>
                         ) : null}

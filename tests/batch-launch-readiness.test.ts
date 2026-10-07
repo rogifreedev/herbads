@@ -27,9 +27,9 @@ const ready = {
 };
 
 describe("batch launch readiness", () => {
-  it("explains identity loading, errors and unavailable selections", () => {
-    expect(getBatchLaunchBlockers({ ...ready, identitiesLoading: true })).toContain("identitiesLoading");
-    expect(getBatchLaunchBlockers({ ...ready, identitiesError: "No permission" })).toContain("identitiesError");
+  it("allows queuing while live identities load or fail, but rejects known unavailable selections", () => {
+    expect(getBatchLaunchBlockers({ ...ready, identitiesLoading: true })).toEqual([]);
+    expect(getBatchLaunchBlockers({ ...ready, identitiesError: "No permission" })).toEqual([]);
     expect(getBatchLaunchBlockers({ ...ready, identities: { pages: [], instagramAccounts: [] } })).toContain("page");
     expect(
       getBatchLaunchBlockers({
@@ -52,8 +52,6 @@ describe("batch launch readiness", () => {
     [{ metaConfigured: false }, "meta"],
     [{ mediaReady: false }, "mediaLoading"],
     [{ mediaReady: false, mediaError: "Drive error" }, "mediaError"],
-    [{ optionsLoading: true }, "optionsLoading"],
-    [{ optionsError: "Meta error" }, "optionsError"],
     [{ copyLoading: true }, "copyLoading"],
     [{ copyError: "Copy error" }, "copyError"],
     [{ hasActiveCampaign: false }, "campaign"],
@@ -67,6 +65,11 @@ describe("batch launch readiness", () => {
   ] as const)("gives a visible reason for %j", (change, reason) => {
     expect(getBatchLaunchBlockers({ ...ready, ...change })).toContain(reason);
     expect(batchLaunchBlockerTargets[reason]).toBeTruthy();
+  });
+
+  it("allows saved Meta options to be queued while the live refresh is unavailable", () => {
+    expect(getBatchLaunchBlockers({ ...ready, optionsLoading: true })).toEqual([]);
+    expect(getBatchLaunchBlockers({ ...ready, optionsError: "Meta rate limit" })).toEqual([]);
   });
 
   it.each([

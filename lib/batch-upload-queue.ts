@@ -27,10 +27,11 @@ export async function processBatchUploadQueue() {
     while (Date.now() < deadline && steps < 40) {
       const { data: job, error: readError } = await db
         .from("batch_launch_jobs")
-        .select("id,client_id,lease_until")
+        .select("id,client_id,lease_until,retry_after")
         .eq("queue_enabled", true)
         .eq("control_status", "run")
         .in("status", ["pending", "running"])
+        .or(`retry_after.is.null,retry_after.lte.${new Date().toISOString()}`)
         .order("queued_at")
         .order("id")
         .limit(1)

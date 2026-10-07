@@ -50,7 +50,7 @@ beforeEach(() => {
       campaign,
       adsetPayload: { ...buildAdSetPayload(id, campaign, template, launchInput.settings, "EUR"), name: id }
     },
-    state: { media: {}, ads: {}, step: "adset" },
+    state: { media: {}, ads: {}, step: "adset", validated: true },
     error: null,
     updated_at: new Date().toISOString()
   }));
@@ -106,6 +106,7 @@ beforeEach(() => {
         select: () => query,
         eq: () => query,
         in: () => query,
+        or: () => query,
         order: () => query,
         limit: () => query,
         update: () => query,

@@ -131,6 +131,7 @@ export type BatchUploadedMedia = {
 };
 
 export type BatchLaunchState = {
+  validated?: boolean;
   savedAdIds?: string[];
   adsetId?: string;
   media: Record<string, BatchUploadedMedia>;
@@ -158,6 +159,8 @@ export type BatchLaunchJob = {
   adCount: number;
   fileCount: number;
   updatedAt: string;
+  retryAfter?: string | null;
+  retryCount?: number;
 };
 
 export type BatchUploadItem = {
@@ -177,6 +180,8 @@ export type BatchUploadItem = {
   queued_at: string;
   error: string | null;
   lease_until: string | null;
+  retry_after: string | null;
+  retry_count: number;
   step: string;
   adset_id: string | null;
   activate: boolean;

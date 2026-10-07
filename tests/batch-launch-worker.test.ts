@@ -49,7 +49,7 @@ beforeEach(() => {
       campaign,
       adsetPayload: buildAdSetPayload(launchInput.name, campaign, template, launchInput.settings, "EUR")
     },
-    state: { media: {}, ads: {}, step: "adset" },
+    state: { media: {}, ads: {}, step: "adset", validated: true },
     error: null,
     lease_token: null,
     lease_until: null,
@@ -92,6 +92,20 @@ beforeEach(() => {
           error: args.p_error,
           ...(args.p_release ? { lease_token: null, lease_until: null } : {})
         } as BatchLaunchJobRow;
+        return Promise.resolve({ data: true, error: null });
+      }
+      if (name === "defer_batch_upload_step") {
+        if (args.p_token !== row.lease_token) return Promise.resolve({ data: false, error: null });
+        row = {
+          ...row,
+          state: structuredClone(args.p_state) as BatchLaunchJobRow["state"],
+          status: "pending",
+          error: String(args.p_error),
+          retry_after: String(args.p_retry_after),
+          retry_count: (row.retry_count ?? 0) + 1,
+          lease_token: null,
+          lease_until: null
+        };
         return Promise.resolve({ data: true, error: null });
       }
       throw new Error(`Unexpected RPC ${name}`);
@@ -372,6 +386,7 @@ describe("resumable paused batch worker", () => {
   it.each([false, true])("resumes old paused ads without changing their requested activation (%s)", async (activate) => {
     row.payload.input.activate = activate;
     row.state = {
+      validated: true,
       adsetId: "100",
       media: { feed: { imageHash: "hash" } },
       ads: { "ad-1": { creativeId: "200", adId: "300" } },
@@ -428,6 +443,17 @@ describe("resumable paused batch worker", () => {
     row.status = "pending"; // Explicit resume, never an automatic replay of a failed write.
     await processBatchLaunch("client", "job");
     expect(row.state.adsetId).toBe("100");
+  });
+  it("automatically defers a definitively rejected Meta rate limit", async () => {
+    mocks.request.mockRejectedValueOnce(
+      new MetaLaunchError("Too many calls from this ad account", false, { code: 80004 })
+    );
+    const result = await processBatchLaunch("client", "job");
+    expect(result.status).toBe("pending");
+    expect(result.retryCount).toBe(1);
+    expect(Date.parse(result.retryAfter!)).toBeGreaterThan(Date.now());
+    expect(row.state.inFlight).toBeUndefined();
+    expect(row.error).toMatch(/Automatischer neuer Versuch/);
   });
   it("does not touch Meta for another partner's job", async () => {
     await expect(processBatchLaunch("foreign-client", "job")).rejects.toThrow("Not found");

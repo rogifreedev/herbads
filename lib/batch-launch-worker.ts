@@ -4,14 +4,28 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getBatchLaunchJob, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { downloadBatchMedia } from "@/lib/batch-launch-drive";
 import { prepareBatchImage } from "@/lib/batch-image-upload";
-import { buildCreativePayload } from "@/lib/batch-launch-plan";
-import { MetaLaunchError, metaLaunchRequest } from "@/lib/meta/batch-launch";
+import { buildCreativePayload, validateLaunchActivation } from "@/lib/batch-launch-plan";
+import { validateBatchIdentity } from "@/lib/batch-launch-identities";
+import { getLiveBatchIdentities } from "@/lib/meta/batch-identities";
+import {
+  BATCH_CAMPAIGN_FIELDS,
+  BATCH_TEMPLATE_FIELDS,
+  isMetaRateLimitError,
+  mapBatchCampaign,
+  MetaLaunchError,
+  metaLaunchRequest
+} from "@/lib/meta/batch-launch";
 import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 
 function createdId(result: { id?: string }) {
   if (!result.id || !/^\d+$/.test(result.id))
     throw new MetaLaunchError("Meta hat keine eindeutige Objekt-ID zurueckgegeben.", true);
   return result.id;
+}
+
+function rateLimitRetryAfter(attempts: number) {
+  const minutes = Math.min(60, 5 * 2 ** Math.max(0, attempts));
+  return new Date(Date.now() + minutes * 60_000).toISOString();
 }
 
 export async function processBatchLaunch(clientId: string, jobId: string, queueToken: string) {
@@ -59,6 +73,26 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
       job.status = "review";
       job.error =
         "Ein Erstellungsschritt wurde unterbrochen. Bitte das Adset und die bereits erstellten Anzeigen in Meta pruefen; es werden keine Duplikate automatisch angelegt.";
+    } else if (!state.validated) {
+      state.step = "validation";
+      const [rawCampaign, template, identities] = await Promise.all([
+        metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
+        metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
+        getLiveBatchIdentities(metaAccountId, true)
+      ]);
+      const metaId = metaAccountId.replace(/^act_/, "");
+      if (String(rawCampaign.account_id) !== metaId || String(template.account_id) !== metaId)
+        throw new Error("Kampagne oder Vorlage gehoert nicht zum Werbekonto.");
+      if (rawCampaign.status !== "ACTIVE")
+        throw new Error("Die Kampagne ist nicht mehr aktiv. Bitte eine aktive Kampagne auswaehlen.");
+      validateBatchIdentity(input.copy, identities);
+      validateLaunchActivation(input.activate, mapBatchCampaign(rawCampaign), input.activationBudget);
+      await metaLaunchRequest(`${metaAccountId}/adsets`, {
+        ...payload.adsetPayload,
+        execution_options: ["validate_only"]
+      });
+      state.validated = true;
+      state.step = "adset";
     } else if (!state.adsetId) {
       state.step = "adset";
       state.adsetId = await createObject("adset", `${metaAccountId}/adsets`, payload.adsetPayload);
@@ -216,6 +250,25 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
       }
     }
   } catch (error) {
+    if (isMetaRateLimitError(error)) {
+      delete state.inFlight;
+      const retryAfter = rateLimitRetryAfter(job.retry_count ?? 0);
+      const message = `Meta-Rate-Limit. Automatischer neuer Versuch ab ${new Intl.DateTimeFormat("de-DE", {
+        dateStyle: "short",
+        timeStyle: "short",
+        timeZone: "Europe/Berlin"
+      }).format(new Date(retryAfter))}.`;
+      const deferred = await db.rpc("defer_batch_upload_step", {
+        p_client_id: clientId,
+        p_job_id: job.id,
+        p_token: token,
+        p_state: state,
+        p_error: message,
+        p_retry_after: retryAfter
+      });
+      if (deferred.error || !deferred.data) throw new Error("Upload konnte nicht erneut eingeplant werden.");
+      return mapLaunchJob(await getBatchLaunchJob(clientId, jobId));
+    }
     const ambiguous = Boolean(state.inFlight) && (!(error instanceof MetaLaunchError) || error.uncertain);
     job.status = ambiguous ? "review" : "failed";
     job.error = error instanceof Error ? error.message : "Batch-Erstellung fehlgeschlagen.";

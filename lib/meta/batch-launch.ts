@@ -13,6 +13,16 @@ export class MetaLaunchError extends Error {
   }
 }
 
+export function isMetaRateLimitError(error: unknown) {
+  if (!(error instanceof MetaLaunchError)) return false;
+  const details = error.details;
+  const code = Number(details?.code);
+  return (
+    [4, 17, 32, 613, 80004].includes(code) ||
+    /rate.?limit|request limit|too many calls|calls to this api|temporarily blocked|zu viele anrufe/i.test(error.message)
+  );
+}
+
 export async function metaLaunchRequest<T>(
   path: string,
   data?: Record<string, unknown> | FormData,
