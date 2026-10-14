@@ -14,7 +14,11 @@ export const navItems: NavItem[] = [
   {
     title: "dashboard",
     href: "/dashboard",
-    icon: LayoutDashboard
+    icon: LayoutDashboard,
+    children: [
+      { title: "overview", href: "/dashboard" },
+      { title: "adsetOutput", href: "/dashboard/adset-output" }
+    ]
   },
   {
     title: "metaAds",

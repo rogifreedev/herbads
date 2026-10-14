@@ -126,8 +126,8 @@ export function CreativeDateRangePicker({ defaultDays }: { defaultDays?: number 
           {rangeLabel(range)}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0" sideOffset={8}>
-        <div className="grid gap-2 border-b border-herb-border p-3 sm:grid-cols-5">
+      <PopoverContent align="end" className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto p-0" sideOffset={8}>
+        <div className="grid grid-cols-2 gap-2 border-b border-herb-border p-3 sm:grid-cols-5">
           {PRESET_DAYS.map((days) => (
             <Button key={days} type="button" variant="outline" size="sm" className="border-herb-border bg-black/20" onClick={() => applyPreset(days)} disabled={isPending}>
               {t("daysPreset", { days })}
@@ -138,6 +138,7 @@ export function CreativeDateRangePicker({ defaultDays }: { defaultDays?: number 
           </Button>
         </div>
         <Calendar
+          className="relative"
           mode="range"
           selected={range}
           onSelect={setRange}

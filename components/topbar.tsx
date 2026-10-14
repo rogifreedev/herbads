@@ -16,7 +16,7 @@ export function Topbar() {
   const pathname = usePathname();
   const t = useTranslations("topbar");
   const tRoot = useTranslations();
-  const showClientSwitcher = pathname !== "/dashboard";
+  const showClientSwitcher = pathname !== "/dashboard" && !pathname.startsWith("/dashboard/");
 
   return (
     <header className="sticky top-0 z-30 flex min-h-[var(--topbar-height)] flex-wrap items-center justify-between gap-2 border-b border-herb-border bg-card/90 px-4 py-2 shadow-[var(--shadow-xs)] backdrop-blur-xl sm:px-6 lg:px-8">

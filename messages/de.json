@@ -309,6 +309,29 @@
     "clientCreateError": "Partner konnte nicht angelegt werden.",
     "clientCreated": "Partner angelegt."
   },
+  "adsetOutput": {
+    "title": "Adset Output",
+    "subtitle": "Über HERBAds erstellte Batches mit Meta-Auslieferung",
+    "total": "Batches live",
+    "video": "Video",
+    "static": "Static",
+    "mixed": "Gemischt",
+    "unknown": "Nicht zugeordnet",
+    "totalColumn": "Gesamt",
+    "byAccount": "Output pro Werbekonto",
+    "account": "Partner / Werbekonto",
+    "accountCount": "{count, plural, one {# Werbekonto} other {# Werbekonten}}",
+    "firstDelivery": "Erste Auslieferung",
+    "definition": "Ein Batch entspricht einem über HERBAds erstellten Adset. Gezählt wird einmalig der erste in Meta gespeicherte Tag mit Impressionen oder Ausgaben. Später pausierte Adsets bleiben enthalten; reine Uploads ohne Auslieferung zählen nicht.",
+    "dataSource": "Datenbasis: Meta-Sync · Zeitraum nach erster erfasster Auslieferung in der Zeitzone des Werbekontos. Neue Auslieferungen erscheinen nach dem nächsten Insights-Sync.",
+    "empty": "Keine erstmals ausgelieferten HERBAds-Batches in diesem Zeitraum.",
+    "loading": "Adset Output wird geladen",
+    "loadError": "Adset Output konnte nicht geladen werden.",
+    "invalidDate": "Bitte einen gültigen Zeitraum auswählen. Das Startdatum darf nicht nach dem Enddatum liegen.",
+    "refresh": "Output aktualisieren",
+    "retry": "Erneut versuchen",
+    "openMeta": "{name} in Meta öffnen"
+  },
   "dashboard": {
     "heroSubtitle": "Konsolidierte Performance über alle aktiven Partner - letzte 30 Tage",
     "heroTitle": "Agentur-Überblick",
@@ -905,6 +928,8 @@
     "noComments": "Noch keine Kommentare gespeichert. Starte den ersten Sync."
   },
   "nav": {
+    "overview": "Übersicht",
+    "adsetOutput": "Adset Output",
     "uploads": "Uploads",
     "dashboard": "Dashboard",
     "metaAds": "META Ads",

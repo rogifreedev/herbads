@@ -309,6 +309,29 @@
     "clientCreateError": "Impossibile creare il partner.",
     "clientCreated": "Partner creato."
   },
+  "adsetOutput": {
+    "title": "Adset Output",
+    "subtitle": "Batch creati tramite HERBAds con pubblicazione su Meta",
+    "total": "Batch pubblicati",
+    "video": "Video",
+    "static": "Static",
+    "mixed": "Misti",
+    "unknown": "Non classificati",
+    "totalColumn": "Totale",
+    "byAccount": "Output per account pubblicitario",
+    "account": "Partner / Account pubblicitario",
+    "accountCount": "{count, plural, one {# account pubblicitario} other {# account pubblicitari}}",
+    "firstDelivery": "Prima pubblicazione",
+    "definition": "Un batch corrisponde a un gruppo creato tramite HERBAds. Conta una sola volta il primo giorno registrato da Meta con impression o spesa. I gruppi messi in pausa successivamente restano inclusi; i caricamenti senza pubblicazione non contano.",
+    "dataSource": "Fonte: sincronizzazione Meta · Periodo basato sulla prima pubblicazione registrata nel fuso orario dell'account. Le nuove pubblicazioni appaiono dopo la successiva sincronizzazione Insights.",
+    "empty": "Nessun batch HERBAds pubblicato per la prima volta in questo periodo.",
+    "loading": "Caricamento Adset Output",
+    "loadError": "Impossibile caricare Adset Output.",
+    "invalidDate": "Seleziona un periodo valido. La data iniziale non può essere successiva a quella finale.",
+    "refresh": "Aggiorna output",
+    "retry": "Riprova",
+    "openMeta": "Apri {name} su Meta"
+  },
   "dashboard": {
     "heroSubtitle": "Performance consolidata di tutti i partner attivi - ultimi 30 giorni",
     "heroTitle": "Panoramica agenzia",
@@ -905,6 +928,8 @@
     "noComments": "Non ci sono ancora commenti salvati. Avvia la prima sincronizzazione."
   },
   "nav": {
+    "overview": "Panoramica",
+    "adsetOutput": "Adset Output",
     "uploads": "Caricamenti",
     "dashboard": "Dashboard",
     "metaAds": "META Ads",
