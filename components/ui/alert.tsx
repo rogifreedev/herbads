@@ -6,9 +6,9 @@ const alertVariants = cva("relative w-full rounded-xl border p-4 text-sm leading
   variants: {
     variant: {
       default: "border-border bg-card text-foreground shadow-[var(--shadow-xs)]",
-      warning: "border-amber-200 bg-amber-50 text-amber-900 shadow-[var(--shadow-xs)]",
-      destructive: "border-red-200 bg-red-50 text-red-900 shadow-[var(--shadow-xs)]",
-      success: "border-emerald-200 bg-emerald-50 text-emerald-900 shadow-[var(--shadow-xs)]"
+      warning: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200 shadow-[var(--shadow-xs)]",
+      destructive: "border-red-200 bg-red-50 text-red-900 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-200 shadow-[var(--shadow-xs)]",
+      success: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200 shadow-[var(--shadow-xs)]"
     }
   },
   defaultVariants: {

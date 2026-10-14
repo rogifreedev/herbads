@@ -8,6 +8,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { chromium } from "playwright";
+import { checkTextContrast } from "./theme-contrast.mjs";
 
 const require = createRequire(import.meta.url);
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,9 +37,23 @@ async function main() {
   let release;
   let gate = null;
   let calls = 0;
+  let failTheme = false;
+  const preferences = new Map();
   // The application API and UI run normally against isolated database/auth fixtures.
   const mock = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
+    if (req.url.startsWith("/rest/v1/user_preferences")) {
+      if (req.method === "POST") {
+        let raw = "";
+        for await (const chunk of req) raw += chunk;
+        if (failTheme) { res.statusCode = 500; return res.end('{"message":"Fixture save failure"}'); }
+        const preference = JSON.parse(raw);
+        preferences.set(preference.user_email, preference.theme);
+        return res.end("{}");
+      }
+      const email = new URL(req.url, "http://fixture").searchParams.get("user_email")?.replace(/^eq\./, "");
+      return res.end(JSON.stringify(preferences.has(email) ? [{ theme: preferences.get(email) }] : []));
+    }
     if (!req.url.includes("/rpc/get_adset_output")) return res.end(req.url.startsWith("/auth/") ? '{"user":null}' : "[]");
     calls++;
     let raw = "";
@@ -159,7 +174,58 @@ async function main() {
     await page.getByRole("button", { name: "Output aktualisieren", exact: true }).click();
     await total.waitFor();
     assert(calls > refreshCalls);
+    // Exercise the real preference endpoint and server-rendered theme across isolated users/devices.
+    await page.getByRole("button", { name: "Dunkelmodus aktivieren", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Hellmodus aktivieren"]')?.getAttribute("aria-busy") === "false");
+    assert.equal(preferences.get("tester@herb-media.com"), "dark");
+    await page.reload({ waitUntil: "networkidle" });
+    assert.equal(await page.locator("html").getAttribute("class"), "dark");
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), "dark");
+    await checkTextContrast(page);
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.getByRole("button", { name: "Hellmodus aktivieren", exact: true }).waitFor();
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(output, `dark-output-${width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole("button", { name: "15.09.2026 - 14.10.2026", exact: true }).click();
+    await page.getByRole("dialog").waitFor();
+    await page.waitForTimeout(250);
+    await checkTextContrast(page);
+    await page.screenshot({ path: path.join(output, "dark-calendar.png") });
+    await page.keyboard.press("Escape");
+    await page.route("**/api/meta/ad-accounts", (route) => route.fulfill({ json: { accounts: [{ id: "test", accountId: "act_test", name: "Testkonto" }] } }));
+    await page.getByRole("button", { name: "Partner anlegen", exact: true }).click();
+    await page.getByRole("dialog", { name: "Partner anlegen", exact: true }).waitFor();
+    await page.waitForTimeout(250);
+    await checkTextContrast(page);
+    await page.screenshot({ path: path.join(output, "dark-form.png") });
+    await page.keyboard.press("Escape");
+    failTheme = true;
+    await page.getByRole("button", { name: "Hellmodus aktivieren", exact: true }).click();
+    await page.getByText("Die Darstellung konnte nicht gespeichert werden. Bitte erneut versuchen.", { exact: true }).waitFor();
+    assert.equal(await page.locator("html").getAttribute("class"), "dark", "Failed saves roll back visibly");
+    failTheme = false;
+    const secondDevice = await browser.newContext();
+    await secondDevice.addCookies(await context.cookies());
+    const secondPage = await secondDevice.newPage();
+    const html = await secondPage.goto(url, { waitUntil: "networkidle" });
+    assert.match(await html.text(), /<html[^>]*class="dark"/, "Dark mode is present before hydration");
+    const otherPayload = Buffer.from(JSON.stringify({ email: "other@herb-media.com", exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url");
+    await secondDevice.addCookies([{ name: "herbads-session", value: `${otherPayload}.${createHmac("sha256", secret).update(otherPayload).digest("base64url")}`, url: origin }]);
+    await secondPage.reload({ waitUntil: "networkidle" });
+    assert.notEqual(await secondPage.locator("html").getAttribute("class"), "dark", "Other users do not inherit a shared browser theme");
+    const forbidden = await secondDevice.request.put(`${origin}/api/user/theme`, { headers: { Origin: "https://other.example" }, data: { theme: "dark" } });
+    assert.equal(forbidden.status(), 403);
+    await page.getByRole("button", { name: "Hellmodus aktivieren", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Dunkelmodus aktivieren"]')?.getAttribute("aria-busy") === "false");
+    assert.equal(preferences.get("tester@herb-media.com"), "light");
+    await page.reload({ waitUntil: "networkidle" });
+    assert.notEqual(await page.locator("html").getAttribute("class"), "dark");
+    await secondDevice.close();
     assert.deepEqual(errors, []);
+    console.log("PASS per-user themes, SSR persistence, separate device, user isolation, CSRF, save failure rollback, mobile toggle, dark calendar/dialog/table contrast");
     console.log("PASS auth, database-backed API, navigation, account totals, batch drilldown, date filters, history, loading, empty/error/retry and desktop/mobile views");
     console.log("Screenshots:", output);
   } catch (error) {

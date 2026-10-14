@@ -58,8 +58,8 @@ export function AdsetOutputDashboard() {
   const columns = types.length + 2;
   const metrics = [
     { key: "total" as const, icon: Layers, color: "text-primary" },
-    { key: "video" as const, icon: Video, color: "text-sky-700" },
-    { key: "static" as const, icon: ImageIcon, color: "text-emerald-700" },
+    { key: "video" as const, icon: Video, color: "text-sky-700 dark:text-sky-300" },
+    { key: "static" as const, icon: ImageIcon, color: "text-emerald-700 dark:text-emerald-300" },
     ...types.filter((type) => type === "mixed" || type === "unknown").map((key) => ({ key, icon: Layers, color: "text-muted-foreground" }))
   ];
 

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CheckCircle2, LogOut, Settings } from "lucide-react";
+import { CheckCircle2, LogOut, Settings } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ClientSwitcher } from "@/components/client-switcher";
 import { CreateClientDialog } from "@/components/create-client-dialog";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getPageTitle } from "@/lib/routes";
@@ -29,15 +30,13 @@ export function Topbar() {
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 md:flex">
+        <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200 md:flex">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {t("metaSynced")}
         </div>
         {showClientSwitcher ? <ClientSwitcher /> : null}
         <CreateClientDialog trigger="icon" />
-        <Button variant="ghost" size="icon" className="hidden text-foreground/65 hover:text-foreground sm:inline-flex" aria-label={t("notifications")}>
-          <Bell className="h-5 w-5" />
-        </Button>
+        <ThemeToggle />
         <LanguageSwitcher />
         <Button asChild variant="ghost" size="icon" className="text-foreground/65 hover:text-foreground">
           <Link href="/settings" aria-label={t("settings")}>

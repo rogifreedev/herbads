@@ -61,7 +61,7 @@ export function BatchStatusRefresh({ clientId }: { clientId: string }) {
   }, [clientId, router]);
 
   return (
-    <p role="status" className={`flex min-h-5 items-center gap-2 text-xs ${failed ? "text-amber-700" : "text-muted-foreground"}`}>
+    <p role="status" className={`flex min-h-5 items-center gap-2 text-xs ${failed ? "text-amber-700 dark:text-amber-200" : "text-muted-foreground"}`}>
       {checking ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:animate-none" /> : null}
       <span>
         {checking ? t("metaStatusRefreshing") : failed ? t("metaStatusRefreshFailed") : checkedAt ? t("metaStatusRefreshed", {

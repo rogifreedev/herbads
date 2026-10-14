@@ -886,7 +886,9 @@
   "topbar": {
     "subtitle": "Performance dell'agenzia e Creative Intelligence",
     "metaSynced": "Meta sincronizzato",
-    "notifications": "Notifiche",
+    "darkMode": "Attiva modalit\u00e0 scura",
+    "lightMode": "Attiva modalit\u00e0 chiara",
+    "themeSaveError": "Impossibile salvare il tema. Riprova.",
     "settings": "Impostazioni",
     "logout": "Esci",
     "language": "Lingua",

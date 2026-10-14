@@ -3,7 +3,8 @@ import { Geist_Mono, Oswald, Work_Sans } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider";
+import { getInitialUserTheme } from "@/lib/user-theme";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -23,17 +24,18 @@ export async function generateMetadata(): Promise<Metadata> {
 export const preferredRegion = "fra1";
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [locale, messages] = await Promise.all([getLocale(), getMessages()]);
+  const [locale, messages, preference] = await Promise.all([getLocale(), getMessages(), getInitialUserTheme()]);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className={preference.theme === "dark" ? "dark" : undefined} suppressHydrationWarning>
       <body className={`${workSans.variable} ${oswald.variable} ${geistMono.variable} ${workSans.className}`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <Suspense fallback={null}>
-            <NavigationProgress />
-          </Suspense>
-          <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
-          <Toaster richColors position="top-right" />
+          <ThemeProvider key={preference.userKey} initialTheme={preference.theme}>
+            <Suspense fallback={null}>
+              <NavigationProgress />
+            </Suspense>
+            <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
+          </ThemeProvider>
         </NextIntlClientProvider>
       </body>
     </html>

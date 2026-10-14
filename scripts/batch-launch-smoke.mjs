@@ -8,6 +8,7 @@ import { chromium } from "playwright";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { checkTextContrast } from "./theme-contrast.mjs";
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -126,6 +127,7 @@ async function main() {
   // Isolated Supabase and browser API fixtures: this test cannot create real Meta objects.
   const mock = http.createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
+    if (req.url.startsWith("/rest/v1/user_preferences")) return res.end(JSON.stringify([{ theme: process.env.SMOKE_THEME ?? "light" }]));
     res.end(req.url.startsWith("/auth/") ? '{"user":null}' : "[]");
   });
   const mockPort = await listen(mock);
@@ -563,6 +565,10 @@ async function main() {
       .fill("Individueller Text nur fuer dieses Motiv.");
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: path.join(output, "desktop.png"), fullPage: true });
+    if (process.env.SMOKE_THEME === "dark") {
+      assert.equal(await page.locator("html").getAttribute("class"), "dark");
+      await checkTextContrast(page);
+    }
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.waitForTimeout(100);
@@ -1286,6 +1292,7 @@ async function main() {
         "Upload page has no viewport overflow"
       );
       await page.screenshot({ path: path.join(output, `upload-queue-${width}.png`), fullPage: true });
+      if (process.env.SMOKE_THEME === "dark") await checkTextContrast(page);
     }
     const readsBeforePolling = queueReadCount;
     await page.waitForTimeout(5200);
