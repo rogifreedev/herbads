@@ -220,17 +220,23 @@ describe("paused adset payloads", () => {
     expect(payload.targeting).not.toHaveProperty("excluded_geo_locations");
     expect(template.targeting.geo_locations.countries).toEqual(["IT"]);
   });
-  it("leaves campaign budgets unchanged and omits adset budget and bidding", () => {
-    const payload = buildAdSetPayload(
-      "Batch",
-      { ...campaign, dailyBudget: 10000 },
-      template,
-      { ...settings, dailyBudget: "" },
-      "EUR"
-    );
-    expect(payload).not.toHaveProperty("daily_budget");
-    expect(payload).not.toHaveProperty("bid_strategy");
-    expect(payload.status).toBe("PAUSED");
+  it.each([
+    { dailyBudget: 10000, lifetimeBudget: 0 },
+    { dailyBudget: 0, lifetimeBudget: 100000 }
+  ])("leaves campaign budgets unchanged and omits adset budgets and bidding: %j", (budget) => {
+    const destination = { ...campaign, ...budget };
+    const original = structuredClone(destination);
+    const source = { ...template, daily_budget: "6500", bid_strategy: "COST_CAP", bid_amount: "100" };
+    for (const dailyBudget of ["", "60.50"]) {
+      const payload = buildAdSetPayload("Batch", destination, source, { ...settings, dailyBudget }, "EUR");
+      expect(payload).not.toHaveProperty("daily_budget");
+      expect(payload).not.toHaveProperty("lifetime_budget");
+      expect(payload).not.toHaveProperty("bid_strategy");
+      expect(payload).not.toHaveProperty("bid_amount");
+      expect(payload.status).toBe("PAUSED");
+      expect(payload.campaign_id).toBe(destination.id);
+      expect(destination).toEqual(original);
+    }
   });
   it("clears inherited language restrictions when all languages are selected", () => {
     expect(

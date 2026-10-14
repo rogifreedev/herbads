@@ -1066,18 +1066,30 @@ export function BatchLaunchForm({
                       ))}
                     </select>
                   </Field>
-                  <Field label={`${t("dailyBudget")} (${account?.currency ?? ""})`} id="launch-budget">
-                    <Input
-                      id="launch-budget"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={dailyBudget}
-                      disabled={campaignBudget}
-                      onChange={(event) => setDailyBudget(event.target.value)}
-                    />
-                    {campaignBudget ? <p className="text-xs text-muted-foreground">{t("campaignBudget")}</p> : null}
-                  </Field>
+                  {campaignBudget ? (
+                    <dl id="launch-campaign-budget" className="min-w-0 space-y-2">
+                      <dt className="text-sm font-medium">
+                        {t(campaign?.dailyBudget ? "campaignDailyBudget" : "campaignLifetimeBudget")}
+                      </dt>
+                      <dd className="space-y-1">
+                        <p className="text-sm font-semibold">
+                          {money((campaign?.dailyBudget || campaign?.lifetimeBudget || 0) / 10 ** currencyDigits)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{t("campaignBudget")}</p>
+                      </dd>
+                    </dl>
+                  ) : (
+                    <Field label={`${t("dailyBudget")} (${account?.currency ?? ""})`} id="launch-budget">
+                      <Input
+                        id="launch-budget"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={dailyBudget}
+                        onChange={(event) => setDailyBudget(event.target.value)}
+                      />
+                    </Field>
+                  )}
                   <div className="min-w-0 space-y-2">
                     <Label htmlFor="country-search">{t("countries")}</Label>
                     <Input

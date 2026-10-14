@@ -84,6 +84,14 @@ function fixture(accountId = "account-a", presets = [], jobs = [], favoriteTempl
         status: "PAUSED",
         dailyBudget: 0,
         lifetimeBudget: 0
+      },
+      {
+        id: "792",
+        name: "Sales - CBO Lifetime",
+        objective: "OUTCOME_SALES",
+        status: "ACTIVE",
+        dailyBudget: 0,
+        lifetimeBudget: 100000
       }
     ],
     templates: ["789", "790", "791"].map((id) => ({
@@ -410,7 +418,7 @@ async function main() {
     assert(await pausedButton.isDisabled());
     releaseMedia();
     await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
-    assert(await pausedButton.isDisabled(), "Creation waits for live Meta even when matched media is ready");
+    assert(await pausedButton.isEnabled(), "Saved Meta options can be queued while the live refresh is pending");
     releaseOptions();
     await page.getByRole("status").filter({ hasText: "Kampagnen und Adsets werden" }).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Deutsch", exact: true }).waitFor();
@@ -431,7 +439,7 @@ async function main() {
     assert(await page.locator("#launch-name").evaluate((input) => input.readOnly));
     assert.deepEqual(
       await page.locator("#launch-campaign option").evaluateAll((options) => options.map((option) => option.value)),
-      ["", "789", "790"]
+      ["", "789", "790", "792"]
     );
     await page.locator("#launch-campaign").selectOption("789");
     assert.match(await page.locator("#launch-template").innerText(), /Website Purchases.*Sales - Deutschland/);
@@ -502,8 +510,22 @@ async function main() {
     await page.locator("#launch-preset").selectOption("preset-1");
     assert.equal(await page.locator("#launch-budget").inputValue(), "60");
     await page.locator("#launch-campaign").selectOption("790");
-    assert(await page.locator("#launch-budget").isDisabled());
+    assert.equal(await page.locator("#launch-budget").count(), 0, "CBO has no adset budget input");
+    const campaignBudget = page.locator("#launch-campaign-budget");
+    assert.match(await campaignBudget.innerText(), /Kampagnen-Tagesbudget.*100,00/s);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await campaignBudget.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.screenshot({ path: path.join(output, `campaign-budget-${width}.png`) });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator("#launch-campaign").selectOption("792");
+    assert.equal(await page.locator("#launch-budget").count(), 0, "Lifetime CBO has no adset budget input");
+    assert.match(await campaignBudget.innerText(), /Kampagnen-Laufzeitbudget.*1\.000,00/s);
     await page.locator("#launch-campaign").selectOption("789");
+    assert.equal(await campaignBudget.count(), 0);
+    assert.equal(await page.locator("#launch-budget").inputValue(), "60", "Switching back to ABO preserves the budget");
     await page.locator("#launch-template").click();
     assert.equal(
       await page.getByRole("group", { name: "Favorisierte Adsets", exact: true }).getByRole("option").count(),
@@ -616,6 +638,9 @@ async function main() {
     await page.goto(url, { waitUntil: "networkidle" });
     assert.equal(await page.locator('#launch-campaign option[value="791"]').count(), 0);
     assert(await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).isDisabled());
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.waitForLoadState("networkidle");
+    await page.locator("#launch-budget").fill("");
     await page.locator("#launch-campaign").selectOption("790");
     await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).check();
     await page.waitForLoadState("networkidle");
@@ -669,6 +694,7 @@ async function main() {
     await dialog.getByRole("button", { name: "Bestätigen und aktivieren", exact: true }).click();
     await page.getByText("Aktiviert", { exact: true }).first().waitFor();
     assert.equal(submitted.activate, true);
+    assert.equal(submitted.settings.dailyBudget, "", "CBO creation does not require an adset budget");
     assert.deepEqual(submitted.activationBudget, { dailyBudget: 10000, lifetimeBudget: 0 });
     assert.equal(creationRequests, 2);
     job = null;
@@ -928,14 +954,9 @@ async function main() {
     await refreshIdentities.click();
     const identityFailure = page.getByRole("alert").filter({ hasText: "Test-Identitaeten-Ausfall" });
     await identityFailure.waitFor();
-    assert(await pausedButton.isDisabled());
+    assert(await pausedButton.isEnabled(), "Saved identities can be queued when a live refresh fails");
     assert(await page.locator("#launch-pageId").isDisabled());
-    assert(
-      await page
-        .locator("#launch-blockers")
-        .getByRole("link", { name: /Facebook- und Instagram-Auswahl konnte nicht/ })
-        .isVisible()
-    );
+    assert.equal(await page.locator("#launch-blockers").count(), 0);
     failIdentities = false;
     await refreshIdentities.click();
     await identityFailure.waitFor({ state: "hidden" });
