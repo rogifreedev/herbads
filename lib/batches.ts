@@ -321,7 +321,8 @@ function findMetaMatch(folderName: string, entities: MetaEntity[]) {
   const containsMatches = entities
     .filter((entity) => {
       if (entity.normalizedName.length < 4) return false;
-      return entity.normalizedName.includes(normalizedFolderName) || normalizedFolderName.includes(entity.normalizedName);
+      // Require the whole batch name; generic adsets like "Video" and partial numbers are not evidence of a match.
+      return ` ${entity.normalizedName} `.includes(` ${normalizedFolderName} `);
     })
     .sort(sortMatches);
 
