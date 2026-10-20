@@ -4,7 +4,7 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getBatchLaunchJob, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { downloadBatchMedia } from "@/lib/batch-launch-drive";
 import { prepareBatchImage } from "@/lib/batch-image-upload";
-import { buildCreativePayload, validateLaunchActivation } from "@/lib/batch-launch-plan";
+import { buildCreativePayload, expandBatchDescriptionVariants, validateLaunchActivation } from "@/lib/batch-launch-plan";
 import { validateBatchIdentity } from "@/lib/batch-launch-identities";
 import { getLiveBatchIdentities } from "@/lib/meta/batch-identities";
 import {
@@ -68,6 +68,37 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
   }
 
   try {
+    if (!state.inFlight && !payload.descriptionVariantsExpanded) {
+      const groups = expandBatchDescriptionVariants(input.groups, input.copy);
+      if (groups.length !== input.groups.length) {
+        if (
+          state.activationStarted ||
+          state.activated ||
+          state.savedAdIds?.length ||
+          Object.values(state.ads).some((ad) => ad.creativeId || ad.adId)
+        )
+          throw new Error(
+            "Beschreibungsvarianten koennen nicht automatisch umgestellt werden, weil bereits Meta-Objekte erstellt wurden. Bitte den Upload zuerst pruefen."
+          );
+        const expanded = {
+          ...payload,
+          input: { ...input, groups },
+          descriptionVariantsExpanded: true
+        };
+        // Upgrade only under the claimed job lease, before the first creative write; existing media stay untouched.
+        const { data, error } = await db
+          .from("batch_launch_jobs")
+          .update({ payload: expanded })
+          .eq("client_id", clientId)
+          .eq("id", job.id)
+          .eq("lease_token", token)
+          .select("id")
+          .single();
+        if (error || !data) throw new Error("Anzeigenvarianten konnten nicht gespeichert werden.");
+        input.groups = groups;
+        payload.descriptionVariantsExpanded = true;
+      }
+    }
     // A previous worker may have died after Meta created an object but before its ID was saved.
     if (state.inFlight) {
       job.status = "review";

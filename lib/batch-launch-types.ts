@@ -16,6 +16,8 @@ export type BatchAdGroup = {
   id: string;
   name: string;
   primaryText?: string;
+  // Assigned server-side when a format pair is expanded into description variants.
+  description?: string;
   matchMethod?: "visual";
   feedFileId: string | null;
   storyFileId: string | null;

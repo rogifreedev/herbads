@@ -93,6 +93,7 @@
     "activationUncertain": "L'attivazione è stata inviata a Meta. Il gruppo potrebbe già essere attivo e generare costi. Controlla lo stato su Meta; riprendere ripete solo il cambio di stato dello stesso gruppo.",
     "deliveryNotice": "Gruppo e inserzioni sono attivati. La pubblicazione effettiva dipende anche dalla revisione di Meta.",
     "activeSummary": "1 gruppo · {ads} inserzioni · {files} file multimediali · attivazione dopo la creazione",
+    "descriptionVariants": "{count} varianti di descrizione",
     "createActive": "Crea e attiva",
     "confirmActivation": "Conferma l'attivazione a pagamento",
     "campaignDailyBudget": "Budget giornaliero della campagna (totale)",

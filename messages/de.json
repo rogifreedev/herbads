@@ -93,6 +93,7 @@
     "activationUncertain": "Die Aktivierung wurde an Meta gesendet. Das Adset kann bereits aktiv sein und Kosten verursachen. Bitte den Status in Meta prüfen; Fortsetzen wiederholt nur die Statusänderung am selben Adset.",
     "deliveryNotice": "Adset und Anzeigen sind aktiviert. Die tatsächliche Auslieferung hängt unter anderem von der Meta-Prüfung ab.",
     "activeSummary": "1 Adset · {ads} Anzeigen · {files} Mediendateien · nach Erstellung aktivieren",
+    "descriptionVariants": "{count} Beschreibungsvarianten",
     "createActive": "Erstellen und aktivieren",
     "confirmActivation": "Kostenpflichtige Aktivierung bestätigen",
     "campaignDailyBudget": "Kampagnen-Tagesbudget (gesamt)",

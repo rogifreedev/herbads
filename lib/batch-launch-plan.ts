@@ -215,6 +215,24 @@ export function validateGroups(groups: BatchAdGroup[], files: BatchMediaFile[]) 
   return files.filter((file) => used.has(file.id));
 }
 
+export function expandBatchDescriptionVariants(groups: BatchAdGroup[], copy: BatchLaunchCopy): BatchAdGroup[] {
+  const descriptions = copyVariants(copy).descriptions;
+  return groups.flatMap(({ id, name, primaryText, matchMethod, feedFileId, storyFileId }) => {
+    const group = { id, name, primaryText, matchMethod, feedFileId, storyFileId };
+    if (!feedFileId || !storyFileId || descriptions.length < 2) return [group];
+    // Meta rejects multiple descriptions bound to the same placement rule. Reuse the uploaded pair per variant.
+    return descriptions.map((description, index) => {
+      const suffix = ` - D${index + 1}`;
+      return {
+        ...group,
+        id: index === 0 ? id : `${id}:description:${index + 1}`,
+        name: `${name.slice(0, 200 - suffix.length).trimEnd()}${suffix}`,
+        description
+      };
+    });
+  });
+}
+
 export function budgetMinorUnits(value: string, currency: string) {
   const amount = Number(value);
   const digits =
@@ -377,6 +395,8 @@ export function buildCreativePayload(
   copy = normalizeBatchCopy(copy);
   if (group.primaryText?.trim())
     copy = { ...copy, primaryText: group.primaryText.trim(), primaryTexts: [group.primaryText.trim()] };
+  if (group.description !== undefined)
+    copy = { ...copy, description: group.description, descriptions: [group.description] };
   validateCopy(copy);
   const variants = copyVariants(copy);
   const textAssets = {
@@ -414,6 +434,8 @@ export function buildCreativePayload(
       ? { ...base, asset_feed_spec: { ...textAssets, optimization_type: "DEGREES_OF_FREEDOM" } }
       : base;
   }
+  if (variants.descriptions.length > 1)
+    throw new Error("Formatpaare mit mehreren Beschreibungen muessen als Anzeigenvarianten erstellt werden.");
   const label = file.kind === "image" ? "image_label" : "video_label";
   const assets = selected.map((id) => ({
     adlabels: [{ name: id === group.storyFileId ? "batch_story" : "batch_feed" }],

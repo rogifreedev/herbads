@@ -8,6 +8,7 @@ import { listBatchMedia } from "@/lib/batch-launch-drive";
 import {
   batchAdsetName,
   buildAdSetPayload,
+  expandBatchDescriptionVariants,
   validateCopy,
   validateGroups,
   validatePreset,
@@ -35,6 +36,7 @@ import type {
 } from "@/lib/batch-launch-types";
 
 export type BatchLaunchPayload = {
+  descriptionVariantsExpanded?: boolean;
   input: BatchLaunchInput;
   files: BatchMediaFile[];
   metaAccountId: string;
@@ -417,6 +419,7 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   if (rawCampaign.status !== "ACTIVE")
     throw new Error("Die Kampagne ist nicht mehr aktiv. Bitte eine aktive Kampagne auswaehlen.");
   const files = validateGroups(input.groups, media.files);
+  input = { ...input, groups: expandBatchDescriptionVariants(input.groups, input.copy) };
   const campaign = mapBatchCampaign(rawCampaign);
   validateLaunchActivation(input.activate, campaign, input.activationBudget);
   const adsetPayload = buildAdSetPayload(input.name, campaign, template, input.settings, account.currency);
@@ -430,7 +433,14 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   } catch (error) {
     if (!isMetaRateLimitError(error)) throw error;
   }
-  const payload: BatchLaunchPayload = { input, files, metaAccountId: account.meta_account_id, campaign, adsetPayload };
+  const payload: BatchLaunchPayload = {
+    input,
+    files,
+    metaAccountId: account.meta_account_id,
+    campaign,
+    adsetPayload,
+    descriptionVariantsExpanded: true
+  };
   const db = createSupabaseServiceRoleClient();
   const { data, error } = await db
     .from("batch_launch_jobs")

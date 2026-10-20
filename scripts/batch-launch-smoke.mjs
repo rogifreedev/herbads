@@ -351,7 +351,11 @@ async function main() {
           status: "pending",
           state: { media: {}, ads: {}, step: "adset" },
           error: null,
-          adCount: submitted.groups.length,
+          adCount: submitted.groups.reduce((count, group) => count + (
+            group.feedFileId && group.storyFileId
+              ? Math.max(1, new Set((submitted.copy.descriptions ?? [submitted.copy.description]).map((text) => text.trim()).filter(Boolean)).size)
+              : 1
+          ), 0),
           fileCount: 2,
           updatedAt: new Date().toISOString()
         };
@@ -850,6 +854,9 @@ async function main() {
     ]) {
       for (let i = 0; i < 5; i++) assert.equal(await variantField(base, i).inputValue(), variantCopy[key][i]);
     }
+    await page.getByRole("heading", { name: "Anzeigen (5)", exact: true }).waitFor();
+    await page.getByText("5 Beschreibungsvarianten", { exact: true }).waitFor();
+    await page.getByText("1 pausiertes Adset · 5 aktive Anzeigen · 2 Mediendateien", { exact: true }).waitFor();
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.getByRole("heading", { name: "Anzeigentexte und Ziel", exact: true }).evaluate((element) => {
@@ -857,6 +864,8 @@ async function main() {
       });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await page.screenshot({ path: path.join(output, `copy-variants-${width}.png`) });
+      await page.getByRole("heading", { name: "Anzeigen (5)", exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(output, `description-variants-${width}.png`) });
     }
     await sourcePicker.selectOption("9789-single");
     assert.equal(await page.locator("#launch-text").inputValue(), copy.primaryText);
@@ -865,11 +874,20 @@ async function main() {
       assert.equal(await variantField("headline", i).inputValue(), "");
     }
     for (let i = 0; i < 5; i++) assert.equal(await variantField("description", i).inputValue(), "");
+    await page.getByRole("heading", { name: "Anzeigen (1)", exact: true }).waitFor();
     await sourcePicker.selectOption("9789-full");
     await page.locator("#launch-text-5").fill("Manuell bearbeiteter Text 5");
     await page.locator("#launch-headline-5").fill("Manuelle Headline 5");
     await page.locator("#launch-description-5").fill("Manuelle Beschreibung 5");
     assert.equal(await sourcePicker.inputValue(), "");
+    await page.getByRole("radio", { name: "Direkt aktivieren", exact: true }).check();
+    await page.getByRole("button", { name: "Erstellen und aktivieren", exact: true }).click();
+    await page.getByRole("dialog").getByText(
+      "1 Adset · 5 Anzeigen · 2 Mediendateien · nach Erstellung aktivieren", { exact: true }
+    ).waitFor();
+    await page.getByRole("dialog").getByRole("button", { name: "Abbrechen", exact: true }).click();
+    assert.equal(creationRequests, 3, "Reviewing the expanded ad count cannot create or activate ads");
+    await page.getByRole("radio", { name: "Mit pausiertem Adset erstellen", exact: true }).check();
     await pausedButton.click();
     await page.getByText("Adset pausiert erstellt", { exact: true }).waitFor();
     assert.deepEqual(submitted.copy.primaryTexts, [
@@ -878,8 +896,9 @@ async function main() {
     ]);
     assert.deepEqual(submitted.copy.headlines, [...variantCopy.headlines.slice(0, 4), "Manuelle Headline 5"]);
     assert.deepEqual(submitted.copy.descriptions, [...variantCopy.descriptions.slice(0, 4), "Manuelle Beschreibung 5"]);
-    assert.equal(submitted.groups.length, 1, "Text alternatives do not split a matched creative into separate ads");
+    assert.equal(submitted.groups.length, 1, "The server expands one source motif without duplicating its media selection");
     assert.equal(submitted.groups[0].storyFileId, "story");
+    assert.equal(job.adCount, 5, "The job counts all five description variants");
     job = null;
     await page.goto(url, { waitUntil: "networkidle" });
     let releaseCopy, copyStarted;
@@ -1300,7 +1319,7 @@ async function main() {
     assert.equal(queueActionCount, 3, "Polling is read-only");
     assert.deepEqual(errors, [], "Browser exceptions");
     console.log(
-      "PASS cancelled retry, preserved settings, corrected identities, duplicate/activation protection, 5x3 copy variants, source selection, stale responses, recovery, languages, countries, progressive loading, matching, presets, favorites and activation confirmation"
+      "PASS description-variant totals and activation confirmation, cancelled retry, preserved settings, corrected identities, duplicate/activation protection, 5x3 copy variants, source selection, stale responses, recovery, languages, countries, progressive loading, matching, presets and favorites"
     );
     console.log("Screenshots:", output);
   } catch (error) {

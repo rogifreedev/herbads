@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BatchLaunchJobRow } from "@/lib/batch-launch";
-import { campaign, feed, launchInput, template } from "./batch-launch-fixtures";
+import { campaign, feed, story, launchInput, template } from "./batch-launch-fixtures";
 import { buildAdSetPayload } from "@/lib/batch-launch-plan";
 import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
 
@@ -214,6 +214,121 @@ describe("resumable paused batch worker", () => {
       title: "Title 0",
       raw: creativeCalls[0][1]
     });
+  });
+  function pairedDescriptionJob() {
+    row.payload.input.copy = normalizeBatchCopy({
+      ...row.payload.input.copy,
+      primaryTexts: Array.from({ length: 5 }, (_, i) => `Body ${i + 1}`),
+      headlines: Array.from({ length: 5 }, (_, i) => `Title ${i + 1}`),
+      descriptions: Array.from({ length: 5 }, (_, i) => `Description ${i + 1}`)
+    });
+    row.payload.files = Array.from({ length: 3 }, (_, i) => [
+      { ...feed, id: `feed-${i}` }, { ...story, id: `story-${i}` }
+    ]).flat();
+    row.payload.input.groups = Array.from({ length: 3 }, (_, i) => ({
+      id: `motif-${i}`, name: `100_V${i + 1}`, feedFileId: `feed-${i}`, storyFileId: `story-${i}`
+    }));
+    row.state.adsetId = "100";
+    row.state.step = "creative";
+    row.state.media = Object.fromEntries(row.payload.files.map((file) => [file.id, { imageHash: `hash-${file.id}` }]));
+    row.state.ads = { "motif-0": {} };
+  }
+  it.each([false, true])(
+    "resumes three uploaded pairs into 15 description variants without reuploading or duplicates (activate=%s)",
+    async (activate) => {
+      pairedDescriptionJob();
+      row.payload.input.activate = activate;
+      row.status = "failed";
+      const originalMedia = structuredClone(row.state.media);
+      await processBatchLaunch("client", "job");
+      expect(writes).toHaveLength(0);
+      expect(row.payload.input.groups).toHaveLength(3);
+      row.status = "pending"; // Explicit resume of the rejected job.
+      let adCount = 0;
+      let creativeCount = 0;
+      mocks.request.mockImplementation(async (path: string, values?: Record<string, unknown>) => {
+        if (path.endsWith("/adcreatives")) return { id: String(200 + ++creativeCount) };
+        if (path.endsWith("/ads")) {
+          expect(values?.status).toBe("ACTIVE");
+          expect(row.state.activated).not.toBe(true);
+          return { id: String(300 + ++adCount) };
+        }
+        if (path === "100?fields=status") return { status: "PAUSED" };
+        if (path.includes("?fields=status,daily_budget")) return { status: "ACTIVE" };
+        if (path === "100" && values?.status === "ACTIVE") {
+          expect(adCount).toBe(15);
+          return { success: true };
+        }
+        throw new Error(`Unexpected request: ${path}`);
+      });
+      expect((await processBatchLaunch("client", "job")).adCount).toBe(15);
+      row.status = "paused";
+      await processBatchLaunch("client", "job");
+      expect(creativeCount).toBe(1);
+      row.status = "pending";
+      for (let i = 0; i < 45; i++) {
+        if ((await processBatchLaunch("client", "job")).status === "completed") break;
+      }
+      expect(row.status).toBe("completed");
+      expect(row.payload.input.activate).toBe(activate);
+      expect(Boolean(row.state.activated)).toBe(activate);
+      expect(row.state.media).toEqual(originalMedia);
+      expect(mocks.prepareImage).not.toHaveBeenCalled();
+      expect(mocks.download).not.toHaveBeenCalled();
+      expect(creativeCount).toBe(15);
+      expect(adCount).toBe(15);
+      expect(Object.values(row.state.ads).filter((ad) => ad.adId)).toHaveLength(15);
+      expect(row.state.savedAdIds).toHaveLength(15);
+      expect(writes.filter((write) => write.table === "batch_launch_jobs")).toHaveLength(1);
+      const creatives = mocks.request.mock.calls.filter(([path]) => path.endsWith("/adcreatives")).map(([, body]) => body);
+      for (const [index, creative] of creatives.entries()) {
+        expect(creative.name).toBe(`100_V${Math.floor(index / 5) + 1} - D${index % 5 + 1}`);
+        expect(creative.asset_feed_spec.bodies).toHaveLength(5);
+        expect(creative.asset_feed_spec.titles).toHaveLength(5);
+        expect(creative.asset_feed_spec.descriptions).toEqual([
+          { text: `Description ${index % 5 + 1}`, adlabels: [{ name: "batch_descriptions" }] }
+        ]);
+        expect(creative.asset_feed_spec.images.map((image: { hash: string }) => image.hash)).toEqual([
+          `hash-feed-${Math.floor(index / 5)}`, `hash-story-${Math.floor(index / 5)}`
+        ]);
+      }
+      expect(writes.filter((write) => write.table === "creatives").map((write) => write.values.raw)).toEqual(creatives);
+      await processBatchLaunch("client", "job");
+      expect(adCount).toBe(15);
+    }
+  );
+  it.each([{ creativeId: "200" }, { adId: "300" }])("does not replan existing Meta objects: %j", async (existing) => {
+    pairedDescriptionJob();
+    row.state.ads["motif-0"] = existing;
+    expect((await processBatchLaunch("client", "job")).status).toBe("failed");
+    expect(row.error).toMatch(/bereits Meta-Objekte/);
+    expect(row.payload.input.groups).toHaveLength(3);
+    expect(writes).toHaveLength(0);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it("does not replan or replay an ambiguous creative write", async () => {
+    pairedDescriptionJob();
+    row.state.inFlight = "creative:motif-0";
+    expect((await processBatchLaunch("client", "job")).status).toBe("review");
+    expect(row.payload.input.groups).toHaveLength(3);
+    expect(writes).toHaveLength(0);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it("does not create anything if saving the expanded plan fails", async () => {
+    pairedDescriptionJob();
+    const db = mocks.database.getMockImplementation()!();
+    const from = db.from;
+    db.from = (table: string) => {
+      const query = from(table);
+      if (table === "batch_launch_jobs")
+        query.single = async () => ({ data: null, error: { message: "Lease lost" } });
+      return query;
+    };
+    mocks.database.mockReturnValueOnce(db);
+    expect((await processBatchLaunch("client", "job")).status).toBe("failed");
+    expect(row.error).toMatch(/Varianten|varianten/);
+    expect(row.payload.input.groups).toHaveLength(3);
+    expect(mocks.request).not.toHaveBeenCalled();
   });
   it("creates every ad active before enabling the parent last", async () => {
     row.payload.input.activate = true;

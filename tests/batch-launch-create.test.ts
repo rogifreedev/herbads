@@ -16,7 +16,7 @@ vi.mock("@/lib/meta/batch-launch", async (original) => ({
 }));
 import { createBatchLaunch, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { MetaLaunchError } from "@/lib/meta/batch-launch";
-import { campaign, feed, launchInput, template } from "./batch-launch-fixtures";
+import { campaign, feed, story, launchInput, template } from "./batch-launch-fixtures";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -180,6 +180,33 @@ describe("batch creation defaults", () => {
       descriptions: ["Description"]
     });
     expect(copy.primaryTexts).toEqual(["", "Second body", "Third body"]);
+  });
+  it("plans five ads for a matched pair, keeps two unique uploads and ignores client description overrides", async () => {
+    mocks.media.mockResolvedValue({ files: [feed, story] });
+    const descriptions = Array.from({ length: 5 }, (_, i) => `Description ${i + 1}`);
+    const job = await createBatchLaunch("client", {
+      ...launchInput,
+      copy: { ...launchInput.copy, descriptions },
+      groups: [{ id: "pair", name: "Motif", feedFileId: feed.id, storyFileId: story.id, description: "Untrusted" }]
+    });
+    const payload = mocks.insert.mock.calls[0][0].payload;
+    expect(payload.descriptionVariantsExpanded).toBe(true);
+    expect(payload.input.groups.map((group: { description: string }) => group.description)).toEqual(descriptions);
+    expect(payload.input.groups).toHaveLength(5);
+    expect(payload.files).toEqual([feed, story]);
+    expect(job.adCount).toBe(5);
+    expect(job.fileCount).toBe(2);
+  });
+  it("still rejects manually reused media before expanding description variants", async () => {
+    await expect(createBatchLaunch("client", {
+      ...launchInput,
+      copy: { ...launchInput.copy, descriptions: ["One", "Two"] },
+      groups: [
+        { id: "one", name: "One", feedFileId: feed.id, storyFileId: null },
+        { id: "two", name: "Two", feedFileId: feed.id, storyFileId: null }
+      ]
+    })).rejects.toThrow(/mehrfach zugeordnet/);
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
   it.each(["2026-09-15T22:30:00Z", "2026-12-31T23:30:00Z"])("uses only the authoritative folder name on %s", async (date) => {
     vi.setSystemTime(new Date(date));

@@ -45,6 +45,7 @@ import {
   adsetGeography,
   adsetLocales,
   batchAdsetName,
+  expandBatchDescriptionVariants,
   groupBatchMedia,
   sameCountrySelection,
   settingsFromAdset
@@ -435,6 +436,7 @@ export function BatchLaunchForm({
     new Intl.NumberFormat(locale, { style: "currency", currency: account?.currency ?? "EUR" }).format(value);
   const suggestion = context?.suggestions.find((item) => item.id === suggestionId);
   const assigned = new Set(groups.flatMap((group) => [group.feedFileId, group.storyFileId]).filter(Boolean));
+  const plannedAds = expandBatchDescriptionVariants(groups, copy);
   const unused = context?.files.filter((file) => !assigned.has(file.id)) ?? [];
   const displayNames = new Intl.DisplayNames([locale], { type: "region" });
   const filteredCountries = COUNTRY_CODES.filter((code) =>
@@ -1540,13 +1542,14 @@ export function BatchLaunchForm({
                       </Alert>
                     ) : null}
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="font-heading text-xl">{t("ads", { count: groups.length })}</h3>
+                      <h3 className="font-heading text-xl">{t("ads", { count: plannedAds.length })}</h3>
                       <Button variant="outline" size="sm" onClick={() => setGroups(context.groups)}>
                         <RefreshCw className="mr-2 h-4 w-4" />
                         {t("resetMatching")}
                       </Button>
                     </div>
                     {groups.map((group) => {
+                      const variantCount = expandBatchDescriptionVariants([group], copy).length;
                       const kind = context.files.find(
                         (file) => file.id === (group.feedFileId ?? group.storyFileId)
                       )?.kind;
@@ -1580,6 +1583,11 @@ export function BatchLaunchForm({
                               </Badge>
                               {group.matchMethod === "visual" ? (
                                 <Badge variant="outline">{t("visualMatch")}</Badge>
+                              ) : null}
+                              {variantCount > 1 ? (
+                                <Badge variant="outline">
+                                  {t("descriptionVariants", { count: variantCount })}
+                                </Badge>
                               ) : null}
                               <Button
                                 size="icon"
@@ -1781,7 +1789,7 @@ export function BatchLaunchForm({
                 </div>
               ) : null}
               <p className="text-sm text-muted-foreground">
-                {t(activate ? "activeSummary" : "summary", { ads: groups.length, files: assigned.size })}
+                {t(activate ? "activeSummary" : "summary", { ads: plannedAds.length, files: assigned.size })}
               </p>
               <Button
                 size="lg"
@@ -1828,7 +1836,7 @@ export function BatchLaunchForm({
                   <dd>{countries.map((code) => displayNames.of(code)).join(", ")}</dd>
                 </div>
               </dl>
-              <p className="text-sm">{t("activeSummary", { ads: groups.length, files: assigned.size })}</p>
+              <p className="text-sm">{t("activeSummary", { ads: plannedAds.length, files: assigned.size })}</p>
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setConfirmActivation(false)}>
                   {t("cancelActivation")}

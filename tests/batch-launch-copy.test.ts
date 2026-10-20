@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { copyFromCreative, normalizeBatchCopy, templateCopySources } from "@/lib/batch-launch-copy";
-import { buildCreativePayload, validateCopy } from "@/lib/batch-launch-plan";
+import { buildCreativePayload, expandBatchDescriptionVariants, validateCopy } from "@/lib/batch-launch-plan";
 import { copy, feed, story } from "./batch-launch-fixtures";
 import type { BatchLaunchCopy } from "@/lib/batch-launch-types";
 
@@ -125,33 +125,71 @@ describe("multi-text validation and Meta payloads", () => {
     );
   });
   it.each(["image", "video"] as const)(
-    "keeps a 1:1 and 9:16 %s pair as one creative with every text variant on both placements",
+    "keeps both %s placements in each description variant with all bodies and headlines",
     (kind) => {
-      const result = buildCreativePayload(
-        { id: "ad", name: "Ad", feedFileId: "feed", storyFileId: "story" },
-        [
-          { ...feed, kind },
-          { ...story, kind }
-        ],
-        { feed: { imageHash: "h1", videoId: "123" }, story: { imageHash: "h2", videoId: "456" } },
-        variants
+      const groups = expandBatchDescriptionVariants(
+        [{ id: "ad", name: "Ad", feedFileId: "feed", storyFileId: "story" }], variants
       );
-      const spec = (result as { asset_feed_spec: Record<string, unknown> }).asset_feed_spec;
-      expect(spec.optimization_type).toBe("PLACEMENT");
-      expect(spec[kind === "image" ? "images" : "videos"]).toHaveLength(2);
-      for (const [field, label] of [
-        ["bodies", "body_label"],
-        ["titles", "title_label"],
-        ["descriptions", "description_label"]
-      ]) {
-        expect(spec[field]).toHaveLength(5);
-        for (const rule of spec.asset_customization_rules as Record<string, unknown>[]) {
-          for (const asset of spec[field] as { adlabels: unknown[] }[])
-            expect(asset.adlabels).toContainEqual(rule[label]);
+      expect(groups).toHaveLength(5);
+      expect(new Set(groups.map((group) => group.id)).size).toBe(5);
+      for (const [index, group] of groups.entries()) {
+        const result = buildCreativePayload(
+          group,
+          [{ ...feed, kind }, { ...story, kind }],
+          { feed: { imageHash: "h1", videoId: "123" }, story: { imageHash: "h2", videoId: "456" } },
+          variants
+        );
+        expect(result.name).toBe(`Ad - D${index + 1}`);
+        const spec = (result as { asset_feed_spec: Record<string, unknown> }).asset_feed_spec;
+        expect(spec.optimization_type).toBe("PLACEMENT");
+        expect(spec[kind === "image" ? "images" : "videos"]).toHaveLength(2);
+        expect(spec.descriptions).toEqual([
+          { text: variants.descriptions[index], adlabels: [{ name: "batch_descriptions" }] }
+        ]);
+        for (const [field, label, count] of [
+          ["bodies", "body_label", 5],
+          ["titles", "title_label", 5],
+          ["descriptions", "description_label", 1]
+        ] as const) {
+          expect(spec[field]).toHaveLength(count);
+          for (const rule of spec.asset_customization_rules as Record<string, unknown>[]) {
+            for (const asset of spec[field] as { adlabels: unknown[] }[])
+              expect(asset.adlabels).toContainEqual(rule[label]);
+          }
         }
       }
     }
   );
+  it("rejects an unexpanded format pair instead of sending the known-invalid Meta payload", () => {
+    expect(() => buildCreativePayload(
+      { id: "ad", name: "Ad", feedFileId: "feed", storyFileId: "story" },
+      [feed, story], { feed: { imageHash: "h1" }, story: { imageHash: "h2" } }, variants
+    )).toThrow(/Anzeigenvarianten/);
+  });
+  it("ignores empty and duplicate descriptions and keeps single-format ads unchanged", () => {
+    const pair = { id: "pair", name: "Pair", feedFileId: "feed", storyFileId: "story" };
+    const single = { id: "single", name: "Single", feedFileId: "other", storyFileId: null };
+    for (const descriptions of [[], ["One"], [" One ", "", "One"]]) {
+      expect(expandBatchDescriptionVariants([pair, single], { ...copy, descriptions })).toEqual([pair, single]);
+    }
+    expect(expandBatchDescriptionVariants([pair, single], {
+      ...copy, descriptions: [" One ", "", "Two", "One"]
+    }).map((group) => [group.id, group.description])).toEqual([
+      ["pair", "One"], ["pair:description:2", "Two"], ["single", undefined]
+    ]);
+  });
+  it("keeps stable unique IDs, bounded names and individual primary text overrides", () => {
+    const groups = [
+      { id: "pair", name: "x".repeat(200), feedFileId: "feed", storyFileId: "story", primaryText: "Override" },
+      { id: "pair-description-2", name: "Other", feedFileId: "other", storyFileId: null }
+    ];
+    const expanded = expandBatchDescriptionVariants(groups, variants);
+    expect(new Set(expanded.map((group) => group.id)).size).toBe(6);
+    expect(expanded.every((group) => group.name.length <= 200)).toBe(true);
+    expect(expanded.slice(0, 5).every((group) => group.primaryText === "Override")).toBe(true);
+    expect(expandBatchDescriptionVariants(groups, variants)).toEqual(expanded);
+    expect(groups[0].name).toHaveLength(200);
+  });
   it("honors per-ad body overrides without dropping the five headlines or descriptions", () => {
     const result = buildCreativePayload(
       { id: "ad", name: "Ad", feedFileId: "feed", storyFileId: null, primaryText: "Override" },
