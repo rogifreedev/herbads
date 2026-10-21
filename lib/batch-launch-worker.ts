@@ -67,6 +67,20 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
     return createdId(result);
   }
 
+  async function ensureCreatedAdsetPaused(adsetId: string) {
+    const parent = await metaLaunchRequest<{ status?: string }>(`${adsetId}?fields=status`);
+    if (parent.status === "PAUSED") return;
+    if (parent.status === "ACTIVE") {
+      const paused = await metaLaunchRequest<{ success?: boolean }>(adsetId, { status: "PAUSED" });
+      if (!paused.success) throw new Error("Meta hat das Pausieren des neuen Adsets nicht bestaetigt.");
+      const confirmed = await metaLaunchRequest<{ status?: string }>(`${adsetId}?fields=status`);
+      if (confirmed.status === "PAUSED") return;
+    }
+    throw new Error(
+      "Das neue Adset ist nicht als pausiert bestaetigt. Anzeigenerstellung angehalten; bitte den Status in Meta pruefen."
+    );
+  }
+
   try {
     if (!state.inFlight && !payload.descriptionVariantsExpanded) {
       const groups = expandBatchDescriptionVariants(input.groups, input.copy);
@@ -223,11 +237,7 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
             );
           } else {
             state.step = "ad";
-            const parent = await metaLaunchRequest<{ status?: string }>(`${state.adsetId}?fields=status`);
-            if (parent.status !== "PAUSED")
-              throw new Error(
-                "Das neue Adset ist nicht als pausiert bestaetigt. Anzeigenerstellung angehalten; bitte das Adset in Meta pausieren und danach fortsetzen."
-              );
+            await ensureCreatedAdsetPaused(state.adsetId!);
             ad.adId = await createObject(`ad:${group.id}`, `${metaAccountId}/ads`, {
               name: group.name,
               adset_id: state.adsetId,

@@ -468,7 +468,21 @@ describe("resumable paused batch worker", () => {
     await processBatchLaunch("client", "job");
     expect(mocks.request).toHaveBeenCalledTimes(5);
   });
-  it.each(["ACTIVE", "ARCHIVED", undefined])("stops before creating an active ad if its parent is %s", async (status) => {
+  it("pauses a job-created active adset before creating its first active ad", async () => {
+    for (let i = 0; i < 3; i++) await processBatchLaunch("client", "job");
+    mocks.request
+      .mockResolvedValueOnce({ status: "ACTIVE" })
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ status: "PAUSED" })
+      .mockResolvedValueOnce({ id: "300" });
+    await processBatchLaunch("client", "job");
+    expect(row.status).toBe("running");
+    expect(row.state.ads["ad-1"]).toMatchObject({ adId: "300", activated: true });
+    expect(mocks.request.mock.calls.some(([path, values]) => path === "100" && values?.status === "PAUSED")).toBe(
+      true
+    );
+  });
+  it.each(["ARCHIVED", undefined])("stops before creating an active ad if its parent is %s", async (status) => {
     for (let i = 0; i < 3; i++) await processBatchLaunch("client", "job");
     mocks.request.mockResolvedValueOnce({ status });
     await processBatchLaunch("client", "job");
