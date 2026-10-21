@@ -40,7 +40,7 @@ export async function processBatchUploadQueue() {
       if (!job || (job.lease_until && Date.parse(job.lease_until) > Date.now())) break;
       const result = await processBatchLaunch(job.client_id, job.id, token);
       steps++;
-      if (result.status === "running" && result.state.step === "processing") break;
+      if (result.status === "running" && ["processing", "pausing"].includes(result.state.step)) break;
     }
   } catch (error) {
     failure = error instanceof Error ? error.message : "Upload-Worker fehlgeschlagen.";

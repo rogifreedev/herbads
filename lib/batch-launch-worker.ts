@@ -69,15 +69,15 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
 
   async function ensureCreatedAdsetPaused(adsetId: string) {
     const parent = await metaLaunchRequest<{ status?: string }>(`${adsetId}?fields=status`);
-    if (parent.status === "PAUSED") return;
+    if (parent.status === "PAUSED") return true;
     if (parent.status === "ACTIVE") {
       const paused = await metaLaunchRequest<{ success?: boolean }>(adsetId, { status: "PAUSED" });
       if (!paused.success) throw new Error("Meta hat das Pausieren des neuen Adsets nicht bestaetigt.");
-      const confirmed = await metaLaunchRequest<{ status?: string }>(`${adsetId}?fields=status`);
-      if (confirmed.status === "PAUSED") return;
+      state.step = "pausing";
+      return false;
     }
     throw new Error(
-      "Das neue Adset ist nicht als pausiert bestaetigt. Anzeigenerstellung angehalten; bitte den Status in Meta pruefen."
+      `Das neue Adset ist nicht als pausiert bestaetigt (Meta-Status: ${parent.status ?? "unbekannt"}). Anzeigenerstellung angehalten; bitte den Status in Meta pruefen.`
     );
   }
 
@@ -237,14 +237,15 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
             );
           } else {
             state.step = "ad";
-            await ensureCreatedAdsetPaused(state.adsetId!);
-            ad.adId = await createObject(`ad:${group.id}`, `${metaAccountId}/ads`, {
-              name: group.name,
-              adset_id: state.adsetId,
-              creative: { creative_id: ad.creativeId },
-              status: "ACTIVE"
-            });
-            ad.activated = true;
+            if (await ensureCreatedAdsetPaused(state.adsetId!)) {
+              ad.adId = await createObject(`ad:${group.id}`, `${metaAccountId}/ads`, {
+                name: group.name,
+                adset_id: state.adsetId,
+                creative: { creative_id: ad.creativeId },
+                status: "ACTIVE"
+              });
+              ad.activated = true;
+            }
           }
           delete state.inFlight;
         } else if (input.activate && !state.activated) {

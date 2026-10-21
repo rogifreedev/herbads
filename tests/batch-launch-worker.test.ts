@@ -472,11 +472,13 @@ describe("resumable paused batch worker", () => {
     for (let i = 0; i < 3; i++) await processBatchLaunch("client", "job");
     mocks.request
       .mockResolvedValueOnce({ status: "ACTIVE" })
-      .mockResolvedValueOnce({ success: true })
-      .mockResolvedValueOnce({ status: "PAUSED" })
-      .mockResolvedValueOnce({ id: "300" });
+      .mockResolvedValueOnce({ success: true });
     await processBatchLaunch("client", "job");
     expect(row.status).toBe("running");
+    expect(row.state.step).toBe("pausing");
+    expect(row.state.ads["ad-1"].adId).toBeUndefined();
+    mocks.request.mockResolvedValueOnce({ status: "PAUSED" }).mockResolvedValueOnce({ id: "300" });
+    await processBatchLaunch("client", "job");
     expect(row.state.ads["ad-1"]).toMatchObject({ adId: "300", activated: true });
     expect(mocks.request.mock.calls.some(([path, values]) => path === "100" && values?.status === "PAUSED")).toBe(
       true

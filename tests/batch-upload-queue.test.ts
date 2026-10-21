@@ -64,6 +64,15 @@ describe("server-side FIFO dispatcher", () => {
     expect((await processBatchUploadQueue()).steps).toBe(1);
     expect(mocks.process).toHaveBeenCalledTimes(1);
   });
+  it("yields while Meta applies the safe adset pause", async () => {
+    mocks.heads = [
+      { id: "a", client_id: "client" },
+      { id: "b", client_id: "client" }
+    ];
+    mocks.process.mockResolvedValue({ status: "running", state: { step: "pausing" } });
+    expect((await processBatchUploadQueue()).steps).toBe(1);
+    expect(mocks.process).toHaveBeenCalledTimes(1);
+  });
   it("moves on after a job fails or requires review", async () => {
     mocks.heads = [
       { id: "a", client_id: "client" },
