@@ -9,6 +9,7 @@ import {
   batchAdsetName,
   buildAdSetPayload,
   expandBatchDescriptionVariants,
+  normalizeBatchCurrency,
   validateCopy,
   validateGroups,
   validatePreset,
@@ -96,6 +97,14 @@ export function mapLaunchJob(row: BatchLaunchJobRow): BatchLaunchJob {
   };
 }
 
+type LaunchAccount = {
+  id: string;
+  client_id: string;
+  meta_account_id: string;
+  name: string | null;
+  currency: string | null;
+};
+
 export async function launchAccount(clientId: string, accountId: string) {
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("meta_ad_accounts")
@@ -104,7 +113,36 @@ export async function launchAccount(clientId: string, accountId: string) {
     .eq("id", accountId)
     .single();
   if (error || !data) throw new Error("Werbekonto gehoert nicht zu diesem Partner.");
-  return data as { id: string; client_id: string; meta_account_id: string; name: string; currency: string };
+  return data as LaunchAccount;
+}
+
+async function resolveLaunchCurrency(account: LaunchAccount) {
+  const storedCurrency = normalizeBatchCurrency(account.currency);
+  if (storedCurrency) return { ...account, currency: storedCurrency };
+  let live: { id: string; account_id?: string; currency?: unknown; name?: string };
+  try {
+    live = await metaLaunchRequest(`${account.meta_account_id}?fields=id,account_id,name,currency`);
+  } catch {
+    throw new Error("Die Kontowaehrung konnte nicht von Meta geladen werden. Bitte erneut versuchen oder den Meta-Zugriff pruefen.");
+  }
+  const currency = normalizeBatchCurrency(live.currency);
+  const metaId = account.meta_account_id.replace(/^act_/, "");
+  if (String(live.id).replace(/^act_/, "") !== metaId || (live.account_id && String(live.account_id) !== metaId))
+    throw new Error("Die Meta-Kontodaten gehoeren nicht zum ausgewaehlten Werbekonto.");
+  if (!currency)
+    throw new Error("Meta hat keine gueltige Kontowaehrung geliefert. Bitte das Werbekonto in Meta pruefen.");
+  const name = account.name || (typeof live.name === "string" ? live.name : null);
+  // Newly linked accounts have no metadata until their first sync. Never guess EUR (or USD) for budgeting.
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("meta_ad_accounts")
+    .update({ currency, name })
+    .eq("id", account.id)
+    .eq("client_id", account.client_id)
+    .eq("meta_account_id", account.meta_account_id)
+    .select("id")
+    .single();
+  if (error || !data) throw new Error("Die Kontowaehrung konnte nicht gespeichert werden. Bitte erneut versuchen.");
+  return { ...account, currency, name };
 }
 
 async function launchFolder(clientId: string, folderId: string) {
@@ -135,7 +173,7 @@ async function readLaunchPresets(accountId: string): Promise<BatchLaunchPreset[]
 }
 
 export async function saveLaunchPreset(clientId: string, accountId: string, input: BatchLaunchPreset) {
-  const account = await launchAccount(clientId, accountId);
+  const account = await resolveLaunchCurrency(await launchAccount(clientId, accountId));
   validatePreset(input);
   if (typeof input.name !== "string" || !input.name.trim() || input.name.length > 100)
     throw new Error("Vorlagenname fehlt oder ist zu lang.");
@@ -293,11 +331,18 @@ export async function getBatchLaunchContext(
     id: row.id,
     metaAccountId: row.meta_account_id,
     name: row.name ?? row.meta_account_id,
-    currency: row.currency ?? "EUR"
+    currency: normalizeBatchCurrency(row.currency)
   }));
   const account = accounts.find((item) => item.id === (requestedAccountId || accounts[0]?.id));
   if (!account) throw new Error("Kein passendes Werbekonto gefunden.");
-  // The account is already scoped to this client. Keep Drive and live Meta off the initial render path.
+  if (!account.currency) {
+    const resolved = await resolveLaunchCurrency({
+      ...accountResult.data!.find((row) => row.id === account.id), client_id: clientId
+    } as LaunchAccount);
+    account.currency = resolved.currency;
+    account.name = resolved.name || account.metaAccountId;
+  }
+  // Known account metadata stays on the fast path; Drive and live campaign options load independently.
   const [presets, suggestions, jobs, favoriteTemplateIds, options] = await Promise.all([
     readLaunchPresets(account.id),
     copySuggestions(account.id),
@@ -385,7 +430,7 @@ export async function getBatchLaunchIdentities(clientId: string, accountId: stri
 export async function createBatchLaunch(clientId: string, input: BatchLaunchInput) {
   if (!input || !/^\d+$/.test(input.campaignId) || !/^\d+$/.test(input.templateId))
     throw new Error("Kampagne oder Vorlagen-Adset fehlt.");
-  const account = await launchAccount(clientId, input.accountId);
+  const account = await resolveLaunchCurrency(await launchAccount(clientId, input.accountId));
   const folder = await launchFolder(clientId, input.folderId);
   input = { ...input, name: batchAdsetName(folder.name) };
   validateCopy(input.copy);

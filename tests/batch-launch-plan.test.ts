@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   batchAdsetName,
   budgetMinorUnits,
+  batchCurrencyDigits,
+  normalizeBatchCurrency,
   buildAdSetPayload,
   buildCreativePayload,
   groupBatchMedia,
@@ -378,8 +380,17 @@ describe("paused adset payloads", () => {
   });
   it("validates monetary precision for each currency", () => {
     expect(budgetMinorUnits("60.50", "EUR")).toBe(6050);
+    expect(budgetMinorUnits("15.01", "USD")).toBe(1501);
+    expect(budgetMinorUnits("15.01", " usd ")).toBe(1501);
     expect(budgetMinorUnits("100", "JPY")).toBe(100);
+    expect(settingsFromAdset({ id: "adset", name: "US", campaignId: "123", raw: { daily_budget: "1501" } }, "USD").dailyBudget).toBe("15.01");
     for (const value of ["0", "-1", "NaN", "Infinity", "1.001"]) expect(() => budgetMinorUnits(value, "EUR")).toThrow();
+  });
+  it.each([null, undefined, "", "null", "undefined", "US", "ZZZ", 123])("rejects invalid currency %j with an actionable error", (currency) => {
+    expect(normalizeBatchCurrency(currency)).toBeNull();
+    expect(() => batchCurrencyDigits(currency)).toThrow(/Kontowaehrung/);
+    expect(() => budgetMinorUnits("15", currency as string)).toThrow(/Kontowaehrung/);
+    expect(() => buildAdSetPayload("Batch", { ...campaign, dailyBudget: 10000 }, template, settings, currency as string)).toThrow(/Kontowaehrung/);
   });
 });
 

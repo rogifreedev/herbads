@@ -97,4 +97,10 @@ describe("batch launch readiness", () => {
   it("does not require an adset budget in a campaign-budget campaign", () => {
     expect(getBatchLaunchBlockers({ ...ready, campaignBudget: true, dailyBudget: "" })).toEqual([]);
   });
+  it.each([null, "null", "", "ZZZ"])("blocks creation and activation for unresolved currency %j, including CBO", (currency) => {
+    for (const campaignBudget of [false, true]) {
+      expect(getBatchLaunchBlockers({ ...ready, currency, campaignBudget })).toEqual(["currency"]);
+    }
+    expect(batchLaunchBlockerTargets.currency).toBe("launch-account");
+  });
 });

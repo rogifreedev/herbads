@@ -86,7 +86,7 @@ export type BatchLaunchIdentities = {
 
 export type BatchLaunchAccountContext = {
   folder: { id: string; name: string };
-  accounts: { id: string; metaAccountId: string; name: string; currency: string }[];
+  accounts: { id: string; metaAccountId: string; name: string; currency: string | null }[];
   accountId: string;
   campaigns: BatchCampaign[];
   templates: BatchTemplate[];

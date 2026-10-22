@@ -52,11 +52,12 @@ const files = [
   modifiedTime: "2026-09-15T10:00:00Z"
 }));
 const initialGroups = [{ id: "ad-1", name: "v1_1/1", feedFileId: "feed", storyFileId: "story" }];
+let fixtureCurrency = "EUR";
 function fixture(accountId = "account-a", presets = [], jobs = [], favoriteTemplateIds = []) {
   return {
     folder: { id: "folder", name: "Batch 01 - Herbstkampagne" },
     accounts: [
-      { id: "account-a", metaAccountId: "act_111", name: "Testkonto A", currency: "EUR" },
+      { id: "account-a", metaAccountId: "act_111", name: "Testkonto A", currency: fixtureCurrency },
       { id: "account-b", metaAccountId: "act_222", name: "Testkonto B", currency: "EUR" }
     ],
     accountId,
@@ -1191,6 +1192,26 @@ async function main() {
     assert.equal(await activity.count(), 0);
     holdJobUpdates = false;
     job = null;
+    fixtureCurrency = "USD";
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("789");
+    await page.getByText("Tagesbudget (USD)", { exact: true }).waitFor();
+    assert.equal(await page.locator("#launch-budget").inputValue(), "65.00", "USD template budgets use cents");
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.locator("#launch-budget").scrollIntoViewIfNeeded();
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(output, `usd-budget-${width}.png`) });
+    }
+    await page.locator("#launch-campaign").selectOption("790");
+    await page.getByText(new Intl.NumberFormat("de", { style: "currency", currency: "USD" }).format(100), { exact: true }).waitFor();
+    fixtureCurrency = null;
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.locator("#launch-campaign").selectOption("790");
+    await page.locator("#launch-blockers").getByRole("link", { name: /Die Kontowährung fehlt/ }).waitFor();
+    assert(await pausedButton.isDisabled(), "Even CBO creation is blocked when the account currency is unknown");
+    assert.equal(creationRequests, 7, "Currency checks never create Meta objects");
+    fixtureCurrency = "EUR";
     const queueClient = "11111111-1111-4111-8111-111111111111";
     const queueJobs = ["running", "pending", "paused", "failed", "review", "completed", "cancelled"].map(
       (status, index) => ({

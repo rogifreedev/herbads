@@ -35,6 +35,7 @@
     "identityPending": "Wird geprüft: {id}",
     "blockersTitle": "Vor dem Erstellen noch offen:",
     "blockers": {
+      "currency": "Die Kontowährung fehlt. Bitte die Seite neu laden, um die Kontodaten von Meta zu aktualisieren.",
       "meta": "Die Meta-Verbindung fehlt. Bitte die Kontoeinstellungen prüfen.",
       "mediaLoading": "Die Drive-Medien und Formatpaare werden noch geladen.",
       "mediaError": "Die Drive-Medien konnten nicht geladen werden. Bitte erneut versuchen.",

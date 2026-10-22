@@ -45,7 +45,9 @@ import {
   adsetGeography,
   adsetLocales,
   batchAdsetName,
+  batchCurrencyDigits,
   expandBatchDescriptionVariants,
+  normalizeBatchCurrency,
   groupBatchMedia,
   sameCountrySelection,
   settingsFromAdset
@@ -429,11 +431,10 @@ export function BatchLaunchForm({
   const templateGeo = adsetGeography(template?.raw.targeting);
   const inheritedLocations = sameCountrySelection(templateGeo.countries, countries) ? templateGeo.locations : [];
   const campaignBudget = Boolean(campaign?.dailyBudget || campaign?.lifetimeBudget);
-  const currencyDigits =
-    new Intl.NumberFormat(locale, { style: "currency", currency: account?.currency ?? "EUR" }).resolvedOptions()
-      .maximumFractionDigits ?? 2;
+  const currency = normalizeBatchCurrency(account?.currency);
+  const currencyDigits = currency ? batchCurrencyDigits(currency) : 2;
   const money = (value: number) =>
-    new Intl.NumberFormat(locale, { style: "currency", currency: account?.currency ?? "EUR" }).format(value);
+    currency ? new Intl.NumberFormat(locale, { style: "currency", currency }).format(value) : "";
   const suggestion = context?.suggestions.find((item) => item.id === suggestionId);
   const assigned = new Set(groups.flatMap((group) => [group.feedFileId, group.storyFileId]).filter(Boolean));
   const plannedAds = expandBatchDescriptionVariants(groups, copy);
@@ -494,7 +495,7 @@ export function BatchLaunchForm({
     copy,
     campaignBudget,
     dailyBudget,
-    currency: account?.currency ?? "EUR",
+    currency,
     identities,
     identitiesLoading,
     identitiesError
@@ -522,11 +523,15 @@ export function BatchLaunchForm({
   }
 
   function chooseTemplate(id: string, replaceSettings = false) {
+    if (!currency) {
+      setError(t("blockers.currency"));
+      return;
+    }
     setTemplateId(id);
     loadTemplateCopy(id, replaceSettings || !copyEdits.current);
     const selected = context?.templates.find((item) => item.id === id);
     if (!presetId || replaceSettings) {
-      const defaults = settingsFromAdset(selected, account?.currency ?? "EUR");
+      const defaults = settingsFromAdset(selected, currency);
       setDailyBudget(defaults.dailyBudget);
       setCountries(defaults.countries);
       setCustomLocales(defaults.locales);
@@ -1081,7 +1086,7 @@ export function BatchLaunchForm({
                       </dd>
                     </dl>
                   ) : (
-                    <Field label={`${t("dailyBudget")} (${account?.currency ?? ""})`} id="launch-budget">
+                    <Field label={`${t("dailyBudget")} (${currency ?? ""})`} id="launch-budget">
                       <Input
                         id="launch-budget"
                         type="number"
@@ -1199,7 +1204,7 @@ export function BatchLaunchForm({
                   </div>
                   <Button
                     variant="outline"
-                    disabled={!presetName.trim() || !countries.length}
+                    disabled={!presetName.trim() || !countries.length || !currency}
                     onClick={() => savePreset()}
                   >
                     <Save className="mr-2 h-4 w-4" />

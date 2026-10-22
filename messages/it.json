@@ -35,6 +35,7 @@
     "identityPending": "Verifica in corso: {id}",
     "blockersTitle": "Da completare prima della creazione:",
     "blockers": {
+      "currency": "Manca la valuta dell'account. Ricarica la pagina per aggiornare i dati da Meta.",
       "meta": "La connessione Meta non è configurata. Verifica le impostazioni dell'account.",
       "mediaLoading": "Caricamento dei file Drive e delle coppie di formati ancora in corso.",
       "mediaError": "Impossibile caricare i file Drive. Riprova.",

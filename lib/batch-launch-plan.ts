@@ -65,10 +65,23 @@ export function adsetLocales(targeting: unknown) {
   ].map((id) => ({ id, name: String(id) }));
 }
 
+const currencyCodes = new Set(Intl.supportedValuesOf("currency"));
+
+export function normalizeBatchCurrency(value: unknown): string | null {
+  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return currencyCodes.has(code) ? code : null;
+}
+
+export function batchCurrencyDigits(value: unknown) {
+  const currency = normalizeBatchCurrency(value);
+  if (!currency)
+    throw new Error("Die Kontowaehrung fehlt oder ist ungueltig. Bitte die Kontodaten erneut von Meta laden.");
+  return new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+}
+
 export function settingsFromAdset(template: BatchTemplate | undefined, currency: string) {
   const targeting = template?.raw.targeting;
-  const digits =
-    new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  const digits = batchCurrencyDigits(currency);
   const budget = Number(template?.raw.daily_budget ?? 0);
   return {
     dailyBudget: Number.isSafeInteger(budget) && budget > 0 ? (budget / 10 ** digits).toFixed(digits) : "",
@@ -235,8 +248,7 @@ export function expandBatchDescriptionVariants(groups: BatchAdGroup[], copy: Bat
 
 export function budgetMinorUnits(value: string, currency: string) {
   const amount = Number(value);
-  const digits =
-    new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  const digits = batchCurrencyDigits(currency);
   const minor = Math.round(amount * 10 ** digits);
   if (
     !Number.isFinite(amount) ||
@@ -323,6 +335,7 @@ export function buildAdSetPayload(
   settings: Omit<BatchLaunchPreset, "id" | "name">,
   currency: string
 ) {
+  batchCurrencyDigits(currency);
   validatePreset(settings);
   if (typeof name !== "string" || !name.trim() || name.length > 200)
     throw new Error("Adset-Name fehlt oder ist zu lang.");

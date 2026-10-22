@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   existing: vi.fn(),
   identities: vi.fn()
 }));
+let storedCurrency: string | null;
 vi.mock("@/lib/meta/batch-identities", () => ({ getLiveBatchIdentities: mocks.identities }));
 vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient: mocks.database }));
 vi.mock("@/lib/batch-launch-drive", () => ({ listBatchMedia: mocks.media }));
@@ -14,11 +15,12 @@ vi.mock("@/lib/meta/batch-launch", async (original) => ({
   ...(await original<typeof import("@/lib/meta/batch-launch")>()),
   metaLaunchRequest: mocks.meta
 }));
-import { createBatchLaunch, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
+import { createBatchLaunch, saveLaunchPreset, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { MetaLaunchError } from "@/lib/meta/batch-launch";
 import { campaign, feed, story, launchInput, template } from "./batch-launch-fixtures";
 
 beforeEach(() => {
+  storedCurrency = "EUR";
   vi.clearAllMocks();
   mocks.insert.mockReset();
   mocks.existing.mockReset();
@@ -30,6 +32,7 @@ beforeEach(() => {
     instagramAccounts: [{ id: launchInput.copy.instagramId, name: "Instagram" }]
   });
   mocks.meta.mockImplementation(async (path: string) => {
+    if (path.startsWith("act_111?")) return { id: "act_111", account_id: "111", currency: "USD", name: "US" };
     if (path.startsWith(`${campaign.id}?`)) return { ...campaign, account_id: "111" };
     if (path.startsWith(`${template.id}?`)) return { ...template, status: "PAUSED", campaign_id: "other" };
     return { success: true };
@@ -38,6 +41,10 @@ beforeEach(() => {
     from(table: string) {
       let inserted: Partial<BatchLaunchJobRow> = {};
       const query = {
+        update(value: { currency: string }) {
+          if (table === "meta_ad_accounts") storedCurrency = value.currency;
+          return query;
+        },
         select() {
           return query;
         },
@@ -71,7 +78,7 @@ beforeEach(() => {
         single: async () => ({
           data:
             table === "meta_ad_accounts"
-              ? { id: "account", client_id: "client", meta_account_id: "act_111", currency: "EUR" }
+              ? { id: "account", client_id: "client", meta_account_id: "act_111", currency: storedCurrency }
               : { ...inserted, id: "job", status: "pending", state: {}, updated_at: new Date().toISOString() },
           error: table === "batch_launch_jobs" ? (mocks.insert.mock.results.at(-1)?.value ?? null) : null
         })
@@ -83,6 +90,28 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("batch creation defaults", () => {
+  it("resolves null account currency before converting a USD budget to cents", async () => {
+    storedCurrency = null;
+    await createBatchLaunch("client", { ...launchInput, settings: { ...launchInput.settings, dailyBudget: "15.01" } });
+    expect(storedCurrency).toBe("USD");
+    expect(mocks.insert.mock.calls[0][0].payload.adsetPayload.daily_budget).toBe(1501);
+    expect(mocks.meta).toHaveBeenCalledWith("act_111?fields=id,account_id,name,currency");
+  });
+  it("does not validate or queue a Meta launch if its currency cannot be resolved", async () => {
+    storedCurrency = null;
+    mocks.meta.mockRejectedValue(new Error("Unavailable"));
+    await expect(createBatchLaunch("client", launchInput)).rejects.toThrow(/Kontowaehrung/);
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(mocks.meta.mock.calls.every(([, body]) => body === undefined)).toBe(true);
+  });
+  it("uses the resolved currency for account preset budget validation as well", async () => {
+    storedCurrency = null;
+    await saveLaunchPreset("client", "account", { ...launchInput.settings, id: "", name: "USD preset", dailyBudget: "15.01" });
+    expect(storedCurrency).toBe("USD");
+    expect(mocks.insert.mock.calls[0][0].settings.dailyBudget).toBe("15.01");
+    expect(mocks.meta.mock.calls.every(([, body]) => body === undefined)).toBe(true);
+  });
   it("validates and queues the same normalized manual targeting without creating a Meta adset", async () => {
     const raw = {
       ...template,

@@ -1,9 +1,10 @@
 import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
-import { budgetMinorUnits } from "@/lib/batch-launch-plan";
+import { budgetMinorUnits, normalizeBatchCurrency } from "@/lib/batch-launch-plan";
 import type { BatchLaunchCopy, BatchLaunchIdentities } from "@/lib/batch-launch-types";
 
 export const batchLaunchBlockerTargets = {
   meta: "launch-account",
+  currency: "launch-account",
   mediaLoading: "launch-media",
   mediaError: "launch-media",
   optionsLoading: "launch-options",
@@ -41,7 +42,7 @@ type Readiness = {
   copy: BatchLaunchCopy;
   campaignBudget: boolean;
   dailyBudget: string;
-  currency: string;
+  currency: string | null;
   identities?: BatchLaunchIdentities;
   identitiesLoading?: boolean;
   identitiesError?: string;
@@ -51,6 +52,8 @@ type Readiness = {
 export function getBatchLaunchBlockers(value: Readiness) {
   const reasons: (keyof typeof batchLaunchBlockerTargets)[] = [];
   if (!value.metaConfigured) reasons.push("meta");
+  const currency = normalizeBatchCurrency(value.currency);
+  if (!currency) reasons.push("currency");
   if (!value.mediaReady) reasons.push(value.mediaError ? "mediaError" : "mediaLoading");
   if (value.copyLoading) reasons.push("copyLoading");
   else if (value.copyError) reasons.push("copyError");
@@ -79,9 +82,9 @@ export function getBatchLaunchBlockers(value: Readiness) {
   } catch {
     reasons.push("landingUrl");
   }
-  if (!value.campaignBudget) {
+  if (!value.campaignBudget && currency) {
     try {
-      budgetMinorUnits(value.dailyBudget, value.currency);
+      budgetMinorUnits(value.dailyBudget, currency);
     } catch {
       reasons.push("budget");
     }
