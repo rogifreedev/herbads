@@ -156,6 +156,13 @@ describe("auth middleware", () => {
     expect(await verifyAppSessionCookie(response.cookies.get(APP_SESSION_COOKIE_NAME)?.value)).toMatchObject({ email: user.email });
   });
 
+  it("accepts a verified herb-group.com workspace email", async () => {
+    fetchMock.mockImplementation(async () => Response.json({ ...user, email: "team@HERB-GROUP.COM" }));
+    const response = await updateSession(request("/dashboard", authCookies(3600)));
+    expect(response.headers.get("location")).toBeNull();
+    expect(await verifyAppSessionCookie(response.cookies.get(APP_SESSION_COOKIE_NAME)?.value)).toMatchObject({ email: "team@herb-group.com" });
+  });
+
   it.each(["/dashboard", "/login"])("uses the signed app session consistently on %s without an auth request", async (path) => {
     const appCookie = await createAppSessionCookie(user.email);
     const response = await updateSession(request(path, { [APP_SESSION_COOKIE_NAME]: appCookie }));

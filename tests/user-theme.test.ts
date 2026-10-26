@@ -66,6 +66,10 @@ describe("User themes", () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: new Error("expired") });
     expect(await getThemeUserEmail()).toBeNull();
   });
+  it("loads preferences for herb-group.com workspace users", async () => {
+    mocks.verify.mockResolvedValue({ email: "Team@herb-group.com" });
+    expect(await getThemeUserEmail()).toBe("team@herb-group.com");
+  });
   it.each(["light", "dark"])("persists %s using the session identity, with no shared cache", async (theme) => {
     const response = await PUT(request({ theme }));
     expect(response.status).toBe(200);

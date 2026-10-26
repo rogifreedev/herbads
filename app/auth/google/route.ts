@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
     options: {
       redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
       queryParams: {
-        hd: "herb-media.com",
         prompt: "select_account"
       }
     }

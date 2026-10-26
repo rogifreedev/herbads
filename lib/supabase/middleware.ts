@@ -1,8 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { APP_SESSION_COOKIE_NAME, APP_SESSION_MAX_AGE, createAppSessionCookie, verifyAppSessionCookie } from "@/lib/auth-session";
-
-const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
+import { isAllowedEmail } from "@/lib/auth-domains";
 
 function isPublicPath(pathname: string) {
   return pathname.startsWith("/auth/");
@@ -10,10 +9,6 @@ function isPublicPath(pathname: string) {
 
 function isCronPath(pathname: string) {
   return pathname.startsWith("/api/cron/");
-}
-
-function isAllowedEmail(email: string | undefined) {
-  return Boolean(email?.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`));
 }
 
 function unauthorizedResponse(request: NextRequest, status = 401) {

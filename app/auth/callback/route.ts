@@ -2,12 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { Session } from "@supabase/supabase-js";
 import { APP_SESSION_COOKIE_NAME, APP_SESSION_MAX_AGE, createAppSessionCookie } from "@/lib/auth-session";
-
-const ALLOWED_EMAIL_DOMAIN = "herb-media.com";
-
-function isAllowedEmail(email: string | undefined) {
-  return Boolean(email?.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`));
-}
+import { isAllowedEmail } from "@/lib/auth-domains";
 
 function safeNext(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";

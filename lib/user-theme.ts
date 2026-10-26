@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { APP_SESSION_COOKIE_NAME, verifyAppSessionCookie } from "@/lib/auth-session";
+import { isAllowedEmail } from "@/lib/auth-domains";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { isTheme, type Theme } from "@/lib/theme";
@@ -15,7 +16,7 @@ export async function getThemeUserEmail(): Promise<string | null> {
     const { data, error } = await supabase.auth.getUser().catch(() => ({ data: { user: null }, error: true }));
     if (!error) email = data.user?.email?.toLowerCase();
   }
-  return email?.endsWith("@herb-media.com") ? email : null;
+  return isAllowedEmail(email) ? email! : null;
 }
 
 export async function getInitialUserTheme(): Promise<{ theme: Theme; userKey: string }> {

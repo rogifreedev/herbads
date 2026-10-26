@@ -870,8 +870,8 @@
   },
   "auth": {
     "loginTitle": "Herb Ads Login",
-    "loginDescription": "Zugriff ist nur für Team-Mitglieder mit einem Google Workspace Account von herb-media.com erlaubt.",
-    "errorDomain": "Zugriff verweigert. Bitte verwende einen Google Workspace Account von herb-media.com.",
+    "loginDescription": "Zugriff ist nur für Team-Mitglieder mit einem Google Workspace Account von herb-media.com oder herb-group.com erlaubt.",
+    "errorDomain": "Zugriff verweigert. Bitte verwende einen Google Workspace Account von herb-media.com oder herb-group.com.",
     "errorOauth": "Google Login konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
     "loginButton": "Mit Google Workspace einloggen",
     "redirecting": "Weiterleitung…"
