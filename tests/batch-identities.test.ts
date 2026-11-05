@@ -102,7 +102,7 @@ describe("account identity API", () => {
     vi.stubEnv("META_SYSTEM_USER_ACCESS_TOKEN", "rotated");
     await getLiveBatchIdentities("act_111");
     expect(fetcher).toHaveBeenCalledTimes(12);
-    vi.advanceTimersByTime(60_001);
+    vi.advanceTimersByTime(10 * 60_000 + 1);
     await getLiveBatchIdentities("act_111");
     expect(fetcher).toHaveBeenCalledTimes(15);
   });

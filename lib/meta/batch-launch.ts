@@ -100,13 +100,13 @@ export function getLiveBatchOptions(metaAccountId: string): Promise<BatchOptions
   const key = `${process.env.META_API_VERSION || "v25.0"}:${metaAccountId}:${tokenHash}`;
   const cached = optionsCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.promise;
-  // Reuse in-flight requests and recent picker data; creation still validates directly with Meta.
-  const entry = { expires: Date.now() + 60_000, promise: loadLiveBatchOptions(metaAccountId) };
+  // Reuse in-flight requests and recent picker data; the serialized queue worker still validates with Meta.
+  const entry = { expires: Date.now() + 10 * 60_000, promise: loadLiveBatchOptions(metaAccountId) };
   if (optionsCache.size >= 20) optionsCache.delete(optionsCache.keys().next().value!);
   optionsCache.set(key, entry);
   void entry.promise.then(
     () => {
-      entry.expires = Date.now() + 60_000;
+      entry.expires = Date.now() + 10 * 60_000;
     },
     () => {
       if (optionsCache.get(key) === entry) optionsCache.delete(key);

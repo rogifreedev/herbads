@@ -1,7 +1,6 @@
 import "server-only";
 import { normalizeBatchCopy } from "@/lib/batch-launch-copy";
 import { canRestartBatch } from "@/lib/batch-launch-retry";
-import { validateBatchIdentity } from "@/lib/batch-launch-identities";
 import { getLiveBatchIdentities } from "@/lib/meta/batch-identities";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { listBatchMedia } from "@/lib/batch-launch-drive";
@@ -17,8 +16,6 @@ import {
   validateLaunchActivation
 } from "@/lib/batch-launch-plan";
 import {
-  BATCH_CAMPAIGN_FIELDS,
-  BATCH_TEMPLATE_FIELDS,
   getLiveBatchOptions,
   isMetaRateLimitError,
   mapBatchCampaign,
@@ -414,12 +411,16 @@ export async function getBatchLaunchMedia(clientId: string, folderId: string): P
   return { ...media, ...(await matchBatchMedia(media.files)) };
 }
 
-export async function getBatchLaunchOptions(clientId: string, accountId: string) {
+export async function getBatchLaunchOptions(clientId: string, accountId: string, fresh = false) {
   // Validate ownership on every request, including cache hits.
   const account = await launchAccount(clientId, accountId);
-  return process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim()
-    ? getLiveBatchOptions(account.meta_account_id)
-    : storedBatchOptions(accountId);
+  if (!fresh || !process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim()) return storedBatchOptions(accountId);
+  try {
+    return await getLiveBatchOptions(account.meta_account_id);
+  } catch (error) {
+    if (!isMetaRateLimitError(error)) throw error;
+    return storedBatchOptions(accountId);
+  }
 }
 
 export async function getBatchLaunchIdentities(clientId: string, accountId: string, fresh = false) {
@@ -436,31 +437,19 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   validateCopy(input.copy);
   input = { ...input, copy: normalizeBatchCopy(input.copy) };
   const media = await listBatchMedia(input.folderId, clientId);
-  let rawCampaign: Record<string, unknown>;
-  let template: Record<string, unknown>;
-  let validated = false;
-  try {
-    const [liveCampaign, liveTemplate, identities] = await Promise.all([
-      metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
-      metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
-      getLiveBatchIdentities(account.meta_account_id, true)
-    ]);
-    rawCampaign = liveCampaign;
-    template = liveTemplate;
-    validateBatchIdentity(input.copy, identities);
-  } catch (error) {
-    if (!isMetaRateLimitError(error)) throw error;
-    const stored = await storedBatchOptions(account.id);
-    const campaign = stored.campaigns.find((item) => item.id === input.campaignId);
-    const selectedTemplate = stored.templates.find((item) => item.id === input.templateId);
-    if (!campaign || !selectedTemplate)
-      throw new Error("Die gespeicherte Kampagne oder das Referenz-Adset ist nicht mehr verfuegbar.");
-    rawCampaign = { ...campaign, account_id: account.meta_account_id.replace(/^act_/, "") };
-    template = { ...selectedTemplate.raw, id: selectedTemplate.id, name: selectedTemplate.name };
-  }
   const metaId = account.meta_account_id.replace(/^act_/, "");
-  if (String(rawCampaign.account_id) !== metaId || String(template.account_id) !== metaId)
-    throw new Error("Kampagne oder Vorlage gehoert nicht zum Werbekonto.");
+  const stored = await storedBatchOptions(account.id);
+  const storedCampaign = stored.campaigns.find((item) => item.id === input.campaignId);
+  const selectedTemplate = stored.templates.find((item) => item.id === input.templateId);
+  if (!storedCampaign || !selectedTemplate)
+    throw new Error("Die gespeicherte Kampagne oder das Referenz-Adset ist nicht mehr verfuegbar.");
+  const rawCampaign: Record<string, unknown> = { ...storedCampaign, account_id: metaId };
+  const template: Record<string, unknown> = {
+    ...selectedTemplate.raw,
+    id: selectedTemplate.id,
+    name: selectedTemplate.name,
+    account_id: metaId
+  };
   if (rawCampaign.status !== "ACTIVE")
     throw new Error("Die Kampagne ist nicht mehr aktiv. Bitte eine aktive Kampagne auswaehlen.");
   const files = validateGroups(input.groups, media.files);
@@ -468,16 +457,6 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   const campaign = mapBatchCampaign(rawCampaign);
   validateLaunchActivation(input.activate, campaign, input.activationBudget);
   const adsetPayload = buildAdSetPayload(input.name, campaign, template, input.settings, account.currency);
-  // Validate with Meta before recording a job; this request creates no adset.
-  try {
-    await metaLaunchRequest(`${account.meta_account_id}/adsets`, {
-      ...adsetPayload,
-      execution_options: ["validate_only"]
-    });
-    validated = true;
-  } catch (error) {
-    if (!isMetaRateLimitError(error)) throw error;
-  }
   const payload: BatchLaunchPayload = {
     input,
     files,
@@ -497,7 +476,7 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
       queue_enabled: true,
       name: input.name,
       payload,
-      state: { media: {}, ads: {}, step: validated ? "adset" : "validation", validated }
+      state: { media: {}, ads: {}, step: "validation", validated: false }
     })
     .select("*")
     .single();

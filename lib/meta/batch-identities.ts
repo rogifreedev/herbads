@@ -12,14 +12,14 @@ export function getLiveBatchIdentities(metaAccountId: string, fresh = false): Pr
   const key = `${process.env.META_API_VERSION || "v25.0"}:${metaAccountId}:${tokenHash}`;
   const cached = cache.get(key);
   if (!fresh && cached && cached.expires > Date.now()) return cached.promise;
-  const entry = { expires: Date.now() + 60_000, promise: loadIdentities(metaAccountId) };
+  const entry = { expires: Date.now() + 10 * 60_000, promise: loadIdentities(metaAccountId) };
   if (cache.size >= 20) cache.delete(cache.keys().next().value!);
   cache.set(key, entry);
   void entry.promise.then(
     (result) => {
       // A partial response must be retried instead of becoming a cached empty picker.
       if (result.warnings?.length && cache.get(key) === entry) cache.delete(key);
-      entry.expires = Date.now() + 60_000;
+      entry.expires = Date.now() + 10 * 60_000;
     },
     () => {
       if (cache.get(key) === entry) cache.delete(key);

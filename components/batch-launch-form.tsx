@@ -319,9 +319,10 @@ export function BatchLaunchForm({
   useEffect(() => {
     if (!optionsAccountId) return;
     const controller = new AbortController();
-    jsonRequest<BatchLaunchOptions>(`${endpoint}/launch/options?accountId=${encodeURIComponent(optionsAccountId)}`, {
-      signal: controller.signal
-    })
+    jsonRequest<BatchLaunchOptions>(
+      `${endpoint}/launch/options?accountId=${encodeURIComponent(optionsAccountId)}${optionsRevision ? "&refresh=1" : ""}`,
+      { signal: controller.signal }
+    )
       .then((data) => {
         if (controller.signal.aborted) return;
         // Refresh picker data only, never overwrite the user's copy, settings or media assignments.

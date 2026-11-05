@@ -27,6 +27,17 @@ type DriveFailure = {
   gateway?: "client-forbidden" | "unusual-traffic" | "automated-queries" | "unknown";
 };
 
+export class DriveDownloadError extends Error {
+  constructor(message: string, public readonly retryable: boolean) {
+    super(message);
+    this.name = "DriveDownloadError";
+  }
+}
+
+export function isRetryableDriveDownloadError(error: unknown) {
+  return error instanceof DriveDownloadError && error.retryable;
+}
+
 async function errorDetails(response: Response, secrets: string[]): Promise<DriveFailure> {
   const reader = response.body?.getReader();
   if (!reader) return { reason: null, format: "leer" };
@@ -107,8 +118,14 @@ function downloadError(name: string, status: number, details: DriveFailure) {
     hint = "Die Drive-Anbindung ist nicht ausreichend autorisiert. Bitte ihre Zugangsdaten und Berechtigungen pruefen.";
   else if (reason && NON_RETRYABLE_REASONS.has(reason))
     hint = "Bitte die Datei und ihre Download-Freigabe in Google Drive pruefen.";
-  return new Error(
-    `Drive-Download fehlgeschlagen: ${name} (HTTP ${status}, ${reason ?? `Fehlerantwort: ${format}`}). ${hint}`
+  const retryable =
+    isAutomatedTrafficBlock(status, details) ||
+    status === 429 ||
+    status >= 500 ||
+    (status === 403 && (!reason || RETRYABLE_REASONS.has(reason)));
+  return new DriveDownloadError(
+    `Drive-Download fehlgeschlagen: ${name} (HTTP ${status}, ${reason ?? `Fehlerantwort: ${format}`}). ${hint}`,
+    retryable
   );
 }
 
@@ -142,7 +159,7 @@ export async function fetchDriveDownload(
     try {
       response = await fetch(url, { headers: { ...authHeaders, Range: range }, cache: "no-store", signal });
     } catch {
-      failure = new Error(`Drive-Download unterbrochen: ${name}. Bitte spaeter fortsetzen.`);
+      failure = new DriveDownloadError(`Drive-Download unterbrochen: ${name}. Bitte spaeter fortsetzen.`, true);
     }
     if (response) {
       if (response.ok) return response;

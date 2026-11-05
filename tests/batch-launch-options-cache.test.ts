@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("short-lived Meta picker cache", () => {
-  it("deduplicates concurrent requests and expires after one minute", async () => {
+  it("deduplicates concurrent requests and expires after ten minutes", async () => {
     const fetcher = vi.fn(async () => Response.json({ data: [] }));
     vi.stubGlobal("fetch", fetcher);
     const { getLiveBatchOptions } = await import("@/lib/meta/batch-launch");
@@ -20,7 +20,7 @@ describe("short-lived Meta picker cache", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     await getLiveBatchOptions("act_111");
     expect(fetcher).toHaveBeenCalledTimes(2);
-    vi.advanceTimersByTime(60_001);
+    vi.advanceTimersByTime(10 * 60_000 + 1);
     await getLiveBatchOptions("act_111");
     expect(fetcher).toHaveBeenCalledTimes(4);
   });

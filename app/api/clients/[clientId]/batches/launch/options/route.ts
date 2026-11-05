@@ -8,8 +8,9 @@ export const maxDuration = 120;
 export async function GET(request: Request, context: { params: Promise<{ clientId: string }> }) {
   try {
     const { clientId } = await context.params;
-    const accountId = new URL(request.url).searchParams.get("accountId") ?? "";
-    return NextResponse.json(await getBatchLaunchOptions(clientId, accountId), {
+    const params = new URL(request.url).searchParams;
+    const accountId = params.get("accountId") ?? "";
+    return NextResponse.json(await getBatchLaunchOptions(clientId, accountId, params.get("refresh") === "1"), {
       headers: { "Cache-Control": "private, no-store" }
     });
   } catch (error) {

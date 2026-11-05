@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   identities: vi.fn()
 }));
 let storedCurrency: string | null;
+let storedCampaignStatus: string;
+let storedTemplate: typeof template;
 vi.mock("@/lib/meta/batch-identities", () => ({ getLiveBatchIdentities: mocks.identities }));
 vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient: mocks.database }));
 vi.mock("@/lib/batch-launch-drive", () => ({ listBatchMedia: mocks.media }));
@@ -16,11 +18,12 @@ vi.mock("@/lib/meta/batch-launch", async (original) => ({
   metaLaunchRequest: mocks.meta
 }));
 import { createBatchLaunch, saveLaunchPreset, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
-import { MetaLaunchError } from "@/lib/meta/batch-launch";
 import { campaign, feed, story, launchInput, template } from "./batch-launch-fixtures";
 
 beforeEach(() => {
   storedCurrency = "EUR";
+  storedCampaignStatus = "ACTIVE";
+  storedTemplate = structuredClone(template);
   vi.clearAllMocks();
   mocks.insert.mockReset();
   mocks.existing.mockReset();
@@ -63,9 +66,9 @@ beforeEach(() => {
         then(resolve: (value: unknown) => unknown) {
           const data =
             table === "meta_campaigns"
-              ? [{ meta_campaign_id: campaign.id, name: campaign.name, objective: campaign.objective, status: "ACTIVE", raw: campaign }]
+              ? [{ meta_campaign_id: campaign.id, name: campaign.name, objective: campaign.objective, status: storedCampaignStatus, raw: campaign }]
               : table === "meta_ad_sets"
-                ? [{ meta_adset_id: template.id, name: "Template", raw: template }]
+                ? [{ meta_adset_id: template.id, name: "Template", raw: storedTemplate }]
                 : mocks.existing();
           return Promise.resolve({ data, error: null }).then(resolve);
         },
@@ -112,32 +115,25 @@ describe("batch creation defaults", () => {
     expect(mocks.insert.mock.calls[0][0].settings.dailyBudget).toBe("15.01");
     expect(mocks.meta.mock.calls.every(([, body]) => body === undefined)).toBe(true);
   });
-  it("validates and queues the same normalized manual targeting without creating a Meta adset", async () => {
+  it("normalizes synchronized targeting and leaves live validation to the queue worker", async () => {
     const raw = {
       ...template,
       targeting: { ...template.targeting, age_min: 40, age_range: [18, 65] }
     };
-    mocks.meta.mockImplementation(async (path: string, body?: Record<string, unknown>) => {
-      if (path.startsWith(`${campaign.id}?`)) return { ...campaign, account_id: "111" };
-      if (path.startsWith(`${template.id}?`)) return raw;
-      expect(path).toBe("act_111/adsets");
-      expect(body).toMatchObject({ status: "PAUSED", execution_options: ["validate_only"] });
-      expect(body?.targeting).not.toHaveProperty("age_range");
-      expect(body?.targeting).toMatchObject({ age_min: 40, age_max: 65, targeting_automation: { advantage_audience: 0 } });
-      return { success: true };
-    });
+    storedTemplate = raw;
     await createBatchLaunch("client", launchInput);
     const queued = mocks.insert.mock.calls[0][0].payload.adsetPayload;
-    expect(queued.targeting).toEqual(mocks.meta.mock.calls.at(-1)![1].targeting);
+    expect(queued.targeting).not.toHaveProperty("age_range");
+    expect(queued.targeting).toMatchObject({ age_min: 40, age_max: 65, targeting_automation: { advantage_audience: 0 } });
     expect(queued.status).toBe("PAUSED");
     expect(queued).not.toHaveProperty("execution_options");
     expect(raw.targeting.age_range).toEqual([18, 65]);
-    expect(mocks.meta.mock.calls.filter(([, body]) => body !== undefined)).toHaveLength(1);
+    expect(mocks.meta).not.toHaveBeenCalled();
   });
-  it("queues from stored settings when Meta rate-limits the preflight", async () => {
-    mocks.meta.mockRejectedValue(new MetaLaunchError("Too many calls from this ad account", false, { code: 80004 }));
+  it("queues from synchronized settings without spending Meta calls on duplicate preflight", async () => {
     const job = await createBatchLaunch("client", launchInput);
     expect(job.status).toBe("pending");
+    expect(mocks.meta).not.toHaveBeenCalled();
     expect(mocks.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         queue_enabled: true,
@@ -184,13 +180,11 @@ describe("batch creation defaults", () => {
     mocks.existing.mockReturnValue([blocked]);
     expect((await createBatchLaunch("client", launchInput)).retryDraft).toBeUndefined();
   });
-  it.each(["pageId", "instagramId"] as const)("rejects an identity outside this account: %s", async (field) => {
-    await expect(
-      createBatchLaunch("client", { ...launchInput, copy: { ...launchInput.copy, [field]: "999999" } })
-    ).rejects.toThrow(/Werbekonto nicht verfuegbar/);
-    expect(mocks.identities).toHaveBeenCalledWith("act_111", true);
-    expect(mocks.insert).not.toHaveBeenCalled();
-    expect(mocks.meta.mock.calls.every(([, body]) => body === undefined)).toBe(true);
+  it.each(["pageId", "instagramId"] as const)("queues %s for serialized worker validation", async (field) => {
+    await createBatchLaunch("client", { ...launchInput, copy: { ...launchInput.copy, [field]: "999999" } });
+    expect(mocks.identities).not.toHaveBeenCalled();
+    expect(mocks.insert).toHaveBeenCalledOnce();
+    expect(mocks.meta).not.toHaveBeenCalled();
   });
   it("persists every variant with canonical scalar fallbacks for the resumable worker", async () => {
     const copy = {
@@ -251,14 +245,7 @@ describe("batch creation defaults", () => {
         })
       })
     );
-    expect(mocks.meta).toHaveBeenLastCalledWith(
-      "act_111/adsets",
-      expect.objectContaining({
-        name,
-        status: "PAUSED",
-        execution_options: ["validate_only"]
-      })
-    );
+    expect(mocks.meta).not.toHaveBeenCalled();
     expect(launchInput.name).toBe("Batch 01");
   });
   it("preserves the original name of an existing job", () => {
@@ -268,12 +255,10 @@ describe("batch creation defaults", () => {
   it.each(["PAUSED", "ARCHIVED", "DELETED"])(
     "rejects a destination that is now %s before any write",
     async (status) => {
-      mocks.meta.mockImplementation(async (path: string) =>
-        path.startsWith(`${campaign.id}?`) ? { ...campaign, status, account_id: "111" } : template
-      );
+      storedCampaignStatus = status;
       await expect(createBatchLaunch("client", launchInput)).rejects.toThrow(/nicht mehr aktiv/);
       expect(mocks.insert).not.toHaveBeenCalled();
-      expect(mocks.meta.mock.calls.every(([, body]) => body === undefined)).toBe(true);
+      expect(mocks.meta).not.toHaveBeenCalled();
     }
   );
 });

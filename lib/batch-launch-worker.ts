@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getBatchLaunchJob, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { downloadBatchMedia } from "@/lib/batch-launch-drive";
+import { isRetryableDriveDownloadError } from "@/lib/batch-drive-download";
 import { prepareBatchImage } from "@/lib/batch-image-upload";
 import { buildCreativePayload, expandBatchDescriptionVariants, validateLaunchActivation } from "@/lib/batch-launch-plan";
 import { validateBatchIdentity } from "@/lib/batch-launch-identities";
@@ -123,7 +124,7 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
       const [rawCampaign, template, identities] = await Promise.all([
         metaLaunchRequest<Record<string, unknown>>(`${input.campaignId}?fields=${BATCH_CAMPAIGN_FIELDS}`),
         metaLaunchRequest<Record<string, unknown>>(`${input.templateId}?fields=${BATCH_TEMPLATE_FIELDS}`),
-        getLiveBatchIdentities(metaAccountId, true)
+        getLiveBatchIdentities(metaAccountId)
       ]);
       const metaId = metaAccountId.replace(/^act_/, "");
       if (String(rawCampaign.account_id) !== metaId || String(template.account_id) !== metaId)
@@ -292,10 +293,13 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
       }
     }
   } catch (error) {
-    if (isMetaRateLimitError(error)) {
+    const metaRateLimit = isMetaRateLimitError(error);
+    const driveRateLimit = isRetryableDriveDownloadError(error);
+    if (metaRateLimit || driveRateLimit) {
       delete state.inFlight;
       const retryAfter = rateLimitRetryAfter(job.retry_count ?? 0);
-      const message = `Meta-Rate-Limit. Automatischer neuer Versuch ab ${new Intl.DateTimeFormat("de-DE", {
+      const provider = metaRateLimit ? "Meta" : "Google Drive";
+      const message = `${provider} begrenzt derzeit die Anfragen. Automatischer neuer Versuch ab ${new Intl.DateTimeFormat("de-DE", {
         dateStyle: "short",
         timeStyle: "short",
         timeZone: "Europe/Berlin"

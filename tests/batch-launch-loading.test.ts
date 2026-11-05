@@ -28,6 +28,7 @@ import {
   getBatchLaunchOptions,
   getBatchLaunchIdentities
 } from "@/lib/batch-launch";
+import { MetaLaunchError } from "@/lib/meta/batch-launch";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -169,10 +170,18 @@ describe("progressive batch loading", () => {
     expect(mocks.tables).toEqual(["batch_folder_checks"]);
   });
   it("rechecks account ownership before every live options request, including cache hits", async () => {
-    await getBatchLaunchOptions("client", "account");
-    await expect(getBatchLaunchOptions("other-client", "account")).rejects.toThrow(/Werbekonto/);
+    await getBatchLaunchOptions("client", "account", true);
+    await expect(getBatchLaunchOptions("other-client", "account", true)).rejects.toThrow(/Werbekonto/);
     expect(mocks.options).toHaveBeenCalledTimes(1);
     expect(mocks.options).toHaveBeenCalledWith("act_111");
     expect(mocks.tables).toEqual(["meta_ad_accounts", "meta_ad_accounts"]);
+  });
+  it("keeps synchronized campaign and adset options usable during a Meta rate limit", async () => {
+    mocks.options.mockRejectedValueOnce(
+      new MetaLaunchError("Too many calls from this ad account", false, { code: 80004 })
+    );
+    const result = await getBatchLaunchOptions("client", "account", true);
+    expect(result.campaigns).toEqual([expect.objectContaining({ id: "123", name: "Synced campaign" })]);
+    expect(result.templates).toEqual([expect.objectContaining({ id: "456", name: "Synced adset" })]);
   });
 });
