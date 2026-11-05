@@ -959,33 +959,50 @@ export function BatchLaunchForm({
                   <Input id="launch-name" value={name} readOnly />
                 </Field>
                 <Field label={t("campaign")} id="launch-campaign">
-                  <select
-                    id="launch-campaign"
-                    className={selectClass}
-                    value={campaignId}
-                    onChange={(event) => {
-                      setCampaignId(event.target.value);
-                      if (context.campaigns.find((item) => item.id === event.target.value)?.status !== "ACTIVE")
-                        setActivate(false);
-                      if (!templateId)
-                        chooseTemplate(
-                          context.templates.find(
-                            (item) => item.campaignId === event.target.value && favoriteIds.includes(item.id)
-                          )?.id ??
-                            context.templates.find((item) => item.campaignId === event.target.value)?.id ??
-                            ""
-                        );
-                    }}
-                  >
-                    <option value="">{t("choose")}</option>
-                    {context.campaigns
-                      .filter((item) => item.status === "ACTIVE")
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <select
+                      id="launch-campaign"
+                      className={selectClass}
+                      value={campaignId}
+                      onChange={(event) => {
+                        setCampaignId(event.target.value);
+                        if (context.campaigns.find((item) => item.id === event.target.value)?.status !== "ACTIVE")
+                          setActivate(false);
+                        if (!templateId)
+                          chooseTemplate(
+                            context.templates.find(
+                              (item) => item.campaignId === event.target.value && favoriteIds.includes(item.id)
+                            )?.id ??
+                              context.templates.find((item) => item.campaignId === event.target.value)?.id ??
+                              ""
+                          );
+                      }}
+                    >
+                      <option value="">{t("choose")}</option>
+                      {context.campaigns
+                        .filter((item) => item.status === "ACTIVE")
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      disabled={optionsLoading || saving}
+                      onClick={() => {
+                        setOptionsState(null);
+                        setOptionsRevision((value) => value + 1);
+                      }}
+                      aria-label={t("refreshMetaOptions")}
+                      title={t("refreshMetaOptions")}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${optionsLoading ? "animate-spin" : ""}`} />
+                    </Button>
+                  </div>
                 </Field>
                 <div className="min-w-0 space-y-2 md:col-span-2">
                   <Label className="block" htmlFor="launch-template">

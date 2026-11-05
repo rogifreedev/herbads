@@ -95,11 +95,11 @@ export const BATCH_TEMPLATE_FIELDS =
 type BatchOptions = Awaited<ReturnType<typeof loadLiveBatchOptions>>;
 const optionsCache = new Map<string, { expires: number; promise: Promise<BatchOptions> }>();
 
-export function getLiveBatchOptions(metaAccountId: string): Promise<BatchOptions> {
+export function getLiveBatchOptions(metaAccountId: string, fresh = false): Promise<BatchOptions> {
   const tokenHash = createHash("sha256").update(getRequiredEnv("META_SYSTEM_USER_ACCESS_TOKEN")).digest("hex");
   const key = `${process.env.META_API_VERSION || "v25.0"}:${metaAccountId}:${tokenHash}`;
   const cached = optionsCache.get(key);
-  if (cached && cached.expires > Date.now()) return cached.promise;
+  if (!fresh && cached && cached.expires > Date.now()) return cached.promise;
   // Reuse in-flight requests and recent picker data; the serialized queue worker still validates with Meta.
   const entry = { expires: Date.now() + 10 * 60_000, promise: loadLiveBatchOptions(metaAccountId) };
   if (optionsCache.size >= 20) optionsCache.delete(optionsCache.keys().next().value!);

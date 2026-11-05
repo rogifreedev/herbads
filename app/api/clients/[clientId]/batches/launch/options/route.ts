@@ -10,7 +10,7 @@ export async function GET(request: Request, context: { params: Promise<{ clientI
     const { clientId } = await context.params;
     const params = new URL(request.url).searchParams;
     const accountId = params.get("accountId") ?? "";
-    return NextResponse.json(await getBatchLaunchOptions(clientId, accountId, params.get("refresh") === "1"), {
+    return NextResponse.json(await getBatchLaunchOptions(clientId, accountId, true, params.get("refresh") === "1"), {
       headers: { "Cache-Control": "private, no-store" }
     });
   } catch (error) {

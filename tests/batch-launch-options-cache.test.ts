@@ -24,6 +24,14 @@ describe("short-lived Meta picker cache", () => {
     await getLiveBatchOptions("act_111");
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
+  it("bypasses a warm cache for an explicit picker refresh", async () => {
+    const fetcher = vi.fn(async () => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", fetcher);
+    const { getLiveBatchOptions } = await import("@/lib/meta/batch-launch");
+    await getLiveBatchOptions("act_111");
+    await getLiveBatchOptions("act_111", true);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
   it("isolates accounts and token rotations", async () => {
     const fetcher = vi.fn(async () => Response.json({ data: [] }));
     vi.stubGlobal("fetch", fetcher);

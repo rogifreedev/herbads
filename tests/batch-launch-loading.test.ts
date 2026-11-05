@@ -173,7 +173,7 @@ describe("progressive batch loading", () => {
     await getBatchLaunchOptions("client", "account", true);
     await expect(getBatchLaunchOptions("other-client", "account", true)).rejects.toThrow(/Werbekonto/);
     expect(mocks.options).toHaveBeenCalledTimes(1);
-    expect(mocks.options).toHaveBeenCalledWith("act_111");
+    expect(mocks.options).toHaveBeenCalledWith("act_111", false);
     expect(mocks.tables).toEqual(["meta_ad_accounts", "meta_ad_accounts"]);
   });
   it("keeps synchronized campaign and adset options usable during a Meta rate limit", async () => {

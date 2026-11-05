@@ -411,12 +411,12 @@ export async function getBatchLaunchMedia(clientId: string, folderId: string): P
   return { ...media, ...(await matchBatchMedia(media.files)) };
 }
 
-export async function getBatchLaunchOptions(clientId: string, accountId: string, fresh = false) {
+export async function getBatchLaunchOptions(clientId: string, accountId: string, live = true, fresh = false) {
   // Validate ownership on every request, including cache hits.
   const account = await launchAccount(clientId, accountId);
-  if (!fresh || !process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim()) return storedBatchOptions(accountId);
+  if (!live || !process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim()) return storedBatchOptions(accountId);
   try {
-    return await getLiveBatchOptions(account.meta_account_id);
+    return await getLiveBatchOptions(account.meta_account_id, fresh);
   } catch (error) {
     if (!isMetaRateLimitError(error)) throw error;
     return storedBatchOptions(accountId);
