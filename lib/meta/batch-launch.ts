@@ -115,6 +115,42 @@ export function getLiveBatchOptions(metaAccountId: string, fresh = false): Promi
   return entry.promise;
 }
 
+function leadFormId(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const id = leadFormId(item);
+      if (id) return id;
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.lead_gen_form_id === "string" && /^\d+$/.test(record.lead_gen_form_id))
+    return record.lead_gen_form_id;
+  for (const item of Object.values(record)) {
+    const id = leadFormId(item);
+    if (id) return id;
+  }
+  return null;
+}
+
+export async function getLiveBatchLeadFormId(templateId: string) {
+  const ads = await metaLaunchList<Record<string, unknown>>(
+    `${templateId}/ads?fields=id,status,effective_status,creative{object_story_spec,asset_feed_spec}&limit=100`
+  );
+  ads.sort(
+    (a, b) =>
+      Number(String(b.effective_status ?? b.status) === "ACTIVE") -
+      Number(String(a.effective_status ?? a.status) === "ACTIVE")
+  );
+  for (const ad of ads) {
+    if (["DELETED", "ARCHIVED"].includes(String(ad.effective_status ?? ad.status))) continue;
+    const id = leadFormId(ad.creative);
+    if (id) return id;
+  }
+  throw new Error("Im Referenz-Adset wurde kein Meta Instant Form gefunden.");
+}
+
 async function loadLiveBatchOptions(metaAccountId: string) {
   const [campaigns, templates] = await Promise.all([
     metaLaunchList<Record<string, unknown>>(`${metaAccountId}/campaigns?fields=${BATCH_CAMPAIGN_FIELDS}&limit=100`),

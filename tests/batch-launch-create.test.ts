@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
   existing: vi.fn(),
   identities: vi.fn(),
-  options: vi.fn()
+  options: vi.fn(),
+  leadForm: vi.fn()
 }));
 let storedCurrency: string | null;
 let storedCampaignStatus: string;
@@ -17,6 +18,7 @@ vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient:
 vi.mock("@/lib/batch-launch-drive", () => ({ listBatchMedia: mocks.media }));
 vi.mock("@/lib/meta/batch-launch", async (original) => ({
   ...(await original<typeof import("@/lib/meta/batch-launch")>()),
+  getLiveBatchLeadFormId: mocks.leadForm,
   getLiveBatchOptions: mocks.options,
   metaLaunchRequest: mocks.meta
 }));
@@ -43,6 +45,7 @@ beforeEach(() => {
     campaigns: [campaign],
     templates: [{ id: template.id, name: "Template", campaignId: campaign.id, raw: template }]
   });
+  mocks.leadForm.mockResolvedValue("123456");
   mocks.meta.mockImplementation(async (path: string) => {
     if (path.startsWith("act_111?")) return { id: "act_111", account_id: "111", currency: "USD", name: "US" };
     if (path.startsWith(`${campaign.id}?`)) return { ...campaign, account_id: "111" };
@@ -166,6 +169,17 @@ describe("batch creation defaults", () => {
     expect(job.status).toBe("pending");
     expect(mocks.options).toHaveBeenCalledWith("act_111");
     expect(mocks.insert).toHaveBeenCalledOnce();
+  });
+  it("inherits the lead form when the reference adset uses Meta Instant Forms", async () => {
+    storedTemplate = { ...template, destination_type: "ON_AD" };
+
+    await createBatchLaunch("client", launchInput);
+
+    expect(mocks.leadForm).toHaveBeenCalledWith(template.id);
+    expect(mocks.insert.mock.calls[0][0].payload).toMatchObject({
+      adsetPayload: { destination_type: "ON_AD" },
+      creativeDestination: { type: "ON_AD", leadFormId: "123456" }
+    });
   });
   const previous = (status: BatchLaunchJobRow["status"]): BatchLaunchJobRow => ({
     id: status,

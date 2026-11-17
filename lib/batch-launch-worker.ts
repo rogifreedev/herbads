@@ -234,7 +234,7 @@ export async function processBatchLaunch(clientId: string, jobId: string, queueT
             ad.creativeId = await createObject(
               `creative:${group.id}`,
               `${metaAccountId}/adcreatives`,
-              buildCreativePayload(group, files, state.media, input.copy)
+              buildCreativePayload(group, files, state.media, input.copy, payload.creativeDestination)
             );
           } else {
             state.step = "ad";
@@ -387,7 +387,7 @@ async function storeCreatedBatch(job: BatchLaunchJobRow) {
           landing_url: input.copy.landingUrl,
           thumbnail_url: media.thumbnailUrl ?? file.thumbnailUrl,
           video_id: media.videoId ?? null,
-          raw: buildCreativePayload(group, payload.files, state.media, input.copy)
+          raw: buildCreativePayload(group, payload.files, state.media, input.copy, payload.creativeDestination)
         },
         { onConflict: "ad_account_id,meta_creative_id" }
       )

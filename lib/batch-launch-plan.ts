@@ -344,8 +344,9 @@ export function buildAdSetPayload(
   const promoted = template.promoted_object as Record<string, unknown> | undefined;
   if (promoted?.product_set_id || promoted?.product_catalog_id || promoted?.application_id)
     throw new Error("Katalog- und App-Adsets werden nicht als Batch-Vorlage unterstuetzt.");
-  if (template.destination_type && !["WEBSITE", "UNDEFINED"].includes(String(template.destination_type)))
-    throw new Error("Bitte ein Website-Adset als Vorlage auswaehlen.");
+  const destinationType = String(template.destination_type ?? "WEBSITE").toUpperCase();
+  if (!["WEBSITE", "UNDEFINED", "ON_AD"].includes(destinationType))
+    throw new Error(`Das Ziel ${destinationType} wird nicht als Batch-Vorlage unterstuetzt.`);
   if (template.is_dynamic_creative) throw new Error("Bitte ein Adset ohne Dynamic Creative als Vorlage auswaehlen.");
   if (!template.optimization_goal || !template.billing_event)
     throw new Error("Optimierungsziel oder Abrechnungsart fehlt in der Vorlage.");
@@ -382,7 +383,7 @@ export function buildAdSetPayload(
     targeting,
     optimization_goal: template.optimization_goal,
     billing_event: template.billing_event,
-    destination_type: "WEBSITE"
+    destination_type: destinationType === "ON_AD" ? "ON_AD" : "WEBSITE"
   };
   for (const key of ["promoted_object", "attribution_spec", "dsa_beneficiary", "dsa_payor"]) {
     if (template[key] !== undefined && template[key] !== null) result[key] = template[key];
@@ -402,7 +403,8 @@ export function buildCreativePayload(
   group: BatchAdGroup,
   files: BatchMediaFile[],
   uploaded: Record<string, BatchUploadedMedia>,
-  copy: BatchLaunchCopy
+  copy: BatchLaunchCopy,
+  destination: { type: "WEBSITE" } | { type: "ON_AD"; leadFormId: string } = { type: "WEBSITE" }
 ) {
   validateCopy(copy);
   copy = normalizeBatchCopy(copy);
@@ -422,13 +424,17 @@ export function buildCreativePayload(
   const story: Record<string, unknown> = { page_id: copy.pageId };
   if (copy.instagramId) story.instagram_user_id = copy.instagramId;
   const base = { name: group.name, object_story_spec: story, url_tags: copy.urlTags };
-  const cta = { type: copy.callToAction, value: { link: copy.landingUrl } };
+  const link = destination.type === "ON_AD" ? "https://fb.me/" : copy.landingUrl;
+  const cta = {
+    type: copy.callToAction,
+    value: destination.type === "ON_AD" ? { lead_gen_form_id: destination.leadFormId } : { link }
+  };
   if (selected.length === 1) {
     const media = uploaded[selected[0]];
     if (file.kind === "image")
       story.link_data = {
         image_hash: media.imageHash,
-        link: copy.landingUrl,
+        link,
         message: copy.primaryText,
         name: copy.headline,
         description: copy.description,
@@ -456,6 +462,7 @@ export function buildCreativePayload(
       ? { hash: uploaded[id].imageHash }
       : { video_id: uploaded[id].videoId, thumbnail_url: uploaded[id].thumbnailUrl })
   }));
+  if (destination.type === "ON_AD") story.link_data = { link, call_to_action: cta };
   return {
     ...base,
     asset_feed_spec: {
@@ -465,7 +472,7 @@ export function buildCreativePayload(
       bodies: textAssets.bodies.map((asset) => ({ ...asset, adlabels: [{ name: "batch_bodies" }] })),
       titles: textAssets.titles.map((asset) => ({ ...asset, adlabels: [{ name: "batch_titles" }] })),
       descriptions: textAssets.descriptions.map((asset) => ({ ...asset, adlabels: [{ name: "batch_descriptions" }] })),
-      link_urls: [{ website_url: copy.landingUrl }],
+      link_urls: [{ website_url: link }],
       call_to_action_types: [copy.callToAction],
       asset_customization_rules: [
         {

@@ -16,6 +16,7 @@ import {
   validateLaunchActivation
 } from "@/lib/batch-launch-plan";
 import {
+  getLiveBatchLeadFormId,
   getLiveBatchOptions,
   isMetaRateLimitError,
   mapBatchCampaign,
@@ -40,6 +41,7 @@ export type BatchLaunchPayload = {
   metaAccountId: string;
   campaign: BatchCampaign;
   adsetPayload: Record<string, unknown>;
+  creativeDestination?: { type: "WEBSITE" } | { type: "ON_AD"; leadFormId: string };
 };
 
 export type BatchLaunchJobRow = {
@@ -466,12 +468,17 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   const campaign = mapBatchCampaign(rawCampaign);
   validateLaunchActivation(input.activate, campaign, input.activationBudget);
   const adsetPayload = buildAdSetPayload(input.name, campaign, template, input.settings, account.currency);
+  const creativeDestination =
+    adsetPayload.destination_type === "ON_AD"
+      ? { type: "ON_AD" as const, leadFormId: await getLiveBatchLeadFormId(selectedTemplate.id) }
+      : { type: "WEBSITE" as const };
   const payload: BatchLaunchPayload = {
     input,
     files,
     metaAccountId: account.meta_account_id,
     campaign,
     adsetPayload,
+    creativeDestination,
     descriptionVariantsExpanded: true
   };
   const db = createSupabaseServiceRoleClient();

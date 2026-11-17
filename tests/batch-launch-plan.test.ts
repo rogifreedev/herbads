@@ -378,6 +378,15 @@ describe("paused adset payloads", () => {
     ).toThrow(/Gebotslimit/);
     expect(() => buildAdSetPayload("Batch", campaign, template, { ...settings, countries: [] }, "EUR")).toThrow();
   });
+  it("preserves Meta Instant Form adsets while rejecting unrelated destinations", () => {
+    expect(buildAdSetPayload("Batch", campaign, { ...template, destination_type: "ON_AD" }, settings, "EUR")).toHaveProperty(
+      "destination_type",
+      "ON_AD"
+    );
+    expect(() =>
+      buildAdSetPayload("Batch", campaign, { ...template, destination_type: "MESSENGER" }, settings, "EUR")
+    ).toThrow(/MESSENGER/);
+  });
   it("validates monetary precision for each currency", () => {
     expect(budgetMinorUnits("60.50", "EUR")).toBe(6050);
     expect(budgetMinorUnits("15.01", "USD")).toBe(1501);
@@ -441,6 +450,21 @@ describe("Meta creative payloads", () => {
     expect(
       buildCreativePayload({ ...single, primaryText: " " }, [feed], { feed: { imageHash: "hash" } }, copy)
     ).toHaveProperty("object_story_spec.link_data.message", copy.primaryText);
+  });
+  it("links Instant Form creatives to the inherited lead form", () => {
+    const payload = buildCreativePayload(
+      { ...group, storyFileId: null },
+      [feed],
+      { feed: { imageHash: "hash" } },
+      copy,
+      { type: "ON_AD", leadFormId: "123456" }
+    );
+    expect(payload).toHaveProperty("object_story_spec.link_data.link", "https://fb.me/");
+    expect(payload).toHaveProperty(
+      "object_story_spec.link_data.call_to_action.value.lead_gen_form_id",
+      "123456"
+    );
+    expect(payload).not.toHaveProperty("object_story_spec.link_data.call_to_action.value.link");
   });
   it("accepts text suggestions with metrics and rejects malformed required fields", () => {
     expect(() => validateCopy({ ...copy, spend: 200, purchases: 5 } as BatchLaunchCopy)).not.toThrow();
