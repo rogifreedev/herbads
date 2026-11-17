@@ -462,7 +462,6 @@ export function buildCreativePayload(
       ? { hash: uploaded[id].imageHash }
       : { video_id: uploaded[id].videoId, thumbnail_url: uploaded[id].thumbnailUrl })
   }));
-  if (destination.type === "ON_AD") story.link_data = { link, call_to_action: cta };
   return {
     ...base,
     asset_feed_spec: {
@@ -473,7 +472,9 @@ export function buildCreativePayload(
       titles: textAssets.titles.map((asset) => ({ ...asset, adlabels: [{ name: "batch_titles" }] })),
       descriptions: textAssets.descriptions.map((asset) => ({ ...asset, adlabels: [{ name: "batch_descriptions" }] })),
       link_urls: [{ website_url: link }],
-      call_to_action_types: [copy.callToAction],
+      ...(destination.type === "ON_AD"
+        ? { call_to_actions: [{ type: copy.callToAction, value: { link, lead_gen_form_id: destination.leadFormId } }] }
+        : { call_to_action_types: [copy.callToAction] }),
       asset_customization_rules: [
         {
           priority: 1,

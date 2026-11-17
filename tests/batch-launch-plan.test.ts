@@ -466,6 +466,22 @@ describe("Meta creative payloads", () => {
     );
     expect(payload).not.toHaveProperty("object_story_spec.link_data.call_to_action.value.link");
   });
+  it("links placement-paired Instant Form creatives through the asset feed", () => {
+    const payload = buildCreativePayload(
+      group,
+      [feed, story],
+      { feed: { imageHash: "h1" }, story: { imageHash: "h2" } },
+      copy,
+      { type: "ON_AD", leadFormId: "123456" }
+    );
+    expect(payload).not.toHaveProperty("object_story_spec.link_data");
+    expect(payload).not.toHaveProperty("asset_feed_spec.call_to_action_types");
+    expect(payload).toHaveProperty("asset_feed_spec.link_urls.0.website_url", "https://fb.me/");
+    expect(payload).toHaveProperty("asset_feed_spec.call_to_actions.0", {
+      type: copy.callToAction,
+      value: { link: "https://fb.me/", lead_gen_form_id: "123456" }
+    });
+  });
   it("accepts text suggestions with metrics and rejects malformed required fields", () => {
     expect(() => validateCopy({ ...copy, spend: 200, purchases: 5 } as BatchLaunchCopy)).not.toThrow();
     expect(() => validateCopy({ ...copy, description: undefined } as unknown as BatchLaunchCopy)).toThrow(
