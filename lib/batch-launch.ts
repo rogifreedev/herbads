@@ -439,8 +439,17 @@ export async function createBatchLaunch(clientId: string, input: BatchLaunchInpu
   const media = await listBatchMedia(input.folderId, clientId);
   const metaId = account.meta_account_id.replace(/^act_/, "");
   const stored = await storedBatchOptions(account.id);
-  const storedCampaign = stored.campaigns.find((item) => item.id === input.campaignId);
-  const selectedTemplate = stored.templates.find((item) => item.id === input.templateId);
+  let storedCampaign = stored.campaigns.find((item) => item.id === input.campaignId);
+  let selectedTemplate = stored.templates.find((item) => item.id === input.templateId);
+  if ((!storedCampaign || !selectedTemplate) && process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim()) {
+    try {
+      const live = await getLiveBatchOptions(account.meta_account_id);
+      storedCampaign ??= live.campaigns.find((item) => item.id === input.campaignId);
+      selectedTemplate ??= live.templates.find((item) => item.id === input.templateId);
+    } catch (error) {
+      if (!isMetaRateLimitError(error)) throw error;
+    }
+  }
   if (!storedCampaign || !selectedTemplate)
     throw new Error("Die gespeicherte Kampagne oder das Referenz-Adset ist nicht mehr verfuegbar.");
   const rawCampaign: Record<string, unknown> = { ...storedCampaign, account_id: metaId };

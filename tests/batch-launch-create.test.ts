@@ -5,24 +5,29 @@ const mocks = vi.hoisted(() => ({
   media: vi.fn(),
   insert: vi.fn(),
   existing: vi.fn(),
-  identities: vi.fn()
+  identities: vi.fn(),
+  options: vi.fn()
 }));
 let storedCurrency: string | null;
 let storedCampaignStatus: string;
-let storedTemplate: typeof template;
+let storedCampaignAvailable: boolean;
+let storedTemplate: typeof template | null;
 vi.mock("@/lib/meta/batch-identities", () => ({ getLiveBatchIdentities: mocks.identities }));
 vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient: mocks.database }));
 vi.mock("@/lib/batch-launch-drive", () => ({ listBatchMedia: mocks.media }));
 vi.mock("@/lib/meta/batch-launch", async (original) => ({
   ...(await original<typeof import("@/lib/meta/batch-launch")>()),
+  getLiveBatchOptions: mocks.options,
   metaLaunchRequest: mocks.meta
 }));
 import { createBatchLaunch, saveLaunchPreset, mapLaunchJob, type BatchLaunchJobRow } from "@/lib/batch-launch";
 import { campaign, feed, story, launchInput, template } from "./batch-launch-fixtures";
 
 beforeEach(() => {
+  vi.stubEnv("META_SYSTEM_USER_ACCESS_TOKEN", "test-token");
   storedCurrency = "EUR";
   storedCampaignStatus = "ACTIVE";
+  storedCampaignAvailable = true;
   storedTemplate = structuredClone(template);
   vi.clearAllMocks();
   mocks.insert.mockReset();
@@ -33,6 +38,10 @@ beforeEach(() => {
   mocks.identities.mockResolvedValue({
     pages: [{ id: launchInput.copy.pageId, name: "Page" }],
     instagramAccounts: [{ id: launchInput.copy.instagramId, name: "Instagram" }]
+  });
+  mocks.options.mockResolvedValue({
+    campaigns: [campaign],
+    templates: [{ id: template.id, name: "Template", campaignId: campaign.id, raw: template }]
   });
   mocks.meta.mockImplementation(async (path: string) => {
     if (path.startsWith("act_111?")) return { id: "act_111", account_id: "111", currency: "USD", name: "US" };
@@ -66,9 +75,13 @@ beforeEach(() => {
         then(resolve: (value: unknown) => unknown) {
           const data =
             table === "meta_campaigns"
-              ? [{ meta_campaign_id: campaign.id, name: campaign.name, objective: campaign.objective, status: storedCampaignStatus, raw: campaign }]
+              ? storedCampaignAvailable
+                ? [{ meta_campaign_id: campaign.id, name: campaign.name, objective: campaign.objective, status: storedCampaignStatus, raw: campaign }]
+                : []
               : table === "meta_ad_sets"
-                ? [{ meta_adset_id: template.id, name: "Template", raw: storedTemplate }]
+                ? storedTemplate
+                  ? [{ meta_adset_id: template.id, name: "Template", raw: storedTemplate }]
+                  : []
                 : mocks.existing();
           return Promise.resolve({ data, error: null }).then(resolve);
         },
@@ -90,7 +103,10 @@ beforeEach(() => {
     }
   });
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 describe("batch creation defaults", () => {
   it("resolves null account currency before converting a USD budget to cents", async () => {
@@ -140,6 +156,16 @@ describe("batch creation defaults", () => {
         state: { media: {}, ads: {}, step: "validation", validated: false }
       })
     );
+  });
+  it("uses live Meta options when a newly created campaign and reference adset are not synchronized yet", async () => {
+    storedCampaignAvailable = false;
+    storedTemplate = null;
+
+    const job = await createBatchLaunch("client", launchInput);
+
+    expect(job.status).toBe("pending");
+    expect(mocks.options).toHaveBeenCalledWith("act_111");
+    expect(mocks.insert).toHaveBeenCalledOnce();
   });
   const previous = (status: BatchLaunchJobRow["status"]): BatchLaunchJobRow => ({
     id: status,
