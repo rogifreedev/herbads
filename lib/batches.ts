@@ -316,7 +316,11 @@ function findMetaMatch(folderName: string, entities: MetaEntity[]) {
   const normalizedFolderName = normalizeName(folderName);
   if (!normalizedFolderName) return null;
 
-  const exactMatches = entities.filter((entity) => entity.normalizedName === normalizedFolderName).sort(sortMatches);
+  // Meta copies represent the same batch; an archived original must not hide its scheduled replacement.
+  const exactMatches = entities.filter((entity) => entity.normalizedName === normalizedFolderName ||
+    (normalizedFolderName.length >= 4 &&
+      entity.normalizedName.replace(/(?: (?:kopie|copy|copia)(?: \d+)?)+$/, "") === normalizedFolderName)
+  ).sort(sortMatches);
   if (exactMatches[0]) return exactMatches[0];
 
   if (normalizedFolderName.length < 4) return null;

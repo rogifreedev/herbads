@@ -108,4 +108,45 @@ describe("batch to Meta adset name matching", () => {
     expect(result.totals).toMatchObject({ live: 0, scheduled: 1, missing: 0, metaEntities: 1002 });
     expect(saved[0]).toMatchObject({ status: "found", match_id: "scheduled" });
   });
+
+  it.each([" - Kopie", " \u2013 Kopie", " - Copy", " - Copia", " - Kopie 2", " - Kopie - Kopie"])(
+    "prefers Rocco's scheduled replacement %s over the archived exact original", async (suffix) => {
+      const name = "160 - BlackFridayV4";
+      const start = new Date(Date.now() + 86400000).toISOString();
+      mocks.metadata.mockResolvedValue({ files: [{ id: "drive-batch", name }] });
+      adsets = [
+        { id: "original", name, status: "ARCHIVED", effective_status: "ARCHIVED" },
+        { id: "replacement", name: `${name}${suffix}`, status: "ACTIVE", effective_status: "ACTIVE", raw: { start_time: start } }
+      ];
+      const result = await runBatchCheck("client");
+      expect(result.items[0]).toMatchObject({ status: "scheduled", match: { id: "replacement", startTime: start } });
+      expect(result.totals).toMatchObject({ scheduled: 1, live: 0, found: 0, missing: 0 });
+      expect(saved[0]).toMatchObject({ status: "found", match_id: "replacement" });
+    }
+  );
+
+  it("prefers a live copy over a paused original but keeps a live original ahead of a scheduled copy", async () => {
+    const name = "160 - BlackFridayV4";
+    mocks.metadata.mockResolvedValue({ files: [{ id: "drive-batch", name }] });
+    adsets = [
+      { id: "original", name, status: "PAUSED", effective_status: "PAUSED" },
+      { id: "replacement", name: `${name} - Kopie`, status: "ACTIVE", effective_status: "ACTIVE" }
+    ];
+    expect((await runBatchCheck("client")).items[0]).toMatchObject({ status: "live", match: { id: "replacement" } });
+    Object.assign(adsets[0], { status: "ACTIVE", effective_status: "ACTIVE" });
+    adsets[1].raw = { start_time: new Date(Date.now() + 86400000).toISOString() };
+    expect((await runBatchCheck("client")).items[0]).toMatchObject({ status: "live", match: { id: "original" } });
+  });
+
+  it.each(["1160 - BlackFridayV4 - Kopie", "160 - BlackFridayV40 - Kopie", "BlackFridayV4 - Kopie", "160 - BlackFridayV4 - Kopie Test"])(
+    "does not let a different batch %s replace an exact match", async (otherName) => {
+      const name = "160 - BlackFridayV4";
+      mocks.metadata.mockResolvedValue({ files: [{ id: "drive-batch", name }] });
+      adsets = [
+        { id: "original", name, status: "ARCHIVED", effective_status: "ARCHIVED" },
+        { id: "other", name: otherName, status: "ACTIVE", effective_status: "ACTIVE" }
+      ];
+      expect((await runBatchCheck("client")).items[0].match?.id).toBe("original");
+    }
+  );
 });
