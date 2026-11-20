@@ -3,6 +3,7 @@ import { runBatchCheck } from "@/lib/batches";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 type RouteContext = {
   params: Promise<{ clientId: string }>;

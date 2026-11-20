@@ -133,6 +133,7 @@ describe("Drive batch folder discovery", () => {
 
 describe("batch check persistence", () => {
   it.each([true, false])("persists discovered batches and handles cache revalidation=%s", async (revalidateCache) => {
+    vi.stubEnv("META_SYSTEM_USER_ACCESS_TOKEN", "");
     tree = { root: [folder("191", "191 - Shoe Details V3"), folder("190", "190 - Shoe Details V2")] };
     const writes: Array<{ table: string; value: Record<string, unknown> }> = [];
     const upserts: Array<Record<string, unknown>> = [];
@@ -143,7 +144,7 @@ describe("batch check persistence", () => {
         let value: Record<string, unknown> | undefined;
         let single = false;
         const query = {
-          select: () => query, eq: () => query, order: () => query, not: () => query, delete: () => query,
+          select: () => query, eq: () => query, order: () => query, not: () => query, delete: () => query, range: () => query,
           maybeSingle() { single = true; return query; },
           single() { single = true; return query; },
           update(input: Record<string, unknown>) { value = input; return query; },

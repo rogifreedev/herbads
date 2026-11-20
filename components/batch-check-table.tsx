@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { memo, useDeferredValue, useMemo, useRef, useState } from "react";
-import { ExternalLink, Loader2, Search, UploadCloud, X } from "lucide-react";
+import { CalendarClock, ExternalLink, Loader2, Search, UploadCloud, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,8 +113,12 @@ const BatchResults = memo(function BatchResults({
       new Intl.DateTimeFormat(locale, { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" }),
     [locale]
   );
-  const statusLabels = { live: t("statusLive"), found: t("statusFoundInactive"), missing: t("statusMissing") };
-  const variants = { live: "success", found: "warning", missing: "destructive" } as const;
+  const scheduleDateTime = useMemo(() => new Intl.DateTimeFormat(locale, {
+    timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZoneName: "short"
+  }), [locale]);
+  const statusLabels = { live: t("statusLive"), scheduled: t("statusScheduled"), found: t("statusFoundInactive"), missing: t("statusMissing") };
+  const variants = { live: "success", scheduled: "secondary", found: "warning", missing: "destructive" } as const;
 
   return (
     <Table className="min-w-[1180px]" aria-label="Batch Check">
@@ -154,6 +158,12 @@ const BatchResults = memo(function BatchResults({
                 </TableCell>
                 <TableCell>
                   <Badge variant={variants[row.status]}>{statusLabels[row.status]}</Badge>
+                  {row.status === "scheduled" && row.match?.startTime ? (
+                    <p className="mt-2 flex min-w-40 items-start gap-1.5 text-xs text-muted-foreground">
+                      <CalendarClock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                      <time dateTime={row.match.startTime}>{t("scheduledStart", { date: formatBatchDate(row.match.startTime, scheduleDateTime) })}</time>
+                    </p>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   {row.match ? (

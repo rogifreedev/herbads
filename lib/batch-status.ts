@@ -6,12 +6,15 @@ import { metaLaunchRequest } from "@/lib/meta/batch-launch";
 import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import type { BatchOverviewItem } from "@/lib/batches";
 
-type AdsetStatus = {
+export type AdsetStatus = {
   id: string;
   meta_adset_id: string;
   status: string | null;
   effective_status: string | null;
+  raw?: Record<string, unknown>;
+  updated_at?: string;
 };
+type MetaStatus = { status: string; effective_status: string; start_time?: string | null; end_time?: string | null };
 type StoredMatch = {
   id: string;
   match_id: string;
@@ -32,13 +35,47 @@ export function isBatchMetaLive(status: string | null, effectiveStatus: string |
   return (!configured || configured === "ACTIVE") && (effective || configured) === "ACTIVE";
 }
 
+export function batchAdsetSchedule(raw?: Record<string, unknown>) {
+  const date = (value: unknown) => typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
+  return { startTime: date(raw?.start_time), endTime: date(raw?.end_time) };
+}
+
+export function getBatchMetaState(status: string | null, effectiveStatus: string | null, startTime?: string | null, endTime?: string | null): "live" | "scheduled" | "found" {
+  const now = Date.now();
+  if (endTime && Date.parse(endTime) <= now) return "found";
+  if (startTime && Date.parse(startTime) > now) {
+    const configured = status?.trim().toUpperCase();
+    const effective = effectiveStatus?.trim().toUpperCase();
+    return (!configured || configured === "ACTIVE") && ["ACTIVE", "PENDING_REVIEW", "PREAPPROVED", "IN_PROCESS"].includes(effective || configured || "")
+      ? "scheduled" : "found";
+  }
+  return isBatchMetaLive(status, effectiveStatus) ? "live" : "found";
+}
+
+export async function saveBatchAdsetSchedule(clientId: string, adset: AdsetStatus, remote: { start_time?: string | null; end_time?: string | null }) {
+  const previous = batchAdsetSchedule(adset.raw);
+  const next = batchAdsetSchedule({
+    start_time: remote.start_time === undefined ? previous.startTime : remote.start_time,
+    end_time: remote.end_time ?? null
+  });
+  if (previous.startTime === next.startTime && previous.endTime === next.endTime) return false;
+  if (!adset.updated_at) throw new Error("Meta-Zeitplan konnte nicht gespeichert werden. Bitte erneut pruefen.");
+  const raw = { ...adset.raw, start_time: next.startTime, end_time: next.endTime };
+  // Do not overwrite targeting/creative metadata written by a concurrent full sync.
+  const { data, error } = await createSupabaseServiceRoleClient().from("meta_ad_sets").update({ raw })
+    .eq("client_id", clientId).eq("id", adset.id).eq("updated_at", adset.updated_at).select("id");
+  if (error || !data?.length) throw new Error("Meta-Zeitplan konnte nicht gespeichert werden. Bitte erneut pruefen.");
+  adset.raw = raw;
+  return true;
+}
+
 export async function readBatchAdsetStatuses(clientId: string, ids: string[]): Promise<AdsetStatus[]> {
   const db = createSupabaseServiceRoleClient();
   const uniqueIds = [...new Set(ids.filter(Boolean))];
   const rows: AdsetStatus[] = [];
   for (let offset = 0; offset < uniqueIds.length; offset += 200) {
     const { data, error } = await db.from("meta_ad_sets")
-      .select("id,meta_adset_id,status,effective_status")
+      .select("id,meta_adset_id,status,effective_status,raw,updated_at")
       .eq("client_id", clientId).in("id", uniqueIds.slice(offset, offset + 200));
     if (error) throw new Error("Gespeicherter Meta-Status konnte nicht geladen werden.");
     rows.push(...(data ?? []) as AdsetStatus[]);
@@ -51,10 +88,11 @@ export function applyBatchAdsetStatuses(items: BatchOverviewItem[], adsets: Adse
   return items.map((item): BatchOverviewItem => {
     const current = item.match && byId.get(item.match.id);
     if (!current || !item.match || (!current.status && !current.effective_status)) return item;
+    const schedule = batchAdsetSchedule(current.raw);
     return {
       ...item,
-      status: isBatchMetaLive(current.status, current.effective_status) ? "live" : "found",
-      match: { ...item.match, status: current.status, effectiveStatus: current.effective_status }
+      status: getBatchMetaState(current.status, current.effective_status, schedule.startTime, schedule.endTime),
+      match: { ...item.match, status: current.status, effectiveStatus: current.effective_status, ...schedule }
     };
   });
 }
@@ -91,31 +129,34 @@ async function refreshStatuses(clientId: string): Promise<BatchStatusRefreshResu
   }
   const adsets = await readBatchAdsetStatuses(clientId, matches.map((match) => match.match_id));
   const ids = [...new Set(adsets.map((adset) => adset.meta_adset_id).filter((id) => /^\d+$/.test(id)))];
-  const current = new Map<string, { status: string; effective_status: string }>();
+  const current = new Map<string, MetaStatus>();
   for (let offset = 0; offset < ids.length; offset += 50) {
     const batch = ids.slice(offset, offset + 50);
-    const response = await metaLaunchRequest<Record<string, { id?: string; status?: string; effective_status?: string }>>(
-      `?ids=${encodeURIComponent(batch.join(","))}&fields=id,status,effective_status`
+    const response = await metaLaunchRequest<Record<string, Partial<MetaStatus> & { id?: string }>>(
+      `?ids=${encodeURIComponent(batch.join(","))}&fields=id,status,effective_status,start_time,end_time`
     );
     for (const id of batch) {
       const value = response[id];
       if (value?.id === id && typeof value.status === "string" && value.status &&
           typeof value.effective_status === "string" && value.effective_status)
-        current.set(id, { status: value.status, effective_status: value.effective_status });
+        current.set(id, { status: value.status, effective_status: value.effective_status, start_time: value.start_time, end_time: value.end_time });
     }
   }
-  const groups = new Map<string, { status: string; effective_status: string; adsets: AdsetStatus[] }>();
+  let changed = false;
+  const groups = new Map<string, { status: string; effective_status: string; batchStatus: "live" | "found"; adsets: AdsetStatus[] }>();
   for (const adset of adsets) {
     const status = current.get(adset.meta_adset_id);
     if (!status) continue;
-    const key = JSON.stringify(status);
-    const group = groups.get(key) ?? { ...status, adsets: [] };
+    if (await saveBatchAdsetSchedule(clientId, adset, status)) changed = true;
+    const schedule = batchAdsetSchedule(adset.raw);
+    const batchStatus = getBatchMetaState(status.status, status.effective_status, schedule.startTime, schedule.endTime) === "live" ? "live" : "found";
+    const key = JSON.stringify([status.status, status.effective_status, batchStatus]);
+    const group = groups.get(key) ?? { status: status.status, effective_status: status.effective_status, batchStatus, adsets: [] };
     group.adsets.push(adset);
     groups.set(key, group);
   }
-  let changed = false;
   for (const group of groups.values()) {
-    const status = isBatchMetaLive(group.status, group.effective_status) ? "live" : "found";
+    const status = group.batchStatus;
     const adsetIds = new Set(group.adsets.map((adset) => adset.id));
     const changedAdsets = group.adsets.filter((adset) => adset.status !== group.status || adset.effective_status !== group.effective_status);
     for (let offset = 0; offset < changedAdsets.length; offset += 200) {

@@ -262,6 +262,26 @@ async function main() {
     await rows.locator("td:nth-child(4)").getByText("Gefunden, nicht aktiv", { exact: true }).waitFor();
     assert.equal(await liveTotal.innerText(), "1");
     assert.equal(await search.inputValue(), "101");
+    statusMode = "active";
+    const scheduledStart = new Date(Date.now() + 7 * 86400000).toISOString();
+    adsets[1].raw = { start_time: scheduledStart };
+    await page.clock.fastForward(60_001);
+    await rows.locator("td:nth-child(4)").getByText("Geplant", { exact: true }).waitFor();
+    assert.equal(await liveTotal.innerText(), "1", "Scheduled batches are not live");
+    const scheduledTotal = page.locator("section > div").filter({ has: page.getByText("Geplant", { exact: true }) }).locator("p").last();
+    assert.equal(await scheduledTotal.innerText(), "1");
+    assert.equal(await rows.getByRole("link", { name: "Auf Meta erstellen" }).count(), 0, "No duplicate creation for a scheduled batch");
+    assert.equal(await rows.locator("time").getAttribute("datetime"), scheduledStart);
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((mode) => document.documentElement.classList.toggle("dark", mode === "dark"), theme);
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await rows.locator("td:nth-child(4)").scrollIntoViewIfNeeded();
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Scheduled overflow at ${width}`);
+        await page.screenshot({ path: path.join(output, `scheduled-${theme}-${width}.png`), animations: "disabled" });
+      }
+    }
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
     statusMode = "unchanged";
     const beforeHidden = statusRequests;
     await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));

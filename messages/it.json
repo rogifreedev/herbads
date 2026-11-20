@@ -407,6 +407,8 @@
     "startCheckHint": "Avvia il confronto tramite Verifica.",
     "rootFolders": "Cartelle root",
     "statusLive": "Attivo",
+    "statusScheduled": "Programmato",
+    "scheduledStart": "Inizio: {date}",
     "statusFound": "Trovato",
     "statusFoundInactive": "Trovato, non attivo",
     "statusMissing": "Non trovato",

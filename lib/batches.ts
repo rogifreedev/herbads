@@ -4,7 +4,8 @@ import { BATCH_CACHE_TAGS, revalidateCacheTags } from "@/lib/cache-tags";
 import { getOptionalEnv } from "@/lib/env";
 import { driveRequest, fetchDriveMetadata, hasDriveCredentials } from "@/lib/google-drive-auth";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
-import { applyBatchAdsetStatuses, isBatchMetaLive, readBatchAdsetStatuses } from "@/lib/batch-status";
+import { applyBatchAdsetStatuses, batchAdsetSchedule, getBatchMetaState, readBatchAdsetStatuses } from "@/lib/batch-status";
+import { readBatchMetaCatalog } from "@/lib/batch-meta-catalog";
 
 export type BatchCheckStatus = "idle" | "running" | "completed" | "failed";
 
@@ -51,6 +52,8 @@ export type BatchMetaMatch = {
   status: string | null;
   effectiveStatus: string | null;
   href: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
 };
 
 export type BatchOverviewItem = {
@@ -63,7 +66,7 @@ export type BatchOverviewItem = {
   webViewLink: string | null;
   modifiedTime: string | null;
   checkedAt: string | null;
-  status: "live" | "found" | "missing";
+  status: "live" | "scheduled" | "found" | "missing";
   match: BatchMetaMatch | null;
 };
 
@@ -73,6 +76,7 @@ export type BatchOverview = {
   totals: {
     folders: number;
     live: number;
+    scheduled: number;
     found: number;
     missing: number;
     metaEntities: number;
@@ -300,12 +304,11 @@ function toPositiveInt(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function isLive(status: string | null, effectiveStatus: string | null) {
-  return isBatchMetaLive(status, effectiveStatus);
-}
-
 function sortMatches(left: MetaEntity, right: MetaEntity) {
   if (left.live !== right.live) return left.live ? -1 : 1;
+  const leftScheduled = getBatchMetaState(left.status, left.effectiveStatus, left.startTime, left.endTime) === "scheduled";
+  const rightScheduled = getBatchMetaState(right.status, right.effectiveStatus, right.startTime, right.endTime) === "scheduled";
+  if (leftScheduled !== rightScheduled) return leftScheduled ? -1 : 1;
   return left.name.localeCompare(right.name, "de");
 }
 
@@ -465,13 +468,7 @@ function sortDriveFolders(folders: DriveBatchFolder[]) {
 }
 
 async function listMetaEntities(clientId: string): Promise<{ entities: MetaEntity[]; error: string | null }> {
-  const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase
-    .from("meta_ad_sets")
-    .select("id,name,status,effective_status")
-    .eq("client_id", clientId);
-
-  if (error) return { entities: [], error: error.message };
+  const data = await readBatchMetaCatalog(clientId, true);
 
   const adSets = (data ?? [])
     .filter((row) => row.name)
@@ -482,8 +479,9 @@ async function listMetaEntities(clientId: string): Promise<{ entities: MetaEntit
       status: row.status ?? null,
       effectiveStatus: row.effective_status ?? null,
       href: adSetDetailHref(clientId, row.id),
+      ...batchAdsetSchedule(row.raw),
       normalizedName: normalizeName(row.name as string),
-      live: isLive(row.status ?? null, row.effective_status ?? null)
+      live: getBatchMetaState(row.status, row.effective_status, batchAdsetSchedule(row.raw).startTime, batchAdsetSchedule(row.raw).endTime) === "live"
     }));
 
   return {
@@ -588,7 +586,7 @@ export async function getBatchOverview(clientId: string): Promise<BatchOverview>
     return {
       settings: null,
       items: [],
-      totals: { folders: 0, live: 0, found: 0, missing: 0, metaEntities: 0 }
+      totals: { folders: 0, live: 0, scheduled: 0, found: 0, missing: 0, metaEntities: 0 }
     };
   }
 
@@ -604,6 +602,7 @@ export async function getBatchOverview(clientId: string): Promise<BatchOverview>
     totals: {
       folders: overviewItems.length,
       live: overviewItems.filter((item) => item.status === "live").length,
+      scheduled: overviewItems.filter((item) => item.status === "scheduled").length,
       found: overviewItems.filter((item) => item.status === "found").length,
       missing: overviewItems.filter((item) => item.status === "missing").length,
       metaEntities: settings.lastMetaEntitiesCount
@@ -614,15 +613,16 @@ export async function getBatchOverview(clientId: string): Promise<BatchOverview>
 async function listStoredBatchItems(clientId: string): Promise<{ items: BatchOverviewItem[]; error: string | null }> {
   try {
     const supabase = createSupabaseServiceRoleClient();
-    const { data, error } = await supabase
-      .from("batch_folder_checks")
-      .select("*")
-      .eq("client_id", clientId)
-      .order("source_folder_label", { ascending: true })
-      .order("path", { ascending: true });
-
-    if (error) return { items: [], error: error.message };
-    const items = ((data ?? []) as BatchFolderCheckRow[]).map(mapStoredItem);
+    const rows: BatchFolderCheckRow[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase.from("batch_folder_checks").select("*")
+        .eq("client_id", clientId).order("source_folder_label", { ascending: true })
+        .order("path", { ascending: true }).order("id").range(offset, offset + 499);
+      if (error) return { items: [], error: error.message };
+      rows.push(...(data ?? []) as BatchFolderCheckRow[]);
+      if ((data?.length ?? 0) < 500) break;
+    }
+    const items = rows.map(mapStoredItem);
     try {
       const adsets = await readBatchAdsetStatuses(clientId, items.flatMap((item) => item.match?.id ? [item.match.id] : []));
       return { items: applyBatchAdsetStatuses(items, adsets), error: null };
@@ -691,7 +691,8 @@ export async function runBatchCheck(clientId: string, options: { revalidateCache
       driveFolderCount += driveResult.folders.length;
       const items = driveResult.folders.map((folder) => {
         const match = findMetaMatch(folder.name, metaResult.entities);
-        const status: BatchOverviewItem["status"] = match ? (match.live ? "live" : "found") : "missing";
+        const status: BatchOverviewItem["status"] = match
+          ? getBatchMetaState(match.status, match.effectiveStatus, match.startTime, match.endTime) : "missing";
 
         return {
           ...folder,
@@ -706,7 +707,9 @@ export async function runBatchCheck(clientId: string, options: { revalidateCache
                 name: match.name,
                 status: match.status,
                 effectiveStatus: match.effectiveStatus,
-                href: match.href
+                href: match.href,
+                startTime: match.startTime,
+                endTime: match.endTime
               }
             : null
         } satisfies BatchOverviewItem;
@@ -749,6 +752,7 @@ export async function runBatchCheck(clientId: string, options: { revalidateCache
       totals: {
         folders: allItems.length,
         live: allItems.filter((item) => item.status === "live").length,
+        scheduled: allItems.filter((item) => item.status === "scheduled").length,
         found: allItems.filter((item) => item.status === "found").length,
         missing: allItems.filter((item) => item.status === "missing").length,
         metaEntities: metaResult.entities.length
@@ -823,7 +827,8 @@ async function replaceStoredBatchItemsForSource(clientId: string, source: BatchD
     depth: item.depth,
     web_view_link: item.webViewLink,
     modified_time: item.modifiedTime,
-    status: item.status,
+    // The schedule lives on the adset; derive its time-dependent display state on every read.
+    status: item.status === "scheduled" ? "found" : item.status,
     match_type: item.match?.type ?? null,
     match_id: item.match?.id || null,
     match_name: item.match?.name ?? null,

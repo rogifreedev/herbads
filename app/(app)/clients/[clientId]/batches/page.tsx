@@ -65,9 +65,10 @@ export default async function BatchesPage({ params }: { params: Promise<{ client
             </Alert>
           ) : null}
 
-          <section className="grid gap-4 md:grid-cols-5">
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <SummaryCard label={t("rootFolders")} value={formatNumber(settings.folders.length)} />
             <SummaryCard label={t("statusLive")} value={formatNumber(overview.totals.live)} />
+            <SummaryCard label={t("statusScheduled")} value={formatNumber(overview.totals.scheduled)} />
             <SummaryCard label={t("statusFound")} value={formatNumber(overview.totals.found)} />
             <SummaryCard label={t("statusMissing")} value={formatNumber(overview.totals.missing)} />
             <SummaryCard label={t("lastCheck")} value={settings.lastCheckedAt ? formatDateTime(settings.lastCheckedAt, locale) : "-"} />

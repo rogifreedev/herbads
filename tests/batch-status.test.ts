@@ -6,14 +6,14 @@ vi.mock("@/lib/supabase/service-role", () => ({ createSupabaseServiceRoleClient:
 vi.mock("@/lib/meta/batch-launch", () => ({ metaLaunchRequest: mocks.meta }));
 vi.mock("@/lib/cache-tags", () => ({ BATCH_CACHE_TAGS: ["batches"], revalidateCacheTags: mocks.revalidate }));
 
-type Row = Record<string, string | null>;
+type Row = Record<string, unknown>;
 type Operation = { table: string; values?: Row; filters: Array<[string, unknown]>; range?: [number, number] };
 let tables: Record<string, Row[]>;
 let operations: Operation[];
 let failTable: string | null;
 
 function adset(index = 1, clientId = "client"): Row {
-  return { id: `adset-${index}`, client_id: clientId, meta_adset_id: String(1000 + index), status: "PAUSED", effective_status: "PAUSED" };
+  return { id: `adset-${index}`, client_id: clientId, meta_adset_id: String(1000 + index), status: "PAUSED", effective_status: "PAUSED", raw: {}, updated_at: "2026-11-19T10:00:00Z" };
 }
 function match(index = 1, clientId = "client"): Row {
   return {
@@ -35,6 +35,7 @@ beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
   vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-11-20T10:00:00Z"));
   vi.stubEnv("META_SYSTEM_USER_ACCESS_TOKEN", "test-token");
   failTable = null;
   operations = [];
@@ -54,7 +55,7 @@ beforeEach(() => {
         operations.push(operation);
         if (failTable === table) return { data: null, error: { message: "Database unavailable" } };
         let rows = (tables[table] ?? []).filter((row) => operation.filters.every(([key, value]) =>
-          Array.isArray(value) ? value.includes(row[key]) : value === "NOT_NULL" ? row[key] !== null : row[key] === value
+          Array.isArray(value) ? value.includes(row[key]) : key === "raw" ? JSON.stringify(row[key]) === value : value === "NOT_NULL" ? row[key] !== null : row[key] === value
         ));
         if (operation.range) rows = rows.slice(operation.range[0], operation.range[1] + 1);
         if (operation.values) rows.forEach((row) => Object.assign(row, operation.values));
@@ -79,6 +80,29 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
 
 describe("batch effective status", () => {
   it.each([
+    ["ACTIVE", "ACTIVE", "2026-11-21T10:00:00Z", null, "scheduled"],
+    ["ACTIVE", "PENDING_REVIEW", "2026-11-21T10:00:00Z", null, "scheduled"],
+    ["ACTIVE", "CAMPAIGN_PAUSED", "2026-11-21T10:00:00Z", null, "found"],
+    ["PAUSED", "ACTIVE", "2026-11-21T10:00:00Z", null, "found"],
+    ["ACTIVE", "WITH_ISSUES", "2026-11-21T10:00:00Z", null, "found"],
+    ["ACTIVE", "ACTIVE", "2026-11-20T10:00:00Z", null, "live"],
+    ["ACTIVE", "ACTIVE", "2026-11-20T06:00:00-0500", null, "scheduled"],
+    ["ACTIVE", "ACTIVE", "2026-11-19T10:00:00Z", "2026-11-20T09:00:00Z", "found"],
+    ["ACTIVE", "ACTIVE", "invalid", null, "live"]
+  ])("classifies %s/%s with start %s and end %s as %s", async (status, effective, start, end, expected) => {
+    const { getBatchMetaState } = await import("@/lib/batch-status");
+    expect(getBatchMetaState(status, effective, start, end)).toBe(expected);
+  });
+
+  it("derives scheduled totals from stored metadata without calling Meta on page load", async () => {
+    Object.assign(tables.meta_ad_sets[0], { status: "ACTIVE", effective_status: "ACTIVE", raw: { start_time: "2026-11-21T10:00:00Z" } });
+    const { getBatchOverview } = await import("@/lib/batches");
+    const overview = await getBatchOverview("client");
+    expect(overview.items[0]).toMatchObject({ status: "scheduled", match: { startTime: "2026-11-21T10:00:00Z" } });
+    expect(overview.totals).toMatchObject({ live: 0, scheduled: 1, missing: 0 });
+    expect(mocks.meta).not.toHaveBeenCalled();
+  });
+  it.each([
     ["ACTIVE", "ACTIVE", true], ["ACTIVE", "CAMPAIGN_PAUSED", false], ["PAUSED", "ACTIVE", false],
     ["PAUSED", "PAUSED", false], ["ACTIVE", "WITH_ISSUES", false], ["ACTIVE", "ARCHIVED", false],
     ["ACTIVE", "DELETED", false], ["ACTIVE", null, true], [null, "ACTIVE", true], [null, null, false],
@@ -92,7 +116,7 @@ describe("batch effective status", () => {
     const original = overviewItem();
     const missing = { ...original, id: "missing", match: null, status: "missing" as const };
     const [updated, unchanged] = applyBatchAdsetStatuses([original, missing], [{ id: "adset-1", meta_adset_id: "1001", status: "ACTIVE", effective_status: "ACTIVE" }]);
-    expect(updated).toEqual({ ...original, status: "live", match: { ...original.match, status: "ACTIVE", effectiveStatus: "ACTIVE" } });
+    expect(updated).toEqual({ ...original, status: "live", match: { ...original.match, status: "ACTIVE", effectiveStatus: "ACTIVE", startTime: null, endTime: null } });
     expect(unchanged).toBe(missing);
     expect(original.status).toBe("found");
     expect(applyBatchAdsetStatuses([original], [])[0]).toBe(original);
@@ -116,6 +140,30 @@ describe("batch effective status", () => {
 });
 
 describe("live Meta batch refresh", () => {
+  it("updates moved schedules without losing targeting and becomes live only after the start", async () => {
+    const start = "2026-11-21T10:00:00Z";
+    tables.meta_ad_sets[0].raw = { targeting: { geo_locations: { countries: ["DE"] } }, start_time: "2026-11-19T10:00:00Z" };
+    mocks.meta.mockResolvedValue({ "1001": { id: "1001", status: "ACTIVE", effective_status: "ACTIVE", start_time: start } });
+    const { refreshBatchMetaStatuses } = await import("@/lib/batch-status");
+    const { getBatchOverview } = await import("@/lib/batches");
+    expect(await refreshBatchMetaStatuses("client")).toMatchObject({ changed: true });
+    expect(tables.meta_ad_sets[0].raw).toEqual({ targeting: { geo_locations: { countries: ["DE"] } }, start_time: start, end_time: null });
+    expect(tables.batch_folder_checks[0].status).toBe("found");
+    expect((await getBatchOverview("client")).items[0].status).toBe("scheduled");
+    vi.setSystemTime(new Date("2026-11-21T10:01:00Z"));
+    expect(await refreshBatchMetaStatuses("client")).toMatchObject({ changed: true });
+    expect(tables.batch_folder_checks[0].status).toBe("live");
+    expect((await getBatchOverview("client")).items[0].status).toBe("live");
+  });
+
+  it("does not overwrite raw metadata changed by a concurrent sync", async () => {
+    const { saveBatchAdsetSchedule } = await import("@/lib/batch-status");
+    tables.meta_ad_sets[0].raw = { targeting: { countries: ["IT"] } };
+    tables.meta_ad_sets[0].updated_at = "2026-11-20T10:00:00Z";
+    await expect(saveBatchAdsetSchedule("client", { id: "adset-1", meta_adset_id: "1001", status: "ACTIVE", effective_status: "ACTIVE", raw: {}, updated_at: "2026-11-19T10:00:00Z" },
+      { start_time: "2026-11-21T10:00:00Z" })).rejects.toThrow("erneut pruefen");
+    expect(tables.meta_ad_sets[0].raw).toEqual({ targeting: { countries: ["IT"] } });
+  });
   it("uses the existing authenticated GET transport without sending Meta writes", async () => {
     const { metaLaunchRequest } = await vi.importActual<typeof import("@/lib/meta/batch-launch")>("@/lib/meta/batch-launch");
     mocks.meta.mockImplementation(metaLaunchRequest);
@@ -124,7 +172,7 @@ describe("live Meta batch refresh", () => {
     const { refreshBatchMetaStatuses } = await import("@/lib/batch-status");
     await refreshBatchMetaStatuses("client");
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({
-      origin: "https://graph.facebook.com", search: "?ids=1001&fields=id,status,effective_status"
+      origin: "https://graph.facebook.com", search: "?ids=1001&fields=id,status,effective_status,start_time,end_time"
     }), expect.objectContaining({
       method: "GET", headers: expect.objectContaining({ Authorization: "Bearer test-token" }), cache: "no-store"
     }));
@@ -134,7 +182,7 @@ describe("live Meta batch refresh", () => {
     tables.batch_folder_checks.push(match(2, "other"));
     const { refreshBatchMetaStatuses } = await import("@/lib/batch-status");
     expect(await refreshBatchMetaStatuses("client")).toMatchObject({ changed: true, checked: 1, unavailable: 0 });
-    expect(mocks.meta).toHaveBeenCalledExactlyOnceWith("?ids=1001&fields=id,status,effective_status");
+    expect(mocks.meta).toHaveBeenCalledExactlyOnceWith("?ids=1001&fields=id,status,effective_status,start_time,end_time");
     expect(tables.meta_ad_sets.map((row) => row.status)).toEqual(["ACTIVE", "PAUSED", "PAUSED"]);
     expect(tables.batch_folder_checks[0]).toMatchObject({ status: "live", match_status: "ACTIVE", checked_at: "2026-10-01T10:00:00Z" });
     for (const op of operations) expect(op.filters).toContainEqual(["client_id", "client"]);
@@ -165,7 +213,7 @@ describe("live Meta batch refresh", () => {
     const { refreshBatchMetaStatuses } = await import("@/lib/batch-status");
     expect(await refreshBatchMetaStatuses("client")).toMatchObject({ changed: true, checked: 1, unavailable: 5 });
     expect(tables.batch_folder_checks.map((row) => row.status)).toEqual(["live", "found", "found", "found", "found", "found"]);
-    expect(mocks.meta).toHaveBeenCalledExactlyOnceWith("?ids=1001%2C1002%2C1003&fields=id,status,effective_status");
+    expect(mocks.meta).toHaveBeenCalledExactlyOnceWith("?ids=1001%2C1002%2C1003&fields=id,status,effective_status,start_time,end_time");
   });
   it("deduplicates concurrent refreshes, isolates clients and tokens, and expires the cache", async () => {
     const { refreshBatchMetaStatuses } = await import("@/lib/batch-status");

@@ -407,6 +407,8 @@
     "startCheckHint": "Starte den Abgleich über Überprüfen.",
     "rootFolders": "Root Ordner",
     "statusLive": "Geschaltet",
+    "statusScheduled": "Geplant",
+    "scheduledStart": "Start: {date}",
     "statusFound": "Gefunden",
     "statusFoundInactive": "Gefunden, nicht aktiv",
     "statusMissing": "Nicht gefunden",
